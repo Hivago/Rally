@@ -135,6 +135,16 @@ public static class DependencyInjection
             .AddPolicyHandler((sp, _) => GetRetryPolicy(sp, options.RetryCount))
             .AddPolicyHandler(GetTimeoutPolicy(options.TimeoutSeconds));
 
+        // In ProRouting DependencyInjection.cs, add:
+
+        services.AddHttpClient<IThirdPartyDeliveryProvider, ProRoutingTaskService>(client =>
+        {
+            client.BaseAddress = new Uri(options.BaseUrl);
+            client.DefaultRequestHeaders.Add("api-key", options.ApiKey);
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+        });
+
+
         return services;
     }
 
@@ -172,6 +182,8 @@ public static class DependencyInjection
                         outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString());
                 });
     }
+
+
 
     private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy(int timeoutSeconds)
     {

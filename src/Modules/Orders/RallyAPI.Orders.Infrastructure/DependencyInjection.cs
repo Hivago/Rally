@@ -15,7 +15,7 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         // DbContext
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        var connectionString = configuration.GetConnectionString("Database");
         services.AddDbContext<OrdersDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>

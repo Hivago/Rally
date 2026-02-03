@@ -11,8 +11,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Modules\Catalog\RallyAPI.Catalog.Endpoints\RallyAPI.Catalog.Endpoints.csproj" />
     <ProjectReference Include="..\Modules\Catalog\RallyAPI.Catalog.Infrastructure\RallyAPI.Catalog.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Delivery\RallyAPI.Delivery.Infrastructure\RallyAPI.Delivery.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Integrations\ProRouting\ProRouting.csproj" />
     <ProjectReference Include="..\Modules\Orders\RallyAPI.Orders.Endpoints\RallyAPI.Orders.Endpoints.csproj" />
+    <ProjectReference Include="..\Modules\Pricing\RallyAPI.Pricing.Infrastructure\RallyAPI.Pricing.Infrastructure.csproj" />
     <ProjectReference Include="..\RallyAPI.Infrastructure\RallyAPI.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Users\RallyAPI.Users.Infrastructure\RallyAPI.Users.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Users\RallyAPI.Users.Endpoints\RallyAPI.Users.Endpoints.csproj" />

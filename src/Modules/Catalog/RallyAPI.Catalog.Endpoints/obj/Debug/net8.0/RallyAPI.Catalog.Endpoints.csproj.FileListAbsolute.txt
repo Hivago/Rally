@@ -3,8 +3,10 @@ C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints
 C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints\bin\Debug\net8.0\RallyAPI.Catalog.Endpoints.pdb
 C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints\bin\Debug\net8.0\RallyAPI.Catalog.Application.dll
 C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints\bin\Debug\net8.0\RallyAPI.Catalog.Domain.dll
+C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints\bin\Debug\net8.0\RallyAPI.Catalog.Infrastructure.dll
 C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints\bin\Debug\net8.0\RallyAPI.SharedKernel.dll
 C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints\bin\Debug\net8.0\RallyAPI.Catalog.Application.pdb
+C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints\bin\Debug\net8.0\RallyAPI.Catalog.Infrastructure.pdb
 C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints\bin\Debug\net8.0\RallyAPI.Catalog.Domain.pdb
 C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints\bin\Debug\net8.0\RallyAPI.SharedKernel.pdb
 C:\Users\vishw\source\repos\Rally\src\Modules\Catalog\RallyAPI.Catalog.Endpoints\obj\Debug\net8.0\RallyAPI.Catalog.Endpoints.csproj.AssemblyReference.cache

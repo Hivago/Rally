@@ -18,6 +18,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\..\..\RallyAPI.Infrastructure\RallyAPI.Infrastructure.csproj" />
 		<ProjectReference Include="..\RallyAPI.Users.Application\RallyAPI.Users.Application.csproj" />
+		<ProjectReference Include="..\RallyAPI.Users.Infrastructure\RallyAPI.Users.Infrastructure.csproj" />
 	</ItemGroup>
 
 

@@ -119,6 +119,9 @@ C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Or
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Orders.Domain.dll
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Orders.Endpoints.dll
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Orders.Infrastructure.dll
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Pricing.Application.dll
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Pricing.Domain.dll
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Pricing.Infrastructure.dll
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.SharedKernel.dll
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Users.Application.dll
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Users.Domain.dll
@@ -128,6 +131,7 @@ C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Ca
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Catalog.Infrastructure.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\ProRouting.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Orders.Endpoints.pdb
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Pricing.Infrastructure.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Infrastructure.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Users.Infrastructure.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Users.Endpoints.pdb
@@ -136,6 +140,8 @@ C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Ca
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Orders.Application.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Orders.Domain.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Orders.Infrastructure.pdb
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Pricing.Application.pdb
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Pricing.Domain.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.SharedKernel.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Users.Application.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Users.Domain.pdb
@@ -162,3 +168,7 @@ C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\refint\Rall
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.genruntimeconfig.cache
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\ref\RallyAPI.Host.dll
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Delivery.Domain.dll
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Delivery.Infrastructure.dll
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Delivery.Infrastructure.pdb
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Delivery.Domain.pdb

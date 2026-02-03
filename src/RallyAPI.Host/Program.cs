@@ -2,15 +2,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using RallyAPI.Catalog.Endpoints;
-using RallyAPI.Catalog.Infrastructure;
+using RallyAPI.Infrastructure;
 using RallyAPI.Integrations.ProRouting;
 using RallyAPI.Orders.Endpoints;
-using RallyAPI.Orders.Infrastructure;
+using RallyAPI.Pricing.Infrastructure;
 using RallyAPI.SharedKernel.Abstractions.Delivery;
 using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.Users.Endpoints;
-using RallyAPI.Users.Infrastructure;
-using RallyAPI.Users.Infrastructure.Persistence;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,35 +16,17 @@ var builder = WebApplication.CreateBuilder(args);
 // Add this BEFORE other service registrations
 builder.Services.AddHttpContextAccessor();
 
-// Add this for UsersDbContext
-builder.Services.AddDbContext<UsersDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("UsersDb")));
-
-// Add this for OrdersDbContext (if you have one)
-builder.Services.AddDbContext<OrdersDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("OrdersDb")));
-
-
 // Add Users Module
-builder.Services.AddUsersInfrastructure(builder.Configuration);
-builder.Services.AddUsersEndpoints();
+builder.Services.AddUsersModule(builder.Configuration);
 
-// Catalog Module
-builder.Services.AddCatalogInfrastructure(builder.Configuration);
-builder.Services.AddCatalogEndpoints();
-
-// Add ProRouting Integration
-builder.Services.AddProRoutingIntegration(builder.Configuration);
+// Add Catalog Module
+builder.Services.AddCatalogModule(builder.Configuration);
 
 // Add Order Module
 builder.Services.AddOrdersModule(builder.Configuration);
 
-// Add MediatR for Application layer
-builder.Services.AddMediatR(cfg =>
-{
-    cfg.RegisterServicesFromAssembly(typeof(RallyAPI.Users.Application.Abstractions.IUnitOfWork).Assembly);
-    cfg.RegisterServicesFromAssembly(typeof(RallyAPI.Catalog.Application.Abstractions.IUnitOfWork).Assembly);
-});
+// Add ProRouting Integration
+builder.Services.AddProRoutingIntegration(builder.Configuration);
 
 // Add Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -79,6 +59,9 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("user_type", "admin"));
 });
 
+// Add these lines
+builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddPricingInfrastructure(builder.Configuration);
 
 
 // Add Swagger
@@ -102,6 +85,7 @@ app.UseAuthorization();
 
 // Map endpoints
 app.MapUsersEndpoints();
+app.MapCatalogEndpoints();
 app.MapOrdersEndpoints();
 app.MapGet("/", () => "Rally API is running!");
 

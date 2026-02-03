@@ -1,13 +1,26 @@
 ﻿using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
+using Microsoft.Extensions.Configuration;
+using RallyAPI.Users.Application;
+using RallyAPI.Users.Infrastructure;
+
 namespace RallyAPI.Users.Endpoints;
 
 public static class DependencyInjection
 {
+    public static IServiceCollection AddUsersModule(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddUsersApplication();
+        services.AddUsersInfrastructure(configuration);
+        services.AddUsersEndpoints();
+        return services;
+    }
+
     public static IServiceCollection AddUsersEndpoints(this IServiceCollection services)
     {
-        // Nothing needed here - MediatR registered in Host
         return services;
     }
 

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace RallyAPI.Users.Infrastructure.Persistence.Migration
 {
     /// <inheritdoc />
-    public partial class AddRiderDeliveryTrackingNew : Migration
+    public partial class AddRiderDeliveryTrackingNew : Microsoft.EntityFrameworkCore.Migrations.Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

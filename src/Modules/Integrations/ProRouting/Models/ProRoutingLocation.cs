@@ -5,7 +5,7 @@ namespace RallyAPI.Integrations.ProRouting.Models;
 /// <summary>
 /// Location model for ProRouting API requests.
 /// </summary>
-internal sealed class ProRoutingLocation
+public sealed class ProRoutingLocation
 {
     [JsonPropertyName("lat")]
     public double Lat { get; set; }

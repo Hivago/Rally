@@ -10,6 +10,8 @@ using RallyAPI.Pricing.Domain.Repositories;
 using RallyAPI.Pricing.Infrastructure.Persistence;
 using RallyAPI.Pricing.Infrastructure.Providers;
 using RallyAPI.Pricing.Infrastructure.Repositories;
+using RallyAPI.SharedKernel.Abstractions.Pricing;
+using RallyAPI.Pricing.Infrastructure.Services;
 
 namespace RallyAPI.Pricing.Infrastructure;
 
@@ -20,6 +22,10 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("Database")!;
+
+        // Delivery pricing
+        services.Configure<DeliveryPricingOptions>(
+            configuration.GetSection(DeliveryPricingOptions.SectionName));
 
         // DbContext
         services.AddDbContext<PricingDbContext>(options =>
@@ -36,6 +42,8 @@ public static class DependencyInjection
         services.AddScoped<IPricingRule, WeatherSurgeRule>();
         services.AddScoped<IPricingRule, DemandSurgeRule>();
         services.AddScoped<IPricingRule, SpecialDayRule>();
+        services.AddScoped<IDeliveryPricingCalculator, DeliveryPricingCalculator>();
+
 
         // Engine
         services.AddScoped<IPricingEngine, PricingEngine>();
