@@ -11,6 +11,7 @@ using RallyAPI.Pricing.Infrastructure.Persistence;
 using RallyAPI.Pricing.Infrastructure.Providers;
 using RallyAPI.Pricing.Infrastructure.Repositories;
 using RallyAPI.SharedKernel.Abstractions.Pricing;
+using RallyAPI.SharedKernel.Infrastructure;
 using RallyAPI.Pricing.Infrastructure.Services;
 
 namespace RallyAPI.Pricing.Infrastructure;
@@ -27,9 +28,17 @@ public static class DependencyInjection
         services.Configure<DeliveryPricingOptions>(
             configuration.GetSection(DeliveryPricingOptions.SectionName));
 
-        // DbContext
-        services.AddDbContext<PricingDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        //// DbContext
+        //services.AddDbContext<PricingDbContext>(options =>
+        //    options.UseNpgsql(connectionString));
+        
+        services.AddDbContext<PricingDbContext>((sp, options) =>
+        {
+            options.UseNpgsql(connectionString);
+            options.AddInterceptors(sp.GetRequiredService<DomainEventInterceptor>());
+        });
+
+
 
         // Repository
         services.AddScoped<IPricingConfigRepository, PricingConfigRepository>();

@@ -1,6 +1,7 @@
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.SharedKernel\bin\Debug\net8.0\RallyAPI.SharedKernel.deps.json
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.SharedKernel\bin\Debug\net8.0\RallyAPI.SharedKernel.dll
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.SharedKernel\bin\Debug\net8.0\RallyAPI.SharedKernel.pdb
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.SharedKernel\obj\Debug\net8.0\RallyAPI.SharedKernel.csproj.AssemblyReference.cache
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.SharedKernel\obj\Debug\net8.0\RallyAPI.SharedKernel.GeneratedMSBuildEditorConfig.editorconfig
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.SharedKernel\obj\Debug\net8.0\RallyAPI.SharedKernel.AssemblyInfoInputs.cache
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.SharedKernel\obj\Debug\net8.0\RallyAPI.SharedKernel.AssemblyInfo.cs

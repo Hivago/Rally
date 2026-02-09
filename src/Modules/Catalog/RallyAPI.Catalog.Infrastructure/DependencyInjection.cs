@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RallyAPI.Catalog.Application.Abstractions;
@@ -13,10 +14,19 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddDbContext<CatalogDbContext>(options =>
+        //services.AddDbContext<CatalogDbContext>(options =>
+        //    options.UseNpgsql(
+        //        configuration.GetConnectionString("Database"),
+        //        npgsqlOptions => npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "catalog")));
+
+        services.AddDbContext<CatalogDbContext>((sp, options) =>
+        {
             options.UseNpgsql(
                 configuration.GetConnectionString("Database"),
-                npgsqlOptions => npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "catalog")));
+                npgsqlOptions => npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "catalog"));
+
+            options.AddInterceptors(sp.GetRequiredService<ISaveChangesInterceptor>());
+        });
 
         services.AddScoped<IMenuRepository, MenuRepository>();
         services.AddScoped<IMenuItemRepository, MenuItemRepository>();

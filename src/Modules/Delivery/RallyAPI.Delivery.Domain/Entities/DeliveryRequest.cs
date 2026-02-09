@@ -356,4 +356,29 @@ public sealed class DeliveryRequest : AggregateRoot
     }
 
     #endregion
+
+    /// <summary>
+    /// Check if immediate dispatch should be triggered
+    /// Returns true if dispatch hasn't started yet
+    /// </summary>
+    public bool ShouldTriggerImmediateDispatch()
+    {
+        return Status == DeliveryRequestStatus.Created ||
+               Status == DeliveryRequestStatus.PendingDispatch;
+    }
+
+    /// <summary>
+    /// Start searching for riders
+    /// </summary>
+    public void StartSearching()
+    {
+        if (!ShouldTriggerImmediateDispatch())
+        {
+            return; // Already searching or assigned
+        }
+
+        Status = DeliveryRequestStatus.SearchingOwnFleet;
+        SearchingStartedAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

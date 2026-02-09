@@ -3,6 +3,14 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
+# Ignore Visual Studio local files
+.vs/
+
+# Ignore appsettings (environment-specific secrets)
+appsettings.json
+appsettings.*.json
+
+
 # dotenv files
 .env
 

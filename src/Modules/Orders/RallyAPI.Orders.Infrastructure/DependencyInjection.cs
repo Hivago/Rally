@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RallyAPI.Orders.Application.Abstractions;
@@ -15,13 +16,24 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         // DbContext
+        //var connectionString = configuration.GetConnectionString("Database");
+        //services.AddDbContext<OrdersDbContext>(options =>
+        //{
+        //    options.UseNpgsql(connectionString, npgsqlOptions =>
+        //    {
+        //        npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "orders");
+        //    });
+        //});
+
         var connectionString = configuration.GetConnectionString("Database");
-        services.AddDbContext<OrdersDbContext>(options =>
+        services.AddDbContext<OrdersDbContext>((sp, options) =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "orders");
             });
+
+            options.AddInterceptors(sp.GetRequiredService<ISaveChangesInterceptor>());
         });
 
         // Repositories

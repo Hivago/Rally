@@ -2,12 +2,15 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using RallyAPI.Catalog.Endpoints;
+using RallyAPI.Delivery.Endpoints;
 using RallyAPI.Infrastructure;
 using RallyAPI.Integrations.ProRouting;
 using RallyAPI.Orders.Endpoints;
+using RallyAPI.Orders.Infrastructure;
 using RallyAPI.Pricing.Infrastructure;
 using RallyAPI.SharedKernel.Abstractions.Delivery;
 using RallyAPI.SharedKernel.Extensions;
+using RallyAPI.SharedKernel.Infrastructure;
 using RallyAPI.Users.Endpoints;
 using System.Text;
 
@@ -15,6 +18,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add this BEFORE other service registrations
 builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddScoped<DomainEventInterceptor>();
 
 // Add Users Module
 builder.Services.AddUsersModule(builder.Configuration);
@@ -27,6 +32,10 @@ builder.Services.AddOrdersModule(builder.Configuration);
 
 // Add ProRouting Integration
 builder.Services.AddProRoutingIntegration(builder.Configuration);
+
+// Add Delivery Module
+builder.Services.AddDeliveryModule(builder.Configuration);
+
 
 // Add Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -87,6 +96,7 @@ app.UseAuthorization();
 app.MapUsersEndpoints();
 app.MapCatalogEndpoints();
 app.MapOrdersEndpoints();
+app.MapDeliveryModuleEndpoints();
 app.MapGet("/", () => "Rally API is running!");
 
 app.Run();

@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MediatR" Version="12.4.1" />
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.23" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\..\..\RallyAPI.SharedKernel\RallyAPI.SharedKernel.csproj" />
+	  <ProjectReference Include="..\..\Integrations\ProRouting\ProRouting.csproj" />
+	  <ProjectReference Include="..\..\Orders\RallyAPI.Orders.Application\RallyAPI.Orders.Application.csproj" />
+	  <ProjectReference Include="..\RallyAPI.Delivery.Application\RallyAPI.Delivery.Application.csproj" />
+	  <ProjectReference Include="..\RallyAPI.Delivery.Domain\RallyAPI.Delivery.Domain.csproj" />
+	  <ProjectReference Include="..\RallyAPI.Delivery.Infrastructure\RallyAPI.Delivery.Infrastructure.csproj" />
+	</ItemGroup>
+	
+
+</Project>

@@ -6,7 +6,7 @@ using RallyAPI.Users.Infrastructure.Persistence;
 using RallyAPI.Users.Infrastructure.Persistence.Repositories;
 using RallyAPI.Users.Infrastructure.Services;
 using RallyAPI.SharedKernel.Abstractions.Riders;
-
+using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace RallyAPI.Users.Infrastructure;
 
 public static class DependencyInjection
@@ -33,12 +33,22 @@ public static class DependencyInjection
     {
         var connectionString = configuration.GetConnectionString("Database");
 
-        services.AddDbContext<UsersDbContext>(options =>
+        //services.AddDbContext<UsersDbContext>(options =>
+        //{
+        //    options.UseNpgsql(connectionString, npgsqlOptions =>
+        //    {
+        //        npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "users");
+        //    });
+        //});
+
+        services.AddDbContext<UsersDbContext>((sp, options) =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "users");
             });
+
+            options.AddInterceptors(sp.GetRequiredService<ISaveChangesInterceptor>());
         });
 
         return services;

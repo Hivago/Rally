@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace RallyAPI.SharedKernel.Domain
 {
-    public abstract class BaseEntity
+    public abstract class BaseEntity : IHasDomainEvents
     {
         public Guid Id { get; protected set; }
         public DateTime CreatedAt { get; protected set; }

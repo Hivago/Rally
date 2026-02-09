@@ -25,6 +25,8 @@ namespace RallyAPI.SharedKernel.Results
         // Common errors
         public static Error NotFound(string entity, Guid id) =>
             new($"{entity}.NotFound", $"{entity} with ID {id} was not found.");
+        public static Error NotFound(string entity) =>
+            new($"{entity}.NotFound", $"{entity} was not found.");
 
         public static Error Validation(string message) =>
             new("Validation.Error", message);

@@ -59,7 +59,7 @@
           "dependencies": {
             "MediatR": {
               "target": "Package",
-              "version": "[12.4.0, )"
+              "version": "[12.4.1, )"
             }
           },
           "imports": [
@@ -206,7 +206,7 @@
           "dependencies": {
             "MediatR": {
               "target": "Package",
-              "version": "[12.4.0, )"
+              "version": "[12.4.1, )"
             },
             "Microsoft.AspNetCore.OpenApi": {
               "target": "Package",
@@ -288,11 +288,96 @@
           "dependencies": {
             "Microsoft.EntityFrameworkCore": {
               "target": "Package",
-              "version": "[8.0.0, )"
+              "version": "[8.0.23, )"
             },
             "Npgsql.EntityFrameworkCore.PostgreSQL": {
               "target": "Package",
               "version": "[8.0.0, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Application\\RallyAPI.Delivery.Application.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Application\\RallyAPI.Delivery.Application.csproj",
+        "projectName": "RallyAPI.Delivery.Application",
+        "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Application\\RallyAPI.Delivery.Application.csproj",
+        "packagesPath": "C:\\Users\\vishw\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Application\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\vishw\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Domain\\RallyAPI.Delivery.Domain.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Domain\\RallyAPI.Delivery.Domain.csproj"
+              },
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Infrastructure\\RallyAPI.Delivery.Infrastructure.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Infrastructure\\RallyAPI.Delivery.Infrastructure.csproj"
+              },
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\RallyAPI.SharedKernel\\RallyAPI.SharedKernel.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\RallyAPI.SharedKernel\\RallyAPI.SharedKernel.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "MediatR": {
+              "target": "Package",
+              "version": "[12.4.1, )"
+            },
+            "Microsoft.Extensions.Logging.Abstractions": {
+              "target": "Package",
+              "version": "[8.0.2, )"
             }
           },
           "imports": [
@@ -384,6 +469,103 @@
         }
       }
     },
+    "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Endpoints\\RallyAPI.Delivery.Endpoints.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Endpoints\\RallyAPI.Delivery.Endpoints.csproj",
+        "projectName": "RallyAPI.Delivery.Endpoints",
+        "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Endpoints\\RallyAPI.Delivery.Endpoints.csproj",
+        "packagesPath": "C:\\Users\\vishw\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Endpoints\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\vishw\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Application\\RallyAPI.Delivery.Application.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Application\\RallyAPI.Delivery.Application.csproj"
+              },
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Domain\\RallyAPI.Delivery.Domain.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Domain\\RallyAPI.Delivery.Domain.csproj"
+              },
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Infrastructure\\RallyAPI.Delivery.Infrastructure.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Infrastructure\\RallyAPI.Delivery.Infrastructure.csproj"
+              },
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Integrations\\ProRouting\\ProRouting.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Integrations\\ProRouting\\ProRouting.csproj"
+              },
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Orders\\RallyAPI.Orders.Application\\RallyAPI.Orders.Application.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Orders\\RallyAPI.Orders.Application\\RallyAPI.Orders.Application.csproj"
+              },
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\RallyAPI.SharedKernel\\RallyAPI.SharedKernel.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\RallyAPI.SharedKernel\\RallyAPI.SharedKernel.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "MediatR": {
+              "target": "Package",
+              "version": "[12.4.1, )"
+            },
+            "Microsoft.AspNetCore.OpenApi": {
+              "target": "Package",
+              "version": "[8.0.23, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.AspNetCore.App": {
+              "privateAssets": "none"
+            },
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
     "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Infrastructure\\RallyAPI.Delivery.Infrastructure.csproj": {
       "version": "1.0.0",
       "restore": {
@@ -439,7 +621,7 @@
           "dependencies": {
             "Microsoft.EntityFrameworkCore": {
               "target": "Package",
-              "version": "[8.0.11, )"
+              "version": "[8.0.23, )"
             },
             "Npgsql.EntityFrameworkCore.PostgreSQL": {
               "target": "Package",
@@ -955,7 +1137,7 @@
           "dependencies": {
             "MediatR": {
               "target": "Package",
-              "version": "[12.2.0, )"
+              "version": "[12.4.1, )"
             },
             "Microsoft.Extensions.Logging.Abstractions": {
               "target": "Package",
@@ -1081,6 +1263,9 @@
             "projectReferences": {
               "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Pricing\\RallyAPI.Pricing.Application\\RallyAPI.Pricing.Application.csproj": {
                 "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Pricing\\RallyAPI.Pricing.Application\\RallyAPI.Pricing.Application.csproj"
+              },
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\RallyAPI.SharedKernel\\RallyAPI.SharedKernel.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\RallyAPI.SharedKernel\\RallyAPI.SharedKernel.csproj"
               }
             }
           }
@@ -1444,7 +1629,7 @@
             },
             "Microsoft.EntityFrameworkCore": {
               "target": "Package",
-              "version": "[8.0.22, )"
+              "version": "[8.0.23, )"
             },
             "Microsoft.EntityFrameworkCore.Design": {
               "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
@@ -1514,6 +1699,9 @@
               },
               "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Catalog\\RallyAPI.Catalog.Infrastructure\\RallyAPI.Catalog.Infrastructure.csproj": {
                 "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Catalog\\RallyAPI.Catalog.Infrastructure\\RallyAPI.Catalog.Infrastructure.csproj"
+              },
+              "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Endpoints\\RallyAPI.Delivery.Endpoints.csproj": {
+                "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Endpoints\\RallyAPI.Delivery.Endpoints.csproj"
               },
               "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Infrastructure\\RallyAPI.Delivery.Infrastructure.csproj": {
                 "projectPath": "C:\\Users\\vishw\\source\\repos\\Rally\\src\\Modules\\Delivery\\RallyAPI.Delivery.Infrastructure\\RallyAPI.Delivery.Infrastructure.csproj"
@@ -1704,6 +1892,14 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "MediatR": {
+              "target": "Package",
+              "version": "[12.4.1, )"
+            },
+            "Microsoft.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[8.0.23, )"
+            },
             "Microsoft.Extensions.Logging": {
               "target": "Package",
               "version": "[8.0.1, )"
