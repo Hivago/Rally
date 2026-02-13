@@ -302,6 +302,25 @@ public sealed class Order : AggregateRoot
     }
 
     /// <summary>
+    /// Assigns a rider to the order.
+    /// </summary>
+    public void AssignRider(Guid? riderId, string? riderName = null, string? riderPhone = null, string? trackingUrl = null)
+    {
+        // 3PL might not have a Guid RiderId, so we use empty for domestic consistency if needed
+        // but DeliveryInfo.AssignRider requires it. If null/empty, we handle gracefully.
+        DeliveryInfo.AssignRider(riderId ?? Guid.Empty, riderName, riderPhone);
+        
+        if (!string.IsNullOrWhiteSpace(trackingUrl))
+        {
+            DeliveryInfo.SetTrackingUrl(trackingUrl);
+        }
+        
+        UpdatedAt = DateTime.UtcNow;
+        
+        AddDomainEvent(new RiderAssignedEvent(Id, OrderNumber.Value, riderId ?? Guid.Empty));
+    }
+
+    /// <summary>
     /// Cancels the order.
     /// </summary>
     public void Cancel(CancellationReason reason, Guid? cancelledBy = null, string? notes = null)
@@ -390,12 +409,12 @@ public sealed class Order : AggregateRoot
     /// <summary>
     /// Updates rider info (called when Delivery Module assigns rider).
     /// </summary>
-    public void UpdateRiderInfo(Guid riderId, string? riderName = null, string? riderPhone = null)
+    public void UpdateRiderInfo(Guid? riderId, string? riderName = null, string? riderPhone = null)
     {
         if (Status.IsTerminal())
             throw new InvalidOperationException("Cannot update rider for completed order");
 
-        DeliveryInfo.AssignRider(riderId, riderName, riderPhone);
+        DeliveryInfo.AssignRider(riderId ?? Guid.Empty, riderName, riderPhone);
         UpdatedAt = DateTime.UtcNow;
     }
 

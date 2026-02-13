@@ -1,27 +1,30 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
-using RallyAPI.Delivery.Application.Commands.CreateDeliveryRequest;
-using RallyAPI.SharedKernel.Abstractions.Orders;
+using RallyAPI.Delivery.Domain.Abstractions;
+using RallyAPI.Delivery.Domain.Entities;
 using RallyAPI.SharedKernel.IntegrationEvents.Orders;
 
 namespace RallyAPI.Delivery.Application.EventHandlers;
 
 /// <summary>
-/// Handles OrderConfirmedIntegrationEvent - Creates DeliveryRequest when restaurant confirms
+/// Handles OrderConfirmedIntegrationEvent.
+/// Creates a DeliveryRequest and waits for Admin to dispatch manually.
+/// NO automatic rider dispatch - Admin will call rider and update status.
 /// </summary>
-public class OrderConfirmedIntegrationEventHandler : INotificationHandler<OrderConfirmedIntegrationEvent>
+public sealed class OrderConfirmedIntegrationEventHandler
+    : INotificationHandler<OrderConfirmedIntegrationEvent>
 {
-    private readonly IMediator _mediator;
-    private readonly IOrderQueryService _orderQueryService;
+    private readonly IDeliveryRequestRepository _deliveryRequestRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<OrderConfirmedIntegrationEventHandler> _logger;
 
     public OrderConfirmedIntegrationEventHandler(
-        IMediator mediator,
-        IOrderQueryService orderQueryService,
+        IDeliveryRequestRepository deliveryRequestRepository,
+        IUnitOfWork unitOfWork,
         ILogger<OrderConfirmedIntegrationEventHandler> logger)
     {
-        _mediator = mediator;
-        _orderQueryService = orderQueryService;
+        _deliveryRequestRepository = deliveryRequestRepository;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -30,70 +33,75 @@ public class OrderConfirmedIntegrationEventHandler : INotificationHandler<OrderC
         CancellationToken cancellationToken)
     {
         _logger.LogInformation(
-            "📦 Handling OrderConfirmedIntegrationEvent for Order {OrderId} ({OrderNumber})",
-            notification.OrderId,
+            "📦 Processing OrderConfirmedIntegrationEvent for Order {OrderNumber}",
             notification.OrderNumber);
 
-        try
+        // ═══════════════════════════════════════════════════════════════
+        // IDEMPOTENCY CHECK - Prevent duplicate DeliveryRequests
+        // ═══════════════════════════════════════════════════════════════
+
+        var existingDelivery = await _deliveryRequestRepository
+            .GetByOrderIdAsync(notification.OrderId, cancellationToken);
+
+        if (existingDelivery is not null)
         {
-            // Get order details via SharedKernel abstraction (not direct reference!)
-            var orderDetails = await _orderQueryService.GetOrderDeliveryDetailsAsync(
-                notification.OrderId,
-                cancellationToken);
-
-            if (orderDetails is null)
-            {
-                _logger.LogError(
-                    "❌ Order {OrderId} details not found",
-                    notification.OrderId);
-                return;
-            }
-
-            // Create delivery request
-            var command = new CreateDeliveryRequestCommand
-            {
-                OrderId = notification.OrderId,
-                OrderNumber = notification.OrderNumber,
-                QuoteId = orderDetails.QuoteId ?? Guid.Empty,
-
-                // Pickup (Restaurant)
-                PickupLatitude = orderDetails.PickupLatitude,
-                PickupLongitude = orderDetails.PickupLongitude,
-                PickupPincode = orderDetails.PickupPincode,
-                PickupAddress = orderDetails.PickupAddress,
-                PickupContactName = orderDetails.RestaurantName,
-                PickupContactPhone = orderDetails.RestaurantPhone,
-
-                // Drop (Customer)
-                DropLatitude = orderDetails.DropLatitude,
-                DropLongitude = orderDetails.DropLongitude,
-                DropPincode = orderDetails.DropPincode,
-                DropAddress = orderDetails.DropAddress,
-                DropContactName = orderDetails.CustomerName,
-                DropContactPhone = orderDetails.CustomerPhone
-            };
-
-            var result = await _mediator.Send(command, cancellationToken);
-
-            if (result.IsFailure)
-            {
-                _logger.LogError(
-                    "❌ Failed to create delivery request for Order {OrderId}: {Error}",
-                    notification.OrderId,
-                    result.Error);
-                return;
-            }
-
-            _logger.LogInformation(
-                "✅ Delivery request created for Order {OrderId}",
-                notification.OrderId);
+            _logger.LogWarning(
+                "⏭️ DeliveryRequest {DeliveryId} already exists for Order {OrderNumber}. " +
+                "Skipping duplicate event.",
+                existingDelivery.Id,
+                notification.OrderNumber);
+            return;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "❌ Error handling OrderConfirmedIntegrationEvent for Order {OrderId}",
-                notification.OrderId);
-            throw;
-        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // CREATE DELIVERY REQUEST
+        // Status: PendingDispatch (waiting for Admin to assign rider)
+        // ═══════════════════════════════════════════════════════════════
+
+        var deliveryRequest = DeliveryRequest.Create(
+            id: Guid.NewGuid(),
+            orderId: notification.OrderId,
+            orderNumber: notification.OrderNumber,
+            quoteId: notification.QuoteId,
+            quotedPrice: 0m, // Delivery fee not available here; admin handles pricing
+            // Pickup (Restaurant)
+            pickupLat: notification.PickupLatitude,
+            pickupLng: notification.PickupLongitude,
+            pickupPincode: notification.PickupPincode,
+            pickupAddress: notification.PickupAddress,
+            pickupContactName: notification.RestaurantName,
+            pickupContactPhone: notification.RestaurantPhone,
+            // Drop (Customer)
+            dropLat: notification.DropLatitude,
+            dropLng: notification.DropLongitude,
+            dropPincode: notification.DropPincode,
+            dropAddress: notification.DropAddress,
+            dropContactName: notification.CustomerName,
+            dropContactPhone: notification.CustomerPhone,
+            // Order context
+            restaurantId: notification.RestaurantId,
+            customerId: notification.CustomerId,
+            itemCount: notification.ItemCount,
+            totalAmount: notification.TotalAmount,
+            deliveryInstructions: notification.DeliveryInstructions,
+            // Status: PendingDispatch (dispatchAt set to now)
+            dispatchAt: notification.ConfirmedAt);
+
+        await _deliveryRequestRepository.AddAsync(deliveryRequest, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "✅ DeliveryRequest {DeliveryId} created for Order {OrderNumber}. " +
+            "Status: PendingDispatch. Waiting for Admin to assign rider.",
+            deliveryRequest.Id,
+            notification.OrderNumber);
+
+        // ═══════════════════════════════════════════════════════════════
+        // NO AUTO-DISPATCH!
+        // Admin will see this in dashboard and manually:
+        // 1. Call the rider
+        // 2. Share pickup/drop details
+        // 3. Update status in system
+        // ═══════════════════════════════════════════════════════════════
     }
 }

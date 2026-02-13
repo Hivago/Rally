@@ -10,14 +10,18 @@ namespace RallyAPI.SharedKernel.Results
     {
         public string Code { get; }
         public string Message { get; }
+        public string Details { get; }  
 
-        private Error(string code, string message)
+        private Error(string code, string message,string details = "")
         {
             Code = code;
             Message = message;
+            Details = details;
         }
 
-        public static Error None => new(string.Empty, string.Empty);
+        //public static Error None => new(string.Empty, string.Empty);
+        public static readonly Error None = new(string.Empty, string.Empty);
+
         public static Error NullValue => new("Error.NullValue", "A null value was provided.");
 
         public static Error Create(string code, string message) => new(code, message);
@@ -32,7 +36,7 @@ namespace RallyAPI.SharedKernel.Results
             new("Validation.Error", message);
 
         public static Error Validation(string message,string detail) =>
-            new("Validation.Error", message);
+            new("Validation.Error", message, detail);
 
         public static Error Conflict(string message) =>
             new("Conflict.Error", message);

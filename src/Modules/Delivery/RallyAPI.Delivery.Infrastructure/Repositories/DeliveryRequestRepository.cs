@@ -66,4 +66,5 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
         _dbContext.DeliveryRequests.Update(request);
         await _dbContext.SaveChangesAsync(ct);
     }
+
 }

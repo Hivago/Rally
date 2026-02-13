@@ -13,13 +13,15 @@ using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.SharedKernel.Infrastructure;
 using RallyAPI.Users.Endpoints;
 using System.Text;
+using RallyAPI.Host;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add this BEFORE other service registrations
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<DomainEventInterceptor>();
+builder.Services.AddScoped<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor>(sp => 
+    sp.GetRequiredService<DomainEventInterceptor>());
 
 // Add Users Module
 builder.Services.AddUsersModule(builder.Configuration);
@@ -77,7 +79,26 @@ builder.Services.AddPricingInfrastructure(builder.Configuration);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Add DataSeeder
+builder.Services.AddScoped<DataSeeder>();
+
 var app = builder.Build();
+
+// Seed Database
+try
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
+        await seeder.SeedAsync();
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine("CRITICAL ERROR IN SEEDING:");
+    Console.WriteLine(ex.ToString());
+    throw; // Rethrow to stop startup
+}
 
 // Add Global Exception Handler (early in pipeline!)
 app.UseGlobalExceptionHandler();

@@ -12,4 +12,5 @@ public interface IDeliveryRequestRepository
     Task<IReadOnlyList<DeliveryRequest>> GetPendingDispatchAsync(DateTime dispatchBefore, CancellationToken ct = default);
     Task AddAsync(DeliveryRequest request, CancellationToken ct = default);
     Task UpdateAsync(DeliveryRequest request, CancellationToken ct = default);
+ 
 }

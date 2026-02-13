@@ -18,6 +18,8 @@ public sealed class Address : ValueObject
     public string? Floor { get; }
     public string? ContactPhone { get; }
 
+    public string? FullAddress => GetFormattedAddress();
+
     // Additional fields for flexibility
     public string? Instructions { get; }
 

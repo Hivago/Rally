@@ -18,6 +18,7 @@ public sealed class OrderPricing : ValueObject
     public Money PackagingFee { get; }
     public Money ServiceFee { get; }
     public Money Tip { get; }
+    public Money TotalAmount { get; }
 
     // Discount details
     public string? DiscountCode { get; }

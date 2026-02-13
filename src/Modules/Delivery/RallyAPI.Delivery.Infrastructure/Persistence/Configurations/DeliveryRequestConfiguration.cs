@@ -30,6 +30,24 @@ public sealed class DeliveryRequestConfiguration : IEntityTypeConfiguration<Deli
         builder.Property(r => r.QuoteId)
             .HasColumnName("quote_id");
 
+        // Order Context
+        builder.Property(r => r.RestaurantId)
+            .HasColumnName("restaurant_id");
+
+        builder.Property(r => r.CustomerId)
+            .HasColumnName("customer_id");
+
+        builder.Property(r => r.ItemCount)
+            .HasColumnName("item_count");
+
+        builder.Property(r => r.TotalAmount)
+            .HasColumnName("total_amount")
+            .HasPrecision(10, 2);
+
+        builder.Property(r => r.DeliveryInstructions)
+            .HasColumnName("delivery_instructions")
+            .HasMaxLength(500);
+
         // Status
         builder.Property(r => r.Status)
             .HasColumnName("status")

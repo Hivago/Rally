@@ -1,3 +1,4 @@
+using MediatR;
 using RallyAPI.Delivery.Domain.Enums;
 using RallyAPI.Delivery.Domain.Events;
 using RallyAPI.SharedKernel.Domain;
@@ -17,6 +18,13 @@ public sealed class DeliveryRequest : AggregateRoot
     public Guid OrderId { get; private set; }
     public string OrderNumber { get; private set; } = string.Empty;
     public Guid? QuoteId { get; private set; }
+
+    // Order Context (from integration event)
+    public Guid? RestaurantId { get; private set; }
+    public Guid? CustomerId { get; private set; }
+    public int? ItemCount { get; private set; }
+    public decimal? TotalAmount { get; private set; }
+    public string? DeliveryInstructions { get; private set; }
 
     // Status
     public DeliveryRequestStatus Status { get; private set; }
@@ -85,6 +93,7 @@ public sealed class DeliveryRequest : AggregateRoot
 
     #region Factory
 
+
     public static DeliveryRequest Create(
         Guid id,
         Guid orderId,
@@ -95,6 +104,11 @@ public sealed class DeliveryRequest : AggregateRoot
         string pickupAddress, string pickupContactName, string pickupContactPhone,
         double dropLat, double dropLng, string dropPincode,
         string dropAddress, string dropContactName, string dropContactPhone,
+        Guid? restaurantId = null,
+        Guid? customerId = null,
+        int? itemCount = null,
+        decimal? totalAmount = null,
+        string? deliveryInstructions = null,
         DateTime? dispatchAt = null,
         decimal? distanceKm = null,
         int? estimatedMinutes = null)
@@ -109,6 +123,11 @@ public sealed class DeliveryRequest : AggregateRoot
             Status = dispatchAt.HasValue
                 ? DeliveryRequestStatus.PendingDispatch
                 : DeliveryRequestStatus.Created,
+            RestaurantId = restaurantId,
+            CustomerId = customerId,
+            ItemCount = itemCount,
+            TotalAmount = totalAmount,
+            DeliveryInstructions = deliveryInstructions,
             PickupLatitude = pickupLat,
             PickupLongitude = pickupLng,
             PickupPincode = pickupPincode,

@@ -24,7 +24,7 @@ public static class DependencyInjection
         services.AddDbContext<DeliveryDbContext>((sp, options) =>
         {
             options.UseNpgsql(
-                configuration.GetConnectionString("DefaultConnection"),
+                configuration.GetConnectionString("Database"),
                 b => b.MigrationsHistoryTable("__EFMigrationsHistory", DeliveryDbContext.Schema));
 
             options.AddInterceptors(sp.GetRequiredService<ISaveChangesInterceptor>());
@@ -34,6 +34,7 @@ public static class DependencyInjection
         // Repositories
         services.AddScoped<IDeliveryQuoteRepository, DeliveryQuoteRepository>();
         services.AddScoped<IDeliveryRequestRepository, DeliveryRequestRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Services
         services.AddScoped<RallyAPI.SharedKernel.Abstractions.Notifications.IRiderNotificationService, Services.StubRiderNotificationService>();

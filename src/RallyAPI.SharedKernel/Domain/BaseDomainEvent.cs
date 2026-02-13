@@ -15,7 +15,7 @@ namespace RallyAPI.SharedKernel.Domain
         protected BaseDomainEvent() 
         {
             EventId = Guid.NewGuid();
-            OccurredAt = DateTime.Now;
+            OccurredAt = DateTime.UtcNow;
         }
     }
 }
