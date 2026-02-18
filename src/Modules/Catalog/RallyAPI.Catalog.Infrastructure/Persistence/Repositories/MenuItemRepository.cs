@@ -22,7 +22,7 @@ internal sealed class MenuItemRepository : IMenuItemRepository
     {
         return await _context.MenuItems
             .Include(m => m.Options)
-            .FirstOrDefaultAsync(m => m.Id == id, ct);
+            .FirstOrDefaultAsync(m => m.MenuId == id, ct);
     }
 
     public async Task<List<MenuItem>> GetByMenuIdAsync(Guid menuId, CancellationToken ct = default)

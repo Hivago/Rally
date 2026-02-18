@@ -70,7 +70,10 @@ public sealed class OrderItemConfiguration : IEntityTypeConfiguration<OrderItem>
                 .HasColumnName("total_price")
                 .HasPrecision(10, 2)
                 .IsRequired();
-            money.Ignore(m => m.Currency);
+            money.Property(m => m.Currency)
+            .HasColumnName("total_price_currency")
+            .HasMaxLength(3)
+            .HasDefaultValue("INR");
         });
 
         // Instructions

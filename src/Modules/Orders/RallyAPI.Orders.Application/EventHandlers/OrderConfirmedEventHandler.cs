@@ -68,7 +68,7 @@ public sealed class OrderConfirmedEventHandler : INotificationHandler<OrderConfi
             dropPincode: order.DeliveryInfo.DeliveryAddress.Pincode,
             // Details
             itemCount: order.Items.Count,
-            totalAmount: order.Pricing.TotalAmount.Amount,
+            totalAmount: order.Pricing.Total.Amount,
             deliveryInstructions: order.SpecialInstructions,
             quoteId: quoteId,
             confirmedAt: order.ConfirmedAt ?? DateTime.UtcNow

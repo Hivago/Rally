@@ -83,7 +83,31 @@ builder.Services.AddPricingInfrastructure(builder.Configuration);
 
 // Add Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header
+    });
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 
 // Add Rate Limiting
@@ -95,8 +119,8 @@ builder.Services.AddRateLimiter(options =>
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new SlidingWindowRateLimiterOptions
             {
-                PermitLimit = 3,
-                Window = TimeSpan.FromMinutes(10),
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
                 SegmentsPerWindow = 2
             }));
 
@@ -106,8 +130,8 @@ builder.Services.AddRateLimiter(options =>
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new SlidingWindowRateLimiterOptions
             {
-                PermitLimit = 5,
-                Window = TimeSpan.FromMinutes(15),
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
                 SegmentsPerWindow = 3
             }));
 
@@ -117,7 +141,7 @@ builder.Services.AddRateLimiter(options =>
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new SlidingWindowRateLimiterOptions
             {
-                PermitLimit = 10,
+                PermitLimit = 100,
                 Window = TimeSpan.FromMinutes(1),
                 SegmentsPerWindow = 2
             }));

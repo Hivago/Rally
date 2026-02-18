@@ -8,21 +8,28 @@ namespace RallyAPI.Orders.Domain.ValueObjects;
 /// </summary>
 public sealed class OrderPricing : ValueObject
 {
-    public Money SubTotal { get; }
-    public Money DeliveryFee { get; }
-    public Money Tax { get; }
-    public Money Discount { get; }
-    public Money Total { get; }
 
-    // Breakdown for transparency
-    public Money PackagingFee { get; }
-    public Money ServiceFee { get; }
-    public Money Tip { get; }
-    public Money TotalAmount { get; }
-
-    // Discount details
-    public string? DiscountCode { get; }
-    public string? DiscountDescription { get; }
+    private OrderPricing()
+    {
+        SubTotal = Money.Zero();
+        DeliveryFee = Money.Zero();
+        Tax = Money.Zero();
+        Discount = Money.Zero();
+        PackagingFee = Money.Zero();
+        ServiceFee = Money.Zero();
+        Tip = Money.Zero();
+        Total = Money.Zero();
+    }
+    public Money SubTotal { get; private set; } = Money.Zero();
+    public Money DeliveryFee { get; private set; } = Money.Zero();
+    public Money Tax { get; private set; } = Money.Zero();
+    public Money Discount { get; private set; } = Money.Zero();
+    public Money Total { get; private set; } = Money.Zero();
+    public Money PackagingFee { get; private set; } = Money.Zero();
+    public Money ServiceFee { get; private set; } = Money.Zero();
+    public Money Tip { get; private set; } = Money.Zero();
+    public string? DiscountCode { get; private set; }
+    public string? DiscountDescription { get; private set; }
 
     private OrderPricing(
         Money subTotal,

@@ -102,67 +102,103 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
                     .IsRequired();
             });
 
+            //pricing.OwnsOne(p => p.DeliveryFee, money =>
+            //{
+            //    money.Property(m => m.Amount)
+            //        .HasColumnName("delivery_fee")
+            //        .HasPrecision(10, 2)
+            //        .IsRequired();
+            //    money.Ignore(m => m.Currency);
+            //});
+
+            //pricing.OwnsOne(p => p.Tax, money =>
+            //{
+            //    money.Property(m => m.Amount)
+            //        .HasColumnName("tax")
+            //        .HasPrecision(10, 2)
+            //        .IsRequired();
+            //    money.Ignore(m => m.Currency);
+            //});
+
+            //pricing.OwnsOne(p => p.Discount, money =>
+            //{
+            //    money.Property(m => m.Amount)
+            //        .HasColumnName("discount")
+            //        .HasPrecision(10, 2)
+            //        .IsRequired();
+            //    money.Ignore(m => m.Currency);
+            //});
+
+            //pricing.OwnsOne(p => p.PackagingFee, money =>
+            //{
+            //    money.Property(m => m.Amount)
+            //        .HasColumnName("packaging_fee")
+            //        .HasPrecision(10, 2)
+            //        .IsRequired();
+            //    money.Ignore(m => m.Currency);
+            //});
+
+            //pricing.OwnsOne(p => p.ServiceFee, money =>
+            //{
+            //    money.Property(m => m.Amount)
+            //        .HasColumnName("service_fee")
+            //        .HasPrecision(10, 2)
+            //        .IsRequired();
+            //    money.Ignore(m => m.Currency);
+            //});
+
+            //pricing.OwnsOne(p => p.Tip, money =>
+            //{
+            //    money.Property(m => m.Amount)
+            //        .HasColumnName("tip")
+            //        .HasPrecision(10, 2)
+            //        .IsRequired();
+            //    money.Ignore(m => m.Currency);
+            //});
+
+            //pricing.OwnsOne(p => p.Total, money =>
+            //{
+            //    money.Property(m => m.Amount)
+            //        .HasColumnName("total")
+            //        .HasPrecision(10, 2)
+            //        .IsRequired();
+            //    money.Ignore(m => m.Currency);
+            //});
+
             pricing.OwnsOne(p => p.DeliveryFee, money =>
             {
-                money.Property(m => m.Amount)
-                    .HasColumnName("delivery_fee")
-                    .HasPrecision(10, 2)
-                    .IsRequired();
-                money.Ignore(m => m.Currency);
+                money.Property(m => m.Amount).HasColumnName("delivery_fee").HasPrecision(10, 2).IsRequired();
+                money.Property(m => m.Currency).HasColumnName("delivery_fee_currency").HasMaxLength(3).HasDefaultValue("INR");
             });
-
             pricing.OwnsOne(p => p.Tax, money =>
             {
-                money.Property(m => m.Amount)
-                    .HasColumnName("tax")
-                    .HasPrecision(10, 2)
-                    .IsRequired();
-                money.Ignore(m => m.Currency);
+                money.Property(m => m.Amount).HasColumnName("tax").HasPrecision(10, 2).IsRequired();
+                money.Property(m => m.Currency).HasColumnName("tax_currency").HasMaxLength(3).HasDefaultValue("INR");
             });
-
             pricing.OwnsOne(p => p.Discount, money =>
             {
-                money.Property(m => m.Amount)
-                    .HasColumnName("discount")
-                    .HasPrecision(10, 2)
-                    .IsRequired();
-                money.Ignore(m => m.Currency);
+                money.Property(m => m.Amount).HasColumnName("discount").HasPrecision(10, 2).IsRequired();
+                money.Property(m => m.Currency).HasColumnName("discount_currency").HasMaxLength(3).HasDefaultValue("INR");
             });
-
             pricing.OwnsOne(p => p.PackagingFee, money =>
             {
-                money.Property(m => m.Amount)
-                    .HasColumnName("packaging_fee")
-                    .HasPrecision(10, 2)
-                    .IsRequired();
-                money.Ignore(m => m.Currency);
+                money.Property(m => m.Amount).HasColumnName("packaging_fee").HasPrecision(10, 2).IsRequired();
+                money.Property(m => m.Currency).HasColumnName("packaging_fee_currency").HasMaxLength(3).HasDefaultValue("INR");
             });
-
             pricing.OwnsOne(p => p.ServiceFee, money =>
             {
-                money.Property(m => m.Amount)
-                    .HasColumnName("service_fee")
-                    .HasPrecision(10, 2)
-                    .IsRequired();
-                money.Ignore(m => m.Currency);
+                money.Property(m => m.Amount).HasColumnName("service_fee").HasPrecision(10, 2).IsRequired();
+                money.Property(m => m.Currency).HasColumnName("service_fee_currency").HasMaxLength(3).HasDefaultValue("INR");
             });
-
             pricing.OwnsOne(p => p.Tip, money =>
             {
-                money.Property(m => m.Amount)
-                    .HasColumnName("tip")
-                    .HasPrecision(10, 2)
-                    .IsRequired();
-                money.Ignore(m => m.Currency);
+                money.Property(m => m.Amount).HasColumnName("tip").HasPrecision(10, 2).IsRequired();
+                money.Property(m => m.Currency).HasColumnName("tip_currency").HasMaxLength(3).HasDefaultValue("INR");
             });
-
             pricing.OwnsOne(p => p.Total, money =>
             {
-                money.Property(m => m.Amount)
-                    .HasColumnName("total")
-                    .HasPrecision(10, 2)
-                    .IsRequired();
-                money.Ignore(m => m.Currency);
+                money.Property(m => m.Amount).HasColumnName("total").HasPrecision(10, 2).IsRequired();
+                money.Property(m => m.Currency).HasColumnName("total_currency").HasMaxLength(3).HasDefaultValue("INR");
             });
 
             pricing.Property(p => p.DiscountCode)

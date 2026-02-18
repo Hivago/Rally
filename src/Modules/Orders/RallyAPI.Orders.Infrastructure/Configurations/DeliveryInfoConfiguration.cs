@@ -105,8 +105,11 @@ public sealed class DeliveryInfoConfiguration : IEntityTypeConfiguration<Deliver
             money.Property(m => m.Amount)
                 .HasColumnName("quoted_delivery_fee")
                 .HasPrecision(10, 2);
-            money.Ignore(m => m.Currency);
-        });
+            money.Property(m => m.Currency)
+                .HasColumnName("quoted_delivery_fee_currency")
+                .HasMaxLength(3)
+                .HasDefaultValue("INR");
+        }); 
 
         builder.Property(d => d.EstimatedMinutes)
             .HasColumnName("estimated_minutes");

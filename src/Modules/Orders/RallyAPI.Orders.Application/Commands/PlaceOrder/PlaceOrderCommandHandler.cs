@@ -110,6 +110,11 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
                 item.ImageUrl,
                 item.SpecialInstructions)).ToList();
 
+            _logger.LogInformation("Received pricing - SubTotal: {Sub}, DeliveryFee: {Del}, Tax: {Tax}",
+            command.Request.Pricing.SubTotal,
+            command.Request.Pricing.DeliveryFee,
+            command.Request.Pricing.Tax);
+
             // Step 8: Create pricing (already calculated by Cart/Delivery Module)
             var pricing = OrderPricing.Create(
                 Money.FromDecimal(command.Request.Pricing.SubTotal, DefaultCurrency),
@@ -127,6 +132,10 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
                     : null,
                 command.Request.Pricing.DiscountCode,
                 command.Request.Pricing.DiscountDescription);
+
+
+            _logger.LogInformation("OrderPricing created - SubTotal: {Sub}, Total: {Total}",
+            pricing.SubTotal.Amount, pricing.Total.Amount);
 
             // Step 9: Create paid order
             var order = Order.CreatePaidOrder(
@@ -147,6 +156,12 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
 
             // Step 10: Add items
             order.AddItems(orderItems);
+
+            _logger.LogInformation("Order pricing - SubTotal: {Sub}, DeliveryFee: {Del}, Tax: {Tax}, Total: {Total}",
+            order.Pricing.SubTotal.Amount,
+            order.Pricing.DeliveryFee.Amount,
+            order.Pricing.Tax.Amount,
+            order.Pricing.Total.Amount);
 
             // Step 11: Finalize and save
             order.FinalizeOrder();
