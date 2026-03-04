@@ -1,0 +1,38 @@
+# ============================================
+# .dockerignore - Keep Docker build fast and small
+# ============================================
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vs
+.vscode
+.idea
+*.user
+*.suo
+
+# Build outputs
+**/bin/
+**/obj/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files
+docker-compose*.yml
+Dockerfile*
+
+# Docs
+*.md
+docs/
+README*
+
+# Keys (mounted at runtime, not baked into image)
+**/Keys/*.pem
+
+# Misc
+*.log
+node_modules/
