@@ -280,5 +280,18 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
 
         // Ignore domain events
         builder.Ignore(o => o.DomainEvents);
+
+        // Escalation tracking
+        builder.Property(o => o.IsEscalated)
+            .HasColumnName("is_escalated")
+            .HasDefaultValue(false);
+
+        builder.Property(o => o.EscalatedAt)
+            .HasColumnName("escalated_at");
+
+        builder.Property(o => o.EscalationReason)
+            .HasColumnName("escalation_reason")
+            .HasMaxLength(500);
     }
+
 }

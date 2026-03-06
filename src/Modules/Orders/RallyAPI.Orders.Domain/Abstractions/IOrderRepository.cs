@@ -43,6 +43,11 @@ public interface IOrderRepository
         Guid riderId,
         CancellationToken cancellationToken = default);
 
+    Task<List<Order>> GetOrdersByStatusOlderThanAsync(
+    OrderStatus status,
+    DateTime olderThan,
+    CancellationToken cancellationToken = default);
+
     // Counts
     Task<int> GetCountByCustomerIdAsync(Guid customerId, CancellationToken cancellationToken = default);
     Task<int> GetCountByRestaurantIdAsync(Guid restaurantId, CancellationToken cancellationToken = default);
