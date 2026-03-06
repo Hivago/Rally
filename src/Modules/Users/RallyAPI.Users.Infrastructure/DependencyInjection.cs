@@ -90,39 +90,22 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionMultiplexer>(
             ConnectionMultiplexer.Connect(redisConnection));
 
-        // SMS Service — Exotel in production, Console in development
 
-        var useExotel = configuration.GetSection("Exotel").Exists();
-        if (useExotel)
+        // MSG91 WhatsApp OTP delivery — or Console fallback for dev
+        if (configuration.GetSection(Msg91WhatsAppOptions.SectionName).Exists())
         {
-            services.Configure<ExotelOptions>(
-                configuration.GetSection(ExotelOptions.SectionName));
+            services.Configure<Msg91WhatsAppOptions>(
+                configuration.GetSection(Msg91WhatsAppOptions.SectionName));
 
-            services.AddHttpClient<ISmsService, ExotelSmsService>(client =>
+            services.AddHttpClient<ISmsService, Msg91WhatsAppService>(client =>
             {
-                client.Timeout = TimeSpan.FromSeconds(10);
+                client.Timeout = TimeSpan.FromSeconds(30);
             });
         }
         else
         {
             services.AddSingleton<ISmsService, ConsoleSmsService>();
         }
-
-        // -------------------------------------------------------
-        // NOTE ON AddHttpClient<ISmsService, ExotelSmsService>:
-        // -------------------------------------------------------
-        // This registers ExotelSmsService as a TYPED HttpClient, meaning:
-        //   - HttpClient is injected into ExotelSmsService's constructor
-        //   - HttpClient lifecycle is managed by IHttpClientFactory (pooling, DNS refresh)
-        //   - No need to manually create/dispose HttpClient
-        //
-        // If your DI method uses WebApplicationBuilder:
-        //   Replace `services.` with `builder.Services.`
-        //   Replace `configuration.` with `builder.Configuration.`
-        //
-        // If your DI method uses IServiceCollection + IConfiguration params:
-        //   Use them directly as shown above.
-        // ============================================================================
 
         services.AddScoped<IOtpService, OtpService>();
 
