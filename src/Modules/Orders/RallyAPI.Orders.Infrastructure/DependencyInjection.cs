@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RallyAPI.Orders.Application.Abstractions;
 using RallyAPI.Orders.Domain.Abstractions;
+using RallyAPI.Orders.Infrastructure.BackgroundServices;
 using RallyAPI.Orders.Infrastructure.Repositories;
 using RallyAPI.Orders.Infrastructure.Services;
 
@@ -35,6 +36,11 @@ public static class DependencyInjection
 
             options.AddInterceptors(sp.GetRequiredService<ISaveChangesInterceptor>());
         });
+
+        // Auto-cancel background service (two-stage: escalate → cancel)
+        services.Configure<AutoCancelOptions>(
+            configuration.GetSection(AutoCancelOptions.SectionName));
+        services.AddHostedService<OrderAutoCancelService>();
 
         // Repositories
         services.AddScoped<IOrderRepository, OrderRepository>();

@@ -72,6 +72,10 @@ public sealed class Order : AggregateRoot
     // EF Core constructor
     private Order() { }
 
+    public bool IsEscalated { get; private set; }
+    public DateTime? EscalatedAt { get; private set; }
+    public string? EscalationReason { get; private set; }
+
     private Order(
         OrderNumber orderNumber,
         Guid customerId,
@@ -466,4 +470,29 @@ public sealed class Order : AggregateRoot
     }
 
     #endregion
+
+    /// <summary>
+    /// Stage 1: Escalate order to admin when restaurant doesn't confirm in time.
+    /// Flags the order and raises a domain event for admin notification.
+    /// </summary>
+    public void EscalateToAdmin(string reason)
+    {
+        if (Status != OrderStatus.Paid)
+            return; // Only escalate orders waiting for restaurant confirmation
+
+        if (IsEscalated)
+            return; // Already escalated, don't raise duplicate events
+
+        IsEscalated = true;
+        EscalatedAt = DateTime.UtcNow;
+        EscalationReason = reason;
+        UpdatedAt = DateTime.UtcNow;
+
+        AddDomainEvent(new Events.OrderEscalatedToAdminEvent(
+            Id,
+            OrderNumber.Value,  // adjust if OrderNumber is a string, not a value object
+            RestaurantId,
+            reason,
+            EscalatedAt.Value));
+    }
 }

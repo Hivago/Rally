@@ -171,4 +171,14 @@ public sealed class OrderRepository : IOrderRepository
     {
         return await _context.Orders.AnyAsync(o => o.OrderNumber.Value == orderNumber, cancellationToken);
     }
+
+    public async Task<List<Order>> GetOrdersByStatusOlderThanAsync(
+    OrderStatus status,
+    DateTime olderThan,
+    CancellationToken cancellationToken = default)
+    {
+        return await _context.Orders
+            .Where(o => o.Status == status && o.CreatedAt < olderThan)
+            .ToListAsync(cancellationToken);
+    }
 }
