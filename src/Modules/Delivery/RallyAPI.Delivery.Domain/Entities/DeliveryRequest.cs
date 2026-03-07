@@ -159,20 +159,23 @@ public sealed class DeliveryRequest : AggregateRoot
 
     public void StartSearchingOwnFleet()
     {
-        EnsureStatus(DeliveryRequestStatus.Created, DeliveryRequestStatus.PendingDispatch);
+        EnsureStatus(DeliveryRequestStatus.Created, DeliveryRequestStatus.PendingDispatch, DeliveryRequestStatus.Searching3PL);
 
         Status = DeliveryRequestStatus.SearchingOwnFleet;
         FleetType = Enums.FleetType.OwnFleet;
-        SearchingStartedAt = DateTime.UtcNow;
+        // Only set SearchingStartedAt if it hasn't been set yet (e.g. from a prior 3PL search)
+        SearchingStartedAt ??= DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 
     public void StartSearching3PL()
     {
-        EnsureStatus(DeliveryRequestStatus.SearchingOwnFleet);
+        EnsureStatus(DeliveryRequestStatus.Created, DeliveryRequestStatus.PendingDispatch, DeliveryRequestStatus.SearchingOwnFleet);
 
         Status = DeliveryRequestStatus.Searching3PL;
         FleetType = Enums.FleetType.ThirdParty;
+        // Only set SearchingStartedAt if it hasn't been set yet
+        SearchingStartedAt ??= DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -323,6 +326,22 @@ public sealed class DeliveryRequest : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void TransitionToOwnFleetSearch()
+    {
+        EnsureStatus(DeliveryRequestStatus.Searching3PL, DeliveryRequestStatus.Assigned3PL);
+
+        // Clear stale 3PL info
+        ExternalTaskId = null;
+        ExternalTrackingUrl = null;
+        ExternalLspName = null;
+        ExternalRiderName = null;
+        ExternalRiderPhone = null;
+
+        Status = DeliveryRequestStatus.SearchingOwnFleet;
+        FleetType = Enums.FleetType.OwnFleet;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     #endregion
 
     #region Rider Offers
@@ -396,7 +415,8 @@ public sealed class DeliveryRequest : AggregateRoot
             return; // Already searching or assigned
         }
 
-        Status = DeliveryRequestStatus.SearchingOwnFleet;
+        Status = DeliveryRequestStatus.Searching3PL;
+        FleetType = Enums.FleetType.ThirdParty;
         SearchingStartedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }

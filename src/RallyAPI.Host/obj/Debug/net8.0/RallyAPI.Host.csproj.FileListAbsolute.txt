@@ -179,7 +179,6 @@ C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\refint\Rall
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.genruntimeconfig.cache
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\ref\RallyAPI.Host.dll
-C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\Keys\private.pem
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\Keys\public.pem
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\HealthChecks.NpgSql.dll

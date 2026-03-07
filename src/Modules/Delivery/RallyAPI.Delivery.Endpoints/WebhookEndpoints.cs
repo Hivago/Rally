@@ -7,6 +7,8 @@ using RallyAPI.Delivery.Domain.Enums;
 using RallyAPI.Delivery.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using RallyAPI.Integrations.ProRouting.Models;
+using MediatR;
+using RallyAPI.Delivery.Application.Commands.TriggerDispatch;
 
 namespace RallyAPI.Delivery.Endpoints;
 
@@ -31,6 +33,7 @@ public static class WebhookEndpoints
     private static async Task<IResult> HandleProRoutingWebhook(
         [FromBody] ProRoutingWebhookPayload payload,
         DeliveryDbContext dbContext,
+        ISender sender,
         ILogger<ProRoutingWebhookPayload> logger,
         CancellationToken ct)
     {
@@ -68,6 +71,16 @@ public static class WebhookEndpoints
                         payload.Agent?.Name,
                         payload.Agent?.Phone,
                         payload.TrackingUrl);
+                    if (delivery.Status == DeliveryRequestStatus.Searching3PL)
+                    {
+                        delivery.Assign3PLRider(
+                            payload.OrderId,
+                            "ProRouting",
+                            payload.Agent?.Name,
+                            payload.Agent?.Phone,
+                            payload.TrackingUrl,
+                            delivery.QuotedPrice); // Base price initially
+                    }
                     break;
 
                 case "picked-up":
@@ -84,9 +97,24 @@ public static class WebhookEndpoints
                 case "cancelled":
                 case "failed":
                 case "rto-initiated":
-                    delivery.MarkFailed(
-                        DeliveryFailureReason.ThirdPartyFailed,
-                        payload.CancelReason ?? payload.State);
+                    if (delivery.Status == DeliveryRequestStatus.Searching3PL || delivery.Status == DeliveryRequestStatus.Assigned3PL)
+                    {
+                        logger.LogInformation("3PL failed for delivery {DeliveryId}. Triggering Own Fleet fallback via background command.", delivery.Id);
+                        
+                        // Clean up 3PL variables and transition state so orchestrator tries Own Fleet
+                        delivery.TransitionToOwnFleetSearch();
+                        await dbContext.SaveChangesAsync(ct);
+                        
+                        // Fire-and-forget background processing command
+                        _ = sender.Send(new TriggerDispatchCommand { DeliveryRequestId = delivery.Id }, ct);
+                        return Results.Ok(new { message = "Webhook processed, Own Fleet fallback triggered" });
+                    }
+                    else
+                    {
+                        delivery.MarkFailed(
+                            DeliveryFailureReason.ThirdPartyFailed,
+                            payload.CancelReason ?? payload.State);
+                    }
                     break;
 
                 default:

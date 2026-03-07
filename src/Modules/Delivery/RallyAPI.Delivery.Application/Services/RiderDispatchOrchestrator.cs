@@ -42,8 +42,36 @@ public sealed class RiderDispatchOrchestrator
             "Starting dispatch for delivery {DeliveryId}",
             deliveryRequest.Id);
 
-        // Start searching own fleet
-        deliveryRequest.StartSearchingOwnFleet();
+        // If explicitly falling back to Own Fleet, bypass 3PL entirely
+        if (deliveryRequest.Status == DeliveryRequestStatus.SearchingOwnFleet)
+        {
+             _logger.LogInformation("Skipping 3PL and assigning via Own Fleet directly for delivery {DeliveryId}.", deliveryRequest.Id);
+             return await AssignViaOwnFleetAsync(deliveryRequest, ct);
+        }
+
+        // Start searching 3PL first priority
+        if (deliveryRequest.Status == DeliveryRequestStatus.Created || deliveryRequest.Status == DeliveryRequestStatus.PendingDispatch)
+        {
+            deliveryRequest.StartSearching3PL();
+            await _requestRepository.UpdateAsync(deliveryRequest, ct);
+        }
+
+        var dispatchResult = await AssignVia3PLAsync(deliveryRequest, ct);
+
+        if (!dispatchResult.IsSuccess)
+        {
+            _logger.LogInformation("3PL assignment failed or timed out. Falling back to Own Fleet for delivery {DeliveryId}", deliveryRequest.Id);
+            return await AssignViaOwnFleetAsync(deliveryRequest, ct);
+        }
+
+        return dispatchResult;
+    }
+
+    private async Task<DispatchResult> AssignViaOwnFleetAsync(
+        DeliveryRequest deliveryRequest,
+        CancellationToken ct)
+    {
+        deliveryRequest.TransitionToOwnFleetSearch();
         await _requestRepository.UpdateAsync(deliveryRequest, ct);
 
         // Get available riders
@@ -58,8 +86,10 @@ public sealed class RiderDispatchOrchestrator
 
         if (!riders.Any())
         {
-            _logger.LogInformation("No riders available, falling back to 3PL");
-            return await FallbackTo3PLAsync(deliveryRequest, ct);
+            _logger.LogInformation("No riders available in Own Fleet");
+            deliveryRequest.MarkFailed(DeliveryFailureReason.NoRidersAvailable, "All dispatch options exhausted (ProRouting failed/timed out and Own Fleet unavailable)");
+            await _requestRepository.UpdateAsync(deliveryRequest, ct);
+            return DispatchResult.Failed("No riders available after exhausting all options.");
         }
 
         // Sequential notification
@@ -135,19 +165,19 @@ public sealed class RiderDispatchOrchestrator
 
         // All riders exhausted
         _logger.LogInformation(
-            "All {Count} riders exhausted, falling back to 3PL",
+            "All {Count} Own Fleet riders exhausted",
             riders.Count);
 
-        return await FallbackTo3PLAsync(deliveryRequest, ct);
+        deliveryRequest.MarkFailed(DeliveryFailureReason.NoRidersAvailable, "All dispatch options exhausted (ProRouting failed/timed out and Own Fleet declined)");
+        await _requestRepository.UpdateAsync(deliveryRequest, ct);
+
+        return DispatchResult.Failed("All riders exhausted");
     }
 
-    private async Task<DispatchResult> FallbackTo3PLAsync(
+    private async Task<DispatchResult> AssignVia3PLAsync(
         DeliveryRequest deliveryRequest,
         CancellationToken ct)
     {
-        deliveryRequest.StartSearching3PL();
-        await _requestRepository.UpdateAsync(deliveryRequest, ct);
-
         var createResult = await _thirdPartyProvider.CreateTaskAsync(
             new CreateTaskRequest
             {
@@ -182,31 +212,37 @@ public sealed class RiderDispatchOrchestrator
                 "3PL booking failed for delivery {DeliveryId}: {Error}",
                 deliveryRequest.Id, createResult.ErrorMessage);
 
-            deliveryRequest.MarkFailed(
-                DeliveryFailureReason.ThirdPartyFailed,
-                createResult.ErrorMessage);
-
-            await _requestRepository.UpdateAsync(deliveryRequest, ct);
-
             return DispatchResult.Failed(createResult.ErrorMessage ?? "3PL booking failed");
         }
 
-        // 3PL will send rider info via webhook
-        deliveryRequest.Assign3PLRider(
-            createResult.TaskId!,
-            createResult.ProviderName ?? "ProRouting",
-            null, // Rider info comes via webhook
-            null,
-            createResult.TrackingUrl,
-            deliveryRequest.QuotedPrice); // Actual price TBD
-
-        await _requestRepository.UpdateAsync(deliveryRequest, ct);
-
         _logger.LogInformation(
-            "3PL task created for delivery {DeliveryId}: {TaskId}",
-            deliveryRequest.Id, createResult.TaskId);
+            "3PL task created for delivery {DeliveryId}: {TaskId}. Waiting {Timeout}s for assignment.",
+            deliveryRequest.Id, createResult.TaskId, _options.AcceptanceTimeoutSeconds);
 
-        return DispatchResult.Success(FleetType.ThirdParty, null, createResult.TaskId);
+        // Wait for webhook assignment
+        await Task.Delay(TimeSpan.FromSeconds(_options.AcceptanceTimeoutSeconds), ct);
+
+        // Reload to get the freshest state (avoid race condition with late webhook)
+        deliveryRequest = (await _requestRepository.GetByIdWithOffersAsync(deliveryRequest.Id, ct))!;
+
+        if (deliveryRequest.Status == DeliveryRequestStatus.Searching3PL)
+        {
+            _logger.LogWarning("ProRouting timeout reached, cancelling 3PL and falling back...");
+            await _thirdPartyProvider.CancelTaskAsync(createResult.TaskId!, "Rider assignment timeout from Orchestrator", ct);
+            return DispatchResult.Failed("3PL assignment timed out");
+        }
+
+        // It either got Assigned3PL or some other status (e.g. Cancelled/Failed via webhook)
+        if (deliveryRequest.Status == DeliveryRequestStatus.Assigned3PL)
+        {
+             return DispatchResult.Success(FleetType.ThirdParty, null, createResult.TaskId);
+        }
+        else 
+        {
+             // If the status is not Assigned3PL and not Searching3PL, it means the webhook explicitly failed/cancelled it already. 
+             // We return a failure here so we fallback to Own Fleet. 
+            return DispatchResult.Failed($"3PL webhook returned alternative status: {deliveryRequest.Status}");
+        }
     }
 
     private decimal CalculateEarnings(decimal deliveryFee)

@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using RallyAPI.Delivery.Domain.Abstractions;
 using RallyAPI.SharedKernel.Results;
+using RallyAPI.Delivery.Application.Services;
 
 namespace RallyAPI.Delivery.Application.Commands.TriggerDispatch;
 
@@ -9,15 +10,18 @@ public class TriggerDispatchCommandHandler : IRequestHandler<TriggerDispatchComm
 {
     private readonly IDeliveryRequestRepository _deliveryRequestRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly RiderDispatchOrchestrator _riderDispatchOrchestrator;
     private readonly ILogger<TriggerDispatchCommandHandler> _logger;
 
     public TriggerDispatchCommandHandler(
         IDeliveryRequestRepository deliveryRequestRepository,
         IUnitOfWork unitOfWork,
+        RiderDispatchOrchestrator riderDispatchOrchestrator,
         ILogger<TriggerDispatchCommandHandler> logger)
     {
         _deliveryRequestRepository = deliveryRequestRepository;
         _unitOfWork = unitOfWork;
+        _riderDispatchOrchestrator = riderDispatchOrchestrator;
         _logger = logger;
     }
 
@@ -38,18 +42,20 @@ public class TriggerDispatchCommandHandler : IRequestHandler<TriggerDispatchComm
             return Result.Failure(Error.NotFound("DeliveryRequest.NotFound"));
         }
 
-        // Start searching for riders
-        deliveryRequest.StartSearching();
-
-        _deliveryRequestRepository.UpdateAsync(deliveryRequest);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        // Only start searching if it is newly created or pending a scheduled dispatch
+        if (deliveryRequest.ShouldTriggerImmediateDispatch())
+        {
+            deliveryRequest.StartSearching();
+            await _deliveryRequestRepository.UpdateAsync(deliveryRequest, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
 
         _logger.LogInformation(
             "✅ Dispatch triggered for DeliveryRequest {DeliveryRequestId}",
             request.DeliveryRequestId);
 
-        // TODO: Trigger actual rider dispatch orchestrator here
-        // await _riderDispatchOrchestrator.DispatchAsync(deliveryRequest, cancellationToken);
+        // Execute actual rider dispatch orchestrator here
+        await _riderDispatchOrchestrator.DispatchAsync(deliveryRequest, cancellationToken);
 
         return Result.Success();
     }
