@@ -74,9 +74,6 @@ public sealed class ProRoutingClient : IDeliveryQuoteProvider
 
             var content = new StringContent(requestJson, System.Text.Encoding.UTF8, "application/json");
 
-            // Log headers for debugging
-            _logger.LogInformation("ProRouting Headers: {Headers}",
-                string.Join(", ", _httpClient.DefaultRequestHeaders.Select(h => $"{h.Key}: {h.Value.First()}")));
 
             var response = await _httpClient.PostAsJsonAsync(
                 EstimateEndpoint,

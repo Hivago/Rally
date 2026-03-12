@@ -35,6 +35,12 @@ public sealed class AssignRiderCommandHandler : IRequestHandler<AssignRiderComma
             return Result.Failure<OrderDto>(OrderErrors.NotFound(command.OrderId));
         }
 
+        if (!CanAssignRider(order, command))
+        {
+            return Result.Failure<OrderDto>(
+                Error.Forbidden("You are not allowed to assign a rider to this order."));
+        }
+
         // Can only assign rider to active orders
         if (!order.Status.IsActive())
         {
@@ -61,5 +67,19 @@ public sealed class AssignRiderCommandHandler : IRequestHandler<AssignRiderComma
             _logger.LogError(ex, "Failed to assign rider to order {OrderId}", command.OrderId);
             return Result.Failure<OrderDto>(OrderErrors.Unexpected(ex.Message));
         }
+    }
+
+    private static bool CanAssignRider(
+        Domain.Entities.Order order,
+        AssignRiderCommand command)
+    {
+        if (string.Equals(command.RequestedByUserType, "admin", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return string.Equals(command.RequestedByUserType, "restaurant", StringComparison.OrdinalIgnoreCase)
+            && command.RequestedById.HasValue
+            && order.RestaurantId == command.RequestedById.Value;
     }
 }

@@ -71,7 +71,7 @@ public static class OrderEndpoints
         group.MapGet("/restaurant/{restaurantId:guid}", GetRestaurantOrders)
             .WithName("GetRestaurantOrders")
             .WithSummary("Get orders for a restaurant")
-            .RequireAuthorization("Restaurant")
+            .RequireAuthorization("RestaurantOrAdmin")
             .Produces<PagedResult<OrderSummaryDto>>();
 
         // Get Active Orders (Admin)
@@ -94,7 +94,7 @@ public static class OrderEndpoints
         group.MapPut("/{orderId:guid}/preparing", StartPreparing)
             .WithName("StartPreparing")
             .WithSummary("Mark order as preparing")
-            .RequireAuthorization("Restaurant")
+            .RequireAuthorization("RestaurantOrAdmin")
             .Produces<OrderDto>()
             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest);
 
@@ -102,7 +102,7 @@ public static class OrderEndpoints
         group.MapPut("/{orderId:guid}/ready", MarkReadyForPickup)
             .WithName("MarkReadyForPickup")
             .WithSummary("Mark order as ready for pickup")
-            .RequireAuthorization("Restaurant")
+            .RequireAuthorization("RestaurantOrAdmin")
             .Produces<OrderDto>()
             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest);
 
@@ -192,7 +192,8 @@ public static class OrderEndpoints
                 }
             });
         })
-.WithTags("Test");
+            .WithTags("Test")
+            .RequireAuthorization("Admin");
 
         return app;
     }
@@ -240,9 +241,21 @@ public static class OrderEndpoints
     private static async Task<IResult> GetOrderById(
         Guid orderId,
         IMediator mediator,
+        ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetOrderByIdQuery(orderId), cancellationToken);
+        if (!currentUser.IsAuthenticated)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator.Send(new GetOrderByIdQuery
+        {
+            OrderId = orderId,
+            RequestingUserId = currentUser.UserId,
+            RequestingUserType = currentUser.UserType,
+            IsAdmin = currentUser.IsAdmin
+        }, cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -252,9 +265,21 @@ public static class OrderEndpoints
     private static async Task<IResult> GetOrderByNumber(
         string orderNumber,
         IMediator mediator,
+        ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetOrderByNumberQuery(orderNumber), cancellationToken);
+        if (!currentUser.IsAuthenticated)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator.Send(new GetOrderByNumberQuery
+        {
+            OrderNumber = orderNumber,
+            RequestingUserId = currentUser.UserId,
+            RequestingUserType = currentUser.UserType,
+            IsAdmin = currentUser.IsAdmin
+        }, cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -293,8 +318,19 @@ public static class OrderEndpoints
         [FromQuery] int page,
         [FromQuery] int pageSize,
         IMediator mediator,
+        ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
+        if (!currentUser.UserId.HasValue)
+        {
+            return Results.Unauthorized();
+        }
+
+        if (!currentUser.IsAdmin && restaurantId != currentUser.UserId.Value)
+        {
+            return Results.Forbid();
+        }
+
         var query = new GetOrdersByRestaurantQuery
         {
             RestaurantId = restaurantId,
@@ -333,9 +369,14 @@ public static class OrderEndpoints
         ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
+        if (!currentUser.UserId.HasValue)
+        {
+            return Results.Unauthorized();
+        }
+
         /// TODO: Get restaurant ID from current user's associated restaurant
         // For MVP, accept restaurant ID from user claims or require it in request
-        var restaurantId = currentUser.UserId ?? Guid.Empty;
+        var restaurantId = currentUser.UserId.Value;
 
         var result = await mediator.Send(
             new ConfirmOrderCommand(orderId, restaurantId),
@@ -352,12 +393,18 @@ public static class OrderEndpoints
         ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
+        if (!currentUser.UserId.HasValue)
+        {
+            return Results.Unauthorized();
+        }
+
         var command = new UpdateOrderStatusCommand
         {
             OrderId = orderId,
             TargetStatus = OrderStatus.Preparing,
             ActorId = currentUser.UserId,
-            ActorRole = "Restaurant"
+            ActorRole = currentUser.IsAdmin ? "Admin" : "Restaurant",
+            ActorUserType = currentUser.IsAdmin ? "admin" : currentUser.UserType
         };
 
         var result = await mediator.Send(command, cancellationToken);
@@ -373,12 +420,18 @@ public static class OrderEndpoints
         ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
+        if (!currentUser.UserId.HasValue)
+        {
+            return Results.Unauthorized();
+        }
+
         var command = new UpdateOrderStatusCommand
         {
             OrderId = orderId,
             TargetStatus = OrderStatus.ReadyForPickup,
             ActorId = currentUser.UserId,
-            ActorRole = "Restaurant"
+            ActorRole = currentUser.IsAdmin ? "Admin" : "Restaurant",
+            ActorUserType = currentUser.IsAdmin ? "admin" : currentUser.UserType
         };
 
         var result = await mediator.Send(command, cancellationToken);
@@ -392,14 +445,22 @@ public static class OrderEndpoints
         Guid orderId,
         [FromBody] AssignRiderRequest request,
         IMediator mediator,
+        ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
+        if (!currentUser.UserId.HasValue)
+        {
+            return Results.Unauthorized();
+        }
+
         var command = new AssignRiderCommand
         {
             OrderId = orderId,
             RiderId = request.RiderId,
             RiderName = request.RiderName,
-            RiderPhone = request.RiderPhone
+            RiderPhone = request.RiderPhone,
+            RequestedById = currentUser.UserId,
+            RequestedByUserType = currentUser.IsAdmin ? "admin" : currentUser.UserType
         };
 
         var result = await mediator.Send(command, cancellationToken);
@@ -415,12 +476,18 @@ public static class OrderEndpoints
         ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
+        if (!currentUser.UserId.HasValue)
+        {
+            return Results.Unauthorized();
+        }
+
         var command = new UpdateOrderStatusCommand
         {
             OrderId = orderId,
             TargetStatus = OrderStatus.PickedUp,
             ActorId = currentUser.UserId,
-            ActorRole = "Rider"
+            ActorRole = currentUser.IsAdmin ? "Admin" : "Rider",
+            ActorUserType = currentUser.IsAdmin ? "admin" : currentUser.UserType
         };
 
         var result = await mediator.Send(command, cancellationToken);
@@ -436,12 +503,18 @@ public static class OrderEndpoints
         ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
+        if (!currentUser.UserId.HasValue)
+        {
+            return Results.Unauthorized();
+        }
+
         var command = new UpdateOrderStatusCommand
         {
             OrderId = orderId,
             TargetStatus = OrderStatus.Delivered,
             ActorId = currentUser.UserId,
-            ActorRole = "Rider"
+            ActorRole = currentUser.IsAdmin ? "Admin" : "Rider",
+            ActorUserType = currentUser.IsAdmin ? "admin" : currentUser.UserType
         };
 
         var result = await mediator.Send(command, cancellationToken);
@@ -458,10 +531,16 @@ public static class OrderEndpoints
         ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
+        if (!currentUser.UserId.HasValue)
+        {
+            return Results.Unauthorized();
+        }
+
         var command = new CancelOrderCommand
         {
             OrderId = orderId,
-            CancelledBy = currentUser.UserId ?? Guid.Empty,
+            CancelledBy = currentUser.UserId.Value,
+            CancelledByUserType = currentUser.IsAdmin ? "admin" : currentUser.UserType,
             Reason = request.Reason,
             Notes = request.Notes
         };
@@ -507,7 +586,12 @@ public static class OrderEndpoints
     ICurrentUserService currentUser,
     CancellationToken cancellationToken)
     {
-        var restaurantId = currentUser.UserId ?? Guid.Empty;
+        if (!currentUser.UserId.HasValue)
+        {
+            return Results.Unauthorized();
+        }
+
+        var restaurantId = currentUser.UserId.Value;
 
         var command = new RejectOrderCommand
         {

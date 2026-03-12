@@ -9,6 +9,7 @@ public interface ICurrentUserService
     string? UserName { get; }
     string? Email { get; }
     string? Phone { get; }
+    string? UserType { get; }
     IReadOnlyList<string> Roles { get; }
     bool IsAuthenticated { get; }
 

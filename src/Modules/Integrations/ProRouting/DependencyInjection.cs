@@ -123,15 +123,7 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         })
-            .ConfigurePrimaryHttpMessageHandler(() =>
-            {
-                // ⚠️ DEVELOPMENT ONLY - bypasses SSL validation
-                return new HttpClientHandler
-                {
-                    ServerCertificateCustomValidationCallback =
-                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-                };
-            })
+
             .AddPolicyHandler((sp, _) => GetRetryPolicy(sp, options.RetryCount))
             .AddPolicyHandler(GetTimeoutPolicy(options.TimeoutSeconds));
 

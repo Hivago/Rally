@@ -15,4 +15,5 @@ public sealed record UpdateOrderStatusCommand : IRequest<Result<OrderDto>>
     public OrderStatus TargetStatus { get; init; }
     public Guid? ActorId { get; init; } // Restaurant, Rider, or Admin ID
     public string? ActorRole { get; init; }
+    public string? ActorUserType { get; init; }
 }

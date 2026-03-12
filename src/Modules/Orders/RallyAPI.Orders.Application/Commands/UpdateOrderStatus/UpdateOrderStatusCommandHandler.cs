@@ -35,6 +35,12 @@ public sealed class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrde
             return Result.Failure<OrderDto>(OrderErrors.NotFound(command.OrderId));
         }
 
+        if (!CanUpdateOrder(order, command))
+        {
+            return Result.Failure<OrderDto>(
+                Error.Forbidden("You are not allowed to update this order."));
+        }
+
         // Validate transition is allowed
         var validTransitions = order.GetValidTransitions();
         if (!validTransitions.Contains(command.TargetStatus))
@@ -96,5 +102,33 @@ public sealed class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrde
                     order.Status.GetDisplayName(),
                     command.TargetStatus.GetDisplayName()));
         }
+    }
+
+    private static bool CanUpdateOrder(
+        Domain.Entities.Order order,
+        UpdateOrderStatusCommand command)
+    {
+        if (string.Equals(command.ActorUserType, "admin", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!command.ActorId.HasValue || string.IsNullOrWhiteSpace(command.ActorUserType))
+        {
+            return false;
+        }
+
+        return command.TargetStatus switch
+        {
+            OrderStatus.Confirmed or OrderStatus.Preparing or OrderStatus.ReadyForPickup =>
+                string.Equals(command.ActorUserType, "restaurant", StringComparison.OrdinalIgnoreCase)
+                && order.RestaurantId == command.ActorId.Value,
+
+            OrderStatus.PickedUp or OrderStatus.Delivered =>
+                string.Equals(command.ActorUserType, "rider", StringComparison.OrdinalIgnoreCase)
+                && order.DeliveryInfo.RiderId == command.ActorId.Value,
+
+            _ => false
+        };
     }
 }

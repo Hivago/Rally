@@ -25,6 +25,32 @@ public sealed class GetOrderByIdQueryHandler : IRequestHandler<GetOrderByIdQuery
             return Result.Failure<OrderDto>(OrderErrors.NotFound(query.OrderId));
         }
 
+        if (!CanAccessOrder(order, query))
+        {
+            return Result.Failure<OrderDto>(OrderErrors.NotFound(query.OrderId));
+        }
+
         return Result.Success(order.ToDto());
+    }
+
+    private static bool CanAccessOrder(Domain.Entities.Order order, GetOrderByIdQuery query)
+    {
+        if (query.IsAdmin)
+        {
+            return true;
+        }
+
+        if (!query.RequestingUserId.HasValue || string.IsNullOrWhiteSpace(query.RequestingUserType))
+        {
+            return false;
+        }
+
+        return query.RequestingUserType.ToLowerInvariant() switch
+        {
+            "customer" => order.CustomerId == query.RequestingUserId.Value,
+            "restaurant" => order.RestaurantId == query.RequestingUserId.Value,
+            "rider" => order.DeliveryInfo.RiderId == query.RequestingUserId.Value,
+            _ => false
+        };
     }
 }

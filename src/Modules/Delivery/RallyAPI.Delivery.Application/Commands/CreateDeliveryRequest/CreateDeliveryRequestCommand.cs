@@ -9,6 +9,8 @@ public sealed record CreateDeliveryRequestCommand : IRequest<Result<DeliveryRequ
     public required Guid OrderId { get; init; }
     public required string OrderNumber { get; init; }
     public required Guid QuoteId { get; init; }
+    public Guid? RequestingUserId { get; init; }
+    public bool IsAdmin { get; init; }
 
     // Pickup
     public required double PickupLatitude { get; init; }

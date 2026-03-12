@@ -7,4 +7,5 @@ public interface IDeliveryQuoteRepository
     Task<DeliveryQuote?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task AddAsync(DeliveryQuote quote, CancellationToken ct = default);
     Task UpdateAsync(DeliveryQuote quote, CancellationToken ct = default);
+    Task<bool> MarkAsUsedAtomicAsync(Guid id, Guid orderId, CancellationToken ct = default);
 }

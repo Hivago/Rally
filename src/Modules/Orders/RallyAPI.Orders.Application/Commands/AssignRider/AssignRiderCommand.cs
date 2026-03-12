@@ -13,4 +13,6 @@ public sealed record AssignRiderCommand : IRequest<Result<OrderDto>>
     public Guid RiderId { get; init; }
     public string? RiderName { get; init; }
     public string? RiderPhone { get; init; }
+    public Guid? RequestedById { get; init; }
+    public string? RequestedByUserType { get; init; }
 }

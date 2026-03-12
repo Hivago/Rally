@@ -31,6 +31,9 @@ public sealed class RevokeTokenCommandHandler
         if (storedToken is null || !storedToken.IsActive)
             return Result.Success(); // Don't reveal if token existed
 
+        if (storedToken.UserId != request.RequestingUserId)
+            return Result.Success(); // Don't reveal ownership details
+
         storedToken.Revoke();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

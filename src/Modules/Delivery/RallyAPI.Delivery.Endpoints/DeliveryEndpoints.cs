@@ -7,6 +7,7 @@ using RallyAPI.Delivery.Application.Commands.CreateDeliveryRequest;
 using RallyAPI.Delivery.Application.Commands.GetQuote;
 using RallyAPI.Delivery.Application.DTOs;
 using RallyAPI.Delivery.Endpoints.Requests;
+using RallyAPI.Orders.Application.Abstractions;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Delivery.Endpoints;
@@ -30,7 +31,7 @@ public static class DeliveryEndpoints
         group.MapPost("/request", CreateDeliveryRequest)
             .WithName("CreateDeliveryRequest")
             .WithSummary("Create delivery request for an order")
-            .RequireAuthorization()
+            .RequireAuthorization("RestaurantOrAdmin")
             .Produces<DeliveryRequestDto>(StatusCodes.Status201Created)
             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest);
 
@@ -73,13 +74,21 @@ public static class DeliveryEndpoints
     private static async Task<IResult> CreateDeliveryRequest(
         [FromBody] CreateDeliveryRequestRequest request,
         IMediator mediator,
+        ICurrentUserService currentUser,
         CancellationToken ct)
     {
+        if (!currentUser.UserId.HasValue)
+        {
+            return Results.Unauthorized();
+        }
+
         var command = new CreateDeliveryRequestCommand
         {
             OrderId = request.OrderId,
             OrderNumber = request.OrderNumber,
             QuoteId = request.QuoteId,
+            RequestingUserId = currentUser.UserId,
+            IsAdmin = currentUser.IsAdmin,
             PickupLatitude = request.PickupLatitude,
             PickupLongitude = request.PickupLongitude,
             PickupPincode = request.PickupPincode,
@@ -115,6 +124,13 @@ public static class DeliveryEndpoints
     {
         Title = error.Code,
         Detail = error.Message,
-        Status = error.Code.Contains("NotFound") ? 404 : 400
+        Status = error.Code switch
+        {
+            var code when code.Contains("NotFound") => 404,
+            var code when code.Contains("Forbidden") => 403,
+            var code when code.Contains("Unauthorized") => 401,
+            var code when code.Contains("Conflict") => 409,
+            _ => 400
+        }
     };
 }

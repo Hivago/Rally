@@ -32,11 +32,19 @@ public static class WebhookEndpoints
 
     private static async Task<IResult> HandleProRoutingWebhook(
         [FromBody] ProRoutingWebhookPayload payload,
+        [FromHeader(Name = "x-pro-api-key")] string? apiKey,
+        Microsoft.Extensions.Options.IOptions<RallyAPI.Integrations.ProRouting.ProRoutingOptions> options,
         DeliveryDbContext dbContext,
         ISender sender,
         ILogger<ProRoutingWebhookPayload> logger,
         CancellationToken ct)
     {
+        if (string.IsNullOrEmpty(apiKey) || apiKey != options.Value.ApiKey)
+        {
+            logger.LogWarning("Unauthorized ProRouting webhook access attempt.");
+            return Results.Unauthorized();
+        }
+
         logger.LogInformation(
             "ProRouting webhook received: OrderId={OrderId}, State={State}",
             payload.OrderId, payload.State);

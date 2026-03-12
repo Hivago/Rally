@@ -35,6 +35,12 @@ public sealed class CancelOrderCommandHandler : IRequestHandler<CancelOrderComma
             return Result.Failure<OrderDto>(OrderErrors.NotFound(command.OrderId));
         }
 
+        if (!CanCancelOrder(order, command))
+        {
+            return Result.Failure<OrderDto>(
+                Error.Forbidden("You are not allowed to cancel this order."));
+        }
+
         if (!order.Status.CanBeCancelled())
         {
             return Result.Failure<OrderDto>(OrderErrors.CannotCancelInStatus(order.Status.GetDisplayName()));
@@ -60,5 +66,23 @@ public sealed class CancelOrderCommandHandler : IRequestHandler<CancelOrderComma
             _logger.LogWarning("Failed to cancel order {OrderId}: {Message}", command.OrderId, ex.Message);
             return Result.Failure<OrderDto>(OrderErrors.CannotCancelInStatus(order.Status.GetDisplayName()));
         }
+    }
+
+    private static bool CanCancelOrder(
+        Domain.Entities.Order order,
+        CancelOrderCommand command)
+    {
+        if (string.Equals(command.CancelledByUserType, "admin", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return command.CancelledByUserType?.ToLowerInvariant() switch
+        {
+            "customer" => order.CustomerId == command.CancelledBy,
+            "restaurant" => order.RestaurantId == command.CancelledBy,
+            "rider" => order.DeliveryInfo.RiderId == command.CancelledBy,
+            _ => false
+        };
     }
 }

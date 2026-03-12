@@ -43,8 +43,26 @@ public sealed class CreateDeliveryRequestCommandHandler
         if (quote is null)
             return Result.Failure<DeliveryRequestDto>(DeliveryErrors.QuoteNotFound(request.QuoteId));
 
+        if (quote.IsExpired)
+            return Result.Failure<DeliveryRequestDto>(DeliveryErrors.QuoteExpired(request.QuoteId));
+
         if (quote.IsUsed)
             return Result.Failure<DeliveryRequestDto>(DeliveryErrors.QuoteAlreadyUsed(request.QuoteId));
+
+        if (!request.IsAdmin)
+        {
+            if (!request.RequestingUserId.HasValue)
+            {
+                return Result.Failure<DeliveryRequestDto>(
+                    Error.Unauthorized("Authentication is required to create a delivery request."));
+            }
+
+            if (!quote.RestaurantId.HasValue || quote.RestaurantId.Value != request.RequestingUserId.Value)
+            {
+                return Result.Failure<DeliveryRequestDto>(
+                    Error.Forbidden("You can only create delivery requests for quotes issued to your restaurant."));
+            }
+        }
 
         // Calculate dispatch time (early dispatch)
         var prepTime = _prepTimeCalculator.Calculate(request.ItemCount);

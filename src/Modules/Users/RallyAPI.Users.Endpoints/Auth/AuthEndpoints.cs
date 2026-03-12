@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Builder;
 using RallyAPI.Users.Application.Auth.Commands.RefreshToken;
 using RallyAPI.Users.Application.Auth.Commands.RevokeToken;
+using System.Security.Claims;
 
 namespace RallyAPI.Users.Endpoints.Auth;
 
@@ -48,10 +49,20 @@ public class RevokeTokenEndpoint : IEndpoint
 
     private static async Task<IResult> HandleAsync(
         RevokeRequest request,
+        HttpContext httpContext,
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var command = new RevokeTokenCommand(request.RefreshToken);
+        var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.User.FindFirst("sub")?.Value
+            ?? httpContext.User.FindFirst("userId")?.Value;
+
+        if (!Guid.TryParse(userIdClaim, out var userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var command = new RevokeTokenCommand(request.RefreshToken, userId);
         var result = await sender.Send(command, cancellationToken);
 
         return result.IsFailure

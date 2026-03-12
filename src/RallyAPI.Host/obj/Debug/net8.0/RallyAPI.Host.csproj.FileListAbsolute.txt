@@ -1,6 +1,5 @@
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\appsettings.Development.json
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\appsettings.json
-C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Host.staticwebassets.endpoints.json
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Host.exe
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Host.deps.json
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Host.runtimeconfig.json
@@ -157,7 +156,6 @@ C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Sh
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Users.Application.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\RallyAPI.Users.Domain.pdb
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.csproj.AssemblyReference.cache
-C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\rpswa.dswa.cache.json
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.GeneratedMSBuildEditorConfig.editorconfig
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.AssemblyInfoInputs.cache
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.AssemblyInfo.cs
@@ -165,14 +163,9 @@ C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Ho
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.MvcApplicationPartsAssemblyInfo.cs
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.MvcApplicationPartsAssemblyInfo.cache
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.sourcelink.json
-C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\rjimswa.dswa.cache.json
-C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\rjsmrazor.dswa.cache.json
-C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\rjsmcshtml.dswa.cache.json
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\scopedcss\bundle\RallyAPI.Host.styles.css
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets.build.json
-C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets.build.json.cache
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets.development.json
-C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets.build.endpoints.json
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.5367A210.Up2Date
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\RallyAPI.Host.dll
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\refint\RallyAPI.Host.dll
@@ -188,4 +181,8 @@ C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\Microsoft.E
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\Microsoft.Extensions.Hosting.Abstractions.dll
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\AWSSDK.Core.dll
 C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\bin\Debug\net8.0\AWSSDK.S3.dll
-C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets\msbuild.RallyAPI.Host.Microsoft.AspNetCore.StaticWebAssets.props
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets\msbuild.build.RallyAPI.Host.props
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets\msbuild.buildMultiTargeting.RallyAPI.Host.props
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets\msbuild.buildTransitive.RallyAPI.Host.props
+C:\Users\vishw\source\repos\Rally\src\RallyAPI.Host\obj\Debug\net8.0\staticwebassets.pack.json

@@ -39,23 +39,43 @@ public sealed class CurrentUserService : ICurrentUserService
     public string? Phone => User?.FindFirst(ClaimTypes.MobilePhone)?.Value
         ?? User?.FindFirst("phone")?.Value;
 
+    public string? UserType => User?.FindFirst("user_type")?.Value?.ToLowerInvariant();
+
     public IReadOnlyList<string> Roles
     {
         get
         {
-            var roles = User?.FindAll(ClaimTypes.Role)
-                .Select(c => c.Value)
+            var standardRoles = User?.FindAll(ClaimTypes.Role)
+                .Select(c => c.Value) ?? Enumerable.Empty<string>();
+
+            var customRoles = User?.FindAll("role")
+                .Select(c => c.Value) ?? Enumerable.Empty<string>();
+
+            return standardRoles
+                .Concat(customRoles)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            return roles ?? new List<string>();
         }
     }
 
     public bool IsAuthenticated => User?.Identity?.IsAuthenticated ?? false;
 
-    public bool IsInRole(string role) => User?.IsInRole(role) ?? false;
+    public bool IsInRole(string role) =>
+        Roles.Any(r => string.Equals(r, role, StringComparison.OrdinalIgnoreCase));
 
-    public bool IsCustomer => IsInRole("Customer") || IsInRole("customer");
-    public bool IsRestaurant => IsInRole("Restaurant") || IsInRole("restaurant");
-    public bool IsRider => IsInRole("Rider") || IsInRole("rider");
-    public bool IsAdmin => IsInRole("Admin") || IsInRole("admin");
+    public bool IsCustomer =>
+        string.Equals(UserType, "customer", StringComparison.OrdinalIgnoreCase) ||
+        IsInRole("Customer");
+
+    public bool IsRestaurant =>
+        string.Equals(UserType, "restaurant", StringComparison.OrdinalIgnoreCase) ||
+        IsInRole("Restaurant");
+
+    public bool IsRider =>
+        string.Equals(UserType, "rider", StringComparison.OrdinalIgnoreCase) ||
+        IsInRole("Rider");
+
+    public bool IsAdmin =>
+        string.Equals(UserType, "admin", StringComparison.OrdinalIgnoreCase) ||
+        IsInRole("Admin");
 }
