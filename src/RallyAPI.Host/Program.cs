@@ -115,8 +115,9 @@ builder.Services.AddPricingInfrastructure(builder.Configuration);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    // 1. FIX: Resolve the schema ID conflict by using the Full Name
-    c.CustomSchemaIds(type => type.FullName);
+    // Use full type names for uniqueness, but normalize nested-type separators
+    // so generated $ref values remain resolver-friendly in Swagger UI.
+    c.CustomSchemaIds(type => (type.FullName ?? type.Name).Replace("+", "."));
 
     // 2. Your existing Security Definition
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -193,7 +194,7 @@ builder.Services.AddCors(options =>
                 "http://localhost:3000",     // React dev server
                 "http://localhost:5173",     // Vite dev server
                 "http://localhost:8081",     // Expo/React Native web
-                "https://hivago.vercel.app")   // Production — update before deploy
+                "https://yourdomain.com")   // Production 
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();

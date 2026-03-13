@@ -1,8 +1,9 @@
 ﻿using MediatR;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.OpenApi.Any;
 using RallyAPI.Users.Application.Customers.Commands.SendOtp;
-using Microsoft.AspNetCore.Builder;
 
 namespace RallyAPI.Users.Endpoints.Customers;
 
@@ -14,7 +15,19 @@ public class SendOtp : IEndpoint
             .WithName("CustomerSendOtp")
             .WithTags("Customers")
             .AllowAnonymous()
-         .RequireRateLimiting("otp");
+            .RequireRateLimiting("otp")
+            .WithOpenApi(operation =>
+            {
+                if (operation.RequestBody?.Content.TryGetValue("application/json", out var content) == true)
+                {
+                    content.Example = new OpenApiObject
+                    {
+                        ["phoneNumber"] = new OpenApiString("string")
+                    };
+                }
+
+                return operation;
+            });
     }
 
     public record SendCustomerOtpRequest(string PhoneNumber);
