@@ -1,4 +1,4 @@
-﻿// File: src/Modules/Orders/RallyAPI.Orders.Endpoints/PaymentEndpoints.cs
+// File: src/Modules/Orders/RallyAPI.Orders.Endpoints/PaymentEndpoints.cs
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -20,23 +20,25 @@ public static class PaymentEndpoints
         // 1. Initiate payment — returns PayU checkout params
         group.MapPost("/initiate", async (
             InitiatePaymentRequest request,
-            HttpContext httpContext,
+            RallyAPI.Orders.Application.Abstractions.ICurrentUserService currentUser,
             ISender sender) =>
         {
-            var customerId = Guid.Parse(httpContext.User.FindFirst("sub")?.Value ?? "");
+            if (!currentUser.UserId.HasValue)
+            {
+                return Results.Unauthorized();
+            }
 
             var result = await sender.Send(new InitiatePaymentCommand(
                 request.OrderId,
-                customerId));
+                currentUser.UserId.Value));
 
             return result.IsSuccess
                 ? Results.Ok(result.Value)
                 : Results.BadRequest(new { error = result.Error.Message });
         })
         .RequireAuthorization("Customer")
-        .RequireRateLimiting("login")  // reuse login rate limit (5/15min)
+        .RequireRateLimiting("login")
         .WithName("InitiatePayment");
-
         // 2. PayU webhook (S2S callback) — source of truth
         group.MapPost("/webhook", async (
             HttpContext httpContext,
@@ -59,14 +61,17 @@ public static class PaymentEndpoints
         // 3. Verify payment — frontend backup check
         group.MapPost("/verify", async (
             VerifyPaymentRequest request,
-            HttpContext httpContext,
+            RallyAPI.Orders.Application.Abstractions.ICurrentUserService currentUser,
             ISender sender) =>
         {
-            var customerId = Guid.Parse(httpContext.User.FindFirst("sub")?.Value ?? "");
+            if (!currentUser.UserId.HasValue)
+            {
+                return Results.Unauthorized();
+            }
 
             var result = await sender.Send(new VerifyPaymentCommand(
                 request.TxnId,
-                customerId));
+                currentUser.UserId.Value));
 
             return result.IsSuccess
                 ? Results.Ok(result.Value)

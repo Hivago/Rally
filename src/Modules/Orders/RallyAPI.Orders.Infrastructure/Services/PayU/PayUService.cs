@@ -34,7 +34,8 @@ public class PayUService : IPayUService
         var amountStr = amount.ToString("F2");
 
         // PayU payment hash: key|txnid|amount|productinfo|firstname|email|||||||||SALT
-        var hashString = $"{_options.MerchantKey}|{txnId}|{amountStr}|{productInfo}|{firstName}|{email}|||||||||||{_options.MerchantSalt}";
+       // var hashString = $"{_options.MerchantKey}|{txnId}|{amountStr}|{productInfo}|{firstName}|{email}|||||||||||{_options.MerchantSalt}";
+        var hashString = $"{_options.MerchantKey}|{txnId}|{amountStr}|{productInfo.Trim()}|{firstName}|{email}|||||||||||{_options.MerchantSalt}";
         var hash = ComputeSha512(hashString);
 
         return new PayUCheckoutParams

@@ -88,7 +88,9 @@ public class InitiatePaymentCommandHandler
             txnId: txnId,
             amount: order.Pricing.Total.Amount,
             customerName: order.CustomerName ?? "Customer",
-            customerEmail: order.CustomerPhone, // Use phone as fallback email for PayU
+            customerEmail: !string.IsNullOrWhiteSpace(order.CustomerEmail)
+            ? order.CustomerEmail
+            : $"{order.CustomerPhone.TrimStart('+')}@rally.app",
             customerPhone: order.CustomerPhone);
 
         payment.MarkInitiated();
