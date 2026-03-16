@@ -6,10 +6,13 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RallyAPI.Catalog.Endpoints;
 using RallyAPI.Delivery.Endpoints;
+using RallyAPI.Host.Hubs;
+using RallyAPI.Host.Services;
 using RallyAPI.Infrastructure;
 using RallyAPI.Integrations.ProRouting;
 using RallyAPI.Orders.Endpoints;
 using RallyAPI.Pricing.Infrastructure;
+using RallyAPI.SharedKernel.Abstractions.Notifications;
 using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.SharedKernel.Infrastructure;
 using RallyAPI.Users.Endpoints;
@@ -21,6 +24,10 @@ using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHttpContextAccessor();
+
+// SignalR
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<ConnectionTracker>();
 
 builder.Services.AddScoped<DomainEventInterceptor>();
 builder.Services.AddScoped<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor>(sp => 
@@ -43,10 +50,19 @@ builder.Services.AddDeliveryModule(builder.Configuration);
 
 // Add Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var publicKeyPath = Path.Combine(AppContext.BaseDirectory, jwtSettings["PublicKeyPath"]!);
-var publicKeyText = File.ReadAllText(publicKeyPath);
 var rsa = RSA.Create();
-rsa.ImportFromPem(publicKeyText);
+var publicKeyPem = jwtSettings["PublicKeyPem"];
+if (!string.IsNullOrWhiteSpace(publicKeyPem))
+{
+    // Railway: key injected as env var JwtSettings__PublicKeyPem
+    rsa.ImportFromPem(publicKeyPem.Replace("\\n", "\n"));
+}
+else
+{
+    // Local dev: read from file
+    var publicKeyPath = Path.Combine(AppContext.BaseDirectory, jwtSettings["PublicKeyPath"]!);
+    rsa.ImportFromPem(File.ReadAllText(publicKeyPath));
+}
 
 
 
@@ -62,6 +78,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
             IssuerSigningKey = new RsaSecurityKey(rsa)
+        };
+
+        // SignalR WebSocket upgrade: bearer token comes via query string
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) &&
+                    context.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = token;
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -109,6 +140,12 @@ builder.Services.AddAuthorization(options =>
 // Add these lines
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddPricingInfrastructure(builder.Configuration);
+
+// Register SignalR notification handlers from this assembly (avoids circular dep on IHubContext)
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+
+// Override StubRiderNotificationService with real SignalR implementation
+builder.Services.AddScoped<IRiderNotificationService, SignalRRiderNotificationService>();
 
 
 // Add Swagger
@@ -227,6 +264,7 @@ app.MapCatalogEndpoints();
 app.MapOrdersEndpoints();
 app.MapPaymentEndpoints();
 app.MapDeliveryModuleEndpoints();
+app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapGet("/", () => "Rally API is running!");
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
