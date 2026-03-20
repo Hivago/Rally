@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.OpenApi.Any;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.Users.Application.Customers.Commands.SendOtp;
 
 namespace RallyAPI.Users.Endpoints.Customers;
@@ -41,7 +42,7 @@ public class SendOtp : IEndpoint
         var result = await sender.Send(command, cancellationToken);
 
         return result.IsFailure
-            ? Results.BadRequest(new { error = result.Error.Message })
+            ? result.Error.ToErrorResult()
             : Results.Ok(new { message = "OTP sent successfully" });
     }
 }

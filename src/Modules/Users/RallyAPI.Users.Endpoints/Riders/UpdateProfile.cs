@@ -3,11 +3,12 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using RallyAPI.SharedKernel.Extensions;
+using RallyAPI.SharedKernel.Results;
 using RallyAPI.Users.Application.Riders.Commands.UpdateProfile;
 using RallyAPI.Users.Application.Riders.Commands.UploadKyc;
 using RallyAPI.Users.Domain.Entities;
 using System.Security.Claims;
-using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Users.Endpoints.Riders;
 
@@ -46,7 +47,7 @@ public class UpdateProfile : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, message = result.Error.Message });
+            : result.Error.ToErrorResult();
     })
     .RequireAuthorization("RiderOrAdmin")
     .WithName("GenerateRiderKycUploadUrl")
@@ -68,7 +69,7 @@ public class UpdateProfile : IEndpoint
                     riderId, sub, isAdmin, request.DocumentType, request.FileKey));
                 return result.IsSuccess
                     ? Results.Ok(result.Value)
-                    : Results.BadRequest(new { error = result.Error.Code, message = result.Error.Message });
+                    : result.Error.ToErrorResult();
             })
             .RequireAuthorization("RiderOrAdmin")
             .WithName("ConfirmRiderKycDocument")
@@ -92,7 +93,7 @@ public class UpdateProfile : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok(new { message = "Profile updated successfully" })
-            : Results.BadRequest(result.Error);
+            : result.Error.ToErrorResult();
     }
 }
 

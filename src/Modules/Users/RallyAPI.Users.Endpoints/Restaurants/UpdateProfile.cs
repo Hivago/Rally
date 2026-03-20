@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.Users.Application.Restaurants.Commands.UploadLogo;
 
 
@@ -32,7 +33,7 @@ namespace RallyAPI.Users.Endpoints.Restaurants
 
                 return result.IsSuccess
       ? Results.Ok(result.Value)
-      : Results.BadRequest(new { error = result.Error.Code, message = result.Error.Message });
+      : result.Error.ToErrorResult();
             })
             .RequireAuthorization("RestaurantOrAdmin")
             .WithName("GenerateRestaurantLogoUploadUrl")
@@ -55,7 +56,7 @@ namespace RallyAPI.Users.Endpoints.Restaurants
 
                         return result.IsSuccess
        ? Results.Ok(result.Value)
-       : Results.BadRequest(new { error = result.Error.Code, message = result.Error.Message });
+       : result.Error.ToErrorResult();
                     })
                     .RequireAuthorization("RestaurantOrAdmin")
                     .WithName("ConfirmRestaurantLogo")

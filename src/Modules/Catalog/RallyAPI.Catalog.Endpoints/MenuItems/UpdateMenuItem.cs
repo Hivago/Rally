@@ -8,6 +8,7 @@ using RallyAPI.Catalog.Application.MenuItems.Commands.UpdateMenuItem;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using RallyAPI.Catalog.Application.MenuItems.Commands.ConfirmMenuItemImage;
+using RallyAPI.SharedKernel.Extensions;
 
 
 namespace RallyAPI.Catalog.Endpoints.MenuItems;
@@ -57,7 +58,7 @@ public class UpdateMenuItem : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, message = result.Error.Message });
+            : result.Error.ToErrorResult();
     })
     .RequireAuthorization("RestaurantOrAdmin")
     .WithName("GenerateMenuItemUploadUrl")
@@ -86,7 +87,7 @@ public class UpdateMenuItem : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, message = result.Error.Message });
+            : result.Error.ToErrorResult();
     })
     .RequireAuthorization("RestaurantOrAdmin")
     .WithName("ConfirmMenuItemImage")
@@ -148,7 +149,7 @@ public class UpdateMenuItem : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok(new { message = "Menu item updated successfully" })
-            : Results.BadRequest(result.Error);
+            : result.Error.ToErrorResult();
     }
 }
 

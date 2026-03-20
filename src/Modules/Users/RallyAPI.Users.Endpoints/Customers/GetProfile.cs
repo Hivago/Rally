@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.Users.Application.Customers.Queries.GetProfile;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
@@ -31,7 +32,7 @@ public class GetProfile : IEndpoint
         var result = await sender.Send(query, cancellationToken);
 
         return result.IsFailure
-            ? Results.NotFound(new { error = result.Error.Message })
+            ? result.Error.ToErrorResult()
             : Results.Ok(result.Value);
     }
 }

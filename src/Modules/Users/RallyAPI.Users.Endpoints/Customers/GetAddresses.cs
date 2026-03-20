@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.Users.Application.Customers.Queries.GetAddresses;
 using System.Security.Claims;
 
@@ -32,7 +33,7 @@ public class GetAddresses : IEndpoint
         var result = await sender.Send(query, cancellationToken);
 
         return result.IsFailure
-            ? Results.NotFound(new { error = result.Error.Message })
+            ? result.Error.ToErrorResult()
             : Results.Ok(result.Value);
     }
 }

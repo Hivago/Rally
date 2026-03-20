@@ -7,6 +7,7 @@ using RallyAPI.Delivery.Application.Commands.CreateDeliveryRequest;
 using RallyAPI.Delivery.Application.Commands.GetQuote;
 using RallyAPI.Delivery.Application.DTOs;
 using RallyAPI.Delivery.Endpoints.Requests;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Delivery.Endpoints;
@@ -67,7 +68,7 @@ public static class DeliveryEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> CreateDeliveryRequest(
@@ -99,7 +100,7 @@ public static class DeliveryEndpoints
 
         return result.IsSuccess
             ? Results.Created($"/api/delivery/{result.Value.Id}", result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> GetDeliveryByOrderId(
@@ -111,10 +112,4 @@ public static class DeliveryEndpoints
         return Results.Ok();
     }
 
-    private static ProblemDetails CreateProblemDetails(Error error) => new()
-    {
-        Title = error.Code,
-        Detail = error.Message,
-        Status = error.Code.Contains("NotFound") ? 404 : 400
-    };
 }

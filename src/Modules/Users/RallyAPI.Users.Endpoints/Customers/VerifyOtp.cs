@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.Users.Application.Customers.Commands.VerifyOtp;
 using Microsoft.AspNetCore.Builder;
 
@@ -28,7 +29,7 @@ public class VerifyOtp : IEndpoint
         var result = await sender.Send(command, cancellationToken);
 
         return result.IsFailure
-            ? Results.BadRequest(new { error = result.Error.Message })
+            ? result.Error.ToErrorResult()
             : Results.Ok(result.Value);
     }
 }

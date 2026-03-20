@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using RallyAPI.Catalog.Application.Menus.Commands.DeleteMenu;
+using RallyAPI.SharedKernel.Extensions;
 
 namespace RallyAPI.Catalog.Endpoints.Menus;
 
@@ -30,6 +31,6 @@ public class DeleteMenu : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok(new { message = "Menu deleted successfully" })
-            : Results.BadRequest(result.Error);
+            : result.Error.ToErrorResult();
     }
 }

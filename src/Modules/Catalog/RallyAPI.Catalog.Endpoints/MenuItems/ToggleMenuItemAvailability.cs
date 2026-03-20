@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using RallyAPI.Catalog.Application.MenuItems.Commands.ToggleMenuItemAvailability;
+using RallyAPI.SharedKernel.Extensions;
 
 namespace RallyAPI.Catalog.Endpoints.MenuItems;
 
@@ -30,6 +31,6 @@ public class ToggleMenuItemAvailability : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(result.Error);
+            : result.Error.ToErrorResult();
     }
 }

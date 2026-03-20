@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.Users.Application.Riders.Commands.VerifyOtp;
 
 namespace RallyAPI.Users.Endpoints.Riders;
@@ -27,7 +28,7 @@ public class VerifyOtp : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(result.Error);
+            : result.Error.ToErrorResult();
     }
 }
 

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Builder;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.Users.Application.Riders.Commands.UpdateLocation;
 using System.Security.Claims;
 
@@ -33,7 +34,7 @@ public class UpdateLocation : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok()
-            : Results.BadRequest(result.Error);
+            : result.Error.ToErrorResult();
     }
 }
 

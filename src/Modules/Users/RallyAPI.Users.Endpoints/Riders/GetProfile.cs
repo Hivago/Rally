@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.Users.Application.Riders.Queries.GetProfile;
 using System.Security.Claims;
 
@@ -28,6 +29,6 @@ public class GetProfile : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.NotFound(result.Error);
+            : result.Error.ToErrorResult();
     }
 }

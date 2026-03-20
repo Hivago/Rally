@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.Users.Application.Customers.Commands.UpdateAddress;
 using System.Security.Claims;
 
@@ -49,7 +50,7 @@ public class UpdateAddress : IEndpoint
         var result = await sender.Send(command, cancellationToken);
 
         return result.IsFailure
-            ? Results.BadRequest(new { error = result.Error.Message })
+            ? result.Error.ToErrorResult()
             : Results.Ok(new { message = "Address updated" });
     }
 }

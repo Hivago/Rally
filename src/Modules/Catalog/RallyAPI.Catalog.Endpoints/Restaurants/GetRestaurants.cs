@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using RallyAPI.Catalog.Application.Restaurants.Queries.GetRestaurants;
+using RallyAPI.SharedKernel.Extensions;
 
 namespace RallyAPI.Catalog.Endpoints.Restaurants;
 
@@ -30,6 +31,6 @@ public class GetRestaurants : IEndpoint
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(result.Error);
+            : result.Error.ToErrorResult();
     }
 }

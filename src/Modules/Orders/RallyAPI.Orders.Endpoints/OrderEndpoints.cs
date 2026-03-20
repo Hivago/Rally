@@ -20,6 +20,7 @@ using RallyAPI.Orders.Application.Queries.GetOrdersByRestaurant;
 using RallyAPI.Orders.Domain.Enums;
 using RallyAPI.SharedKernel.Abstractions.Distance;
 using RallyAPI.SharedKernel.Abstractions.Pricing;
+using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Orders.Endpoints;
@@ -234,7 +235,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Created($"/api/orders/{result.Value.Id}", result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> GetOrderById(
@@ -246,7 +247,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.NotFound(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> GetOrderByNumber(
@@ -258,7 +259,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.NotFound(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> GetMyOrders(
@@ -284,7 +285,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> GetRestaurantOrders(
@@ -307,7 +308,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> GetActiveOrders(
@@ -324,7 +325,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> ConfirmOrder(
@@ -343,7 +344,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> StartPreparing(
@@ -364,7 +365,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> MarkReadyForPickup(
@@ -385,7 +386,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> AssignRider(
@@ -406,7 +407,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> MarkPickedUp(
@@ -427,7 +428,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> MarkDelivered(
@@ -448,7 +449,7 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     private static async Task<IResult> CancelOrder(
@@ -470,35 +471,10 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
 
     #endregion
-
-    #region Helper Methods
-
-    private static ProblemDetails CreateProblemDetails(Error error)
-    {
-        return new ProblemDetails
-        {
-            Title = error.Code,
-            Detail = error.Message,
-            Status = GetStatusCode(error.Code)
-        };
-    }
-
-    private static int GetStatusCode(string errorCode)
-    {
-        return errorCode switch
-        {
-            var code when code.Contains("NotFound") => StatusCodes.Status404NotFound,
-            var code when code.Contains("Unauthorized") => StatusCodes.Status401Unauthorized,
-            var code when code.Contains("Forbidden") => StatusCodes.Status403Forbidden,
-            var code when code.Contains("Validation") => StatusCodes.Status400BadRequest,
-            var code when code.Contains("Conflict") => StatusCodes.Status409Conflict,
-            _ => StatusCodes.Status400BadRequest
-        };
-    }
 
     private static async Task<IResult> RejectOrder(
     Guid orderId,
@@ -520,8 +496,6 @@ public static class OrderEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(CreateProblemDetails(result.Error));
+            : result.Error.ToErrorResult();
     }
-
-    #endregion
 }

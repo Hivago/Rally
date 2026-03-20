@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using RallyAPI.Catalog.Application.Menus.Commands.CreateMenu;
+using RallyAPI.SharedKernel.Extensions;
 
 namespace RallyAPI.Catalog.Endpoints.Menus;
 
@@ -35,7 +36,7 @@ public class CreateMenu : IEndpoint
 
         return result.IsSuccess
             ? Results.Created($"/api/menus/{result.Value.MenuId}", result.Value)
-            : Results.BadRequest(result.Error);
+            : result.Error.ToErrorResult();
     }
 }
 
