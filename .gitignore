@@ -494,3 +494,4 @@ $RECYCLE.BIN/
 
 Keys/
 *.pem
+appsettings.Development.json
