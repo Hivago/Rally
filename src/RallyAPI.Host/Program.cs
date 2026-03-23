@@ -16,12 +16,27 @@ using RallyAPI.SharedKernel.Abstractions.Notifications;
 using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.SharedKernel.Infrastructure;
 using RallyAPI.Users.Endpoints;
+using Serilog;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 
+// Bootstrap logger — captures startup errors before the host is built
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
+try
+{
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .Enrich.WithEnvironmentName()
+    .Enrich.WithThreadId());
 
 // Serialize enums as strings in all HTTP responses (minimal API + TypedResults)
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -256,6 +271,16 @@ var app = builder.Build();
 // Add Global Exception Handler (early in pipeline!)
 app.UseGlobalExceptionHandler();
 
+// Serilog request logging — replaces default Microsoft request logging
+app.UseSerilogRequestLogging(options =>
+{
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
+        diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString());
+    };
+});
+
 // Configure pipeline
 if (app.Environment.IsDevelopment())
 {
@@ -320,7 +345,15 @@ using (var scope = app.Services.CreateScope())
 
 app.Run();
 
-
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
 
 
    static Task WriteHealthCheckResponse(HttpContext context, HealthReport report)
