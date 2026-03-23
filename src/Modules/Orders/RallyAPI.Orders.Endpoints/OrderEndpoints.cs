@@ -135,6 +135,14 @@ public static class OrderEndpoints
             .Produces<OrderDto>()
             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest);
 
+        // Mark Customer Picked Up (Restaurant/Admin — for pickup orders)
+        group.MapPut("/{orderId:guid}/customer-pickup", MarkCustomerPickedUp)
+            .WithName("MarkCustomerPickedUp")
+            .WithSummary("Mark pickup order as collected by customer")
+            .RequireAuthorization("AdminOrRestaurant")
+            .Produces<OrderDto>()
+            .Produces<ProblemDetails>(StatusCodes.Status400BadRequest);
+
         // Cancel Order
         group.MapPut("/{orderId:guid}/cancel", CancelOrder)
             .WithName("CancelOrder")
@@ -496,6 +504,27 @@ public static class OrderEndpoints
     }
 
     #endregion
+
+    private static async Task<IResult> MarkCustomerPickedUp(
+        Guid orderId,
+        IMediator mediator,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateOrderStatusCommand
+        {
+            OrderId = orderId,
+            TargetStatus = OrderStatus.Delivered,
+            ActorId = currentUser.UserId,
+            ActorRole = GetCallerRole(currentUser)
+        };
+
+        var result = await mediator.Send(command, cancellationToken);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : result.Error.ToErrorResult();
+    }
 
     private static string GetCallerRole(ICurrentUserService currentUser)
     {

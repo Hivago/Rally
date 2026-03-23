@@ -112,26 +112,32 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
             // Step 5: Generate order number
             var orderNumber = await _orderNumberGenerator.GenerateAsync(cancellationToken);
 
-            // Step 6: Create delivery address
-            var deliveryAddress = Address.Create(
-                command.Request.DeliveryAddress.Street,
-                command.Request.DeliveryAddress.City,
-                command.Request.DeliveryAddress.Pincode,
-                command.Request.DeliveryAddress.Latitude,
-                command.Request.DeliveryAddress.Longitude,
-                command.Request.DeliveryAddress.Landmark,
-                command.Request.DeliveryAddress.BuildingName,
-                command.Request.DeliveryAddress.Floor,
-                command.Request.DeliveryAddress.ContactPhone,
-                command.Request.DeliveryAddress.Instructions);
+            // Step 6: Create delivery info (only for delivery orders)
+            var fulfillmentType = command.Request.FulfillmentType;
+            DeliveryInfo? deliveryInfo = null;
 
-            // Step 6: Create delivery info
-            var deliveryInfo = DeliveryInfo.Create(
-                command.Request.PickupLatitude,
-                command.Request.PickupLongitude,
-                command.Request.PickupPincode,
-                deliveryAddress,
-                command.Request.PickupAddress);
+            if (fulfillmentType == Domain.Enums.FulfillmentType.Delivery)
+            {
+                var addr = command.Request.DeliveryAddress!;
+                var deliveryAddress = Address.Create(
+                    addr.Street,
+                    addr.City,
+                    addr.Pincode,
+                    addr.Latitude,
+                    addr.Longitude,
+                    addr.Landmark,
+                    addr.BuildingName,
+                    addr.Floor,
+                    addr.ContactPhone,
+                    addr.Instructions);
+
+                deliveryInfo = DeliveryInfo.Create(
+                    command.Request.PickupLatitude,
+                    command.Request.PickupLongitude,
+                    command.Request.PickupPincode,
+                    deliveryAddress,
+                    command.Request.PickupAddress);
+            }
 
             // Step 7: Create order items (from resolved source: cart or request body)
             var orderItems = resolvedItems.Select(item => OrderItem.Create(
@@ -177,15 +183,16 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
                 command.CustomerName,
                 command.Request.RestaurantId,
                 command.Request.RestaurantName,
-                deliveryInfo,
                 pricing,
                 command.PaymentId,
-                command.PaymentTransactionId,
-                command.DeliveryQuoteId,
-                command.CustomerPhone,
-                command.CustomerEmail,
-                command.Request.RestaurantPhone,
-                command.Request.SpecialInstructions);
+                fulfillmentType: fulfillmentType,
+                deliveryInfo: deliveryInfo,
+                paymentTransactionId: command.PaymentTransactionId,
+                deliveryQuoteId: command.DeliveryQuoteId,
+                customerPhone: command.CustomerPhone,
+                customerEmail: command.CustomerEmail,
+                restaurantPhone: command.Request.RestaurantPhone,
+                specialInstructions: command.Request.SpecialInstructions);
 
             // Step 10: Add items
             order.AddItems(orderItems);

@@ -26,6 +26,8 @@ public static class OrderMappingExtensions
             RestaurantName = order.RestaurantName,
             RestaurantPhone = order.RestaurantPhone,
 
+            FulfillmentType = order.FulfillmentType,
+
             Status = order.Status,
             StatusDisplay = order.Status.GetDisplayName(),
             PaymentStatus = order.PaymentStatus,
@@ -35,7 +37,7 @@ public static class OrderMappingExtensions
             TotalItems = order.Items.Sum(i => i.Quantity),
 
             Pricing = order.Pricing.ToDto(),
-            DeliveryInfo = order.DeliveryInfo.ToDto(),
+            DeliveryInfo = order.DeliveryInfo?.ToDto(),
 
             CreatedAt = order.CreatedAt,
             ConfirmedAt = order.ConfirmedAt,
@@ -75,8 +77,8 @@ public static class OrderMappingExtensions
             Total = order.Pricing.Total.Amount,
             TotalDisplay = order.Pricing.Total.ToDisplayString(),
             CreatedAt = order.CreatedAt,
-            EstimatedMinutes = order.DeliveryInfo.EstimatedMinutes,
-            EstimatedTimeDisplay = order.DeliveryInfo.EstimatedMinutes.HasValue
+            EstimatedMinutes = order.DeliveryInfo?.EstimatedMinutes,
+            EstimatedTimeDisplay = order.DeliveryInfo?.EstimatedMinutes.HasValue == true
                 ? $"{order.DeliveryInfo.EstimatedMinutes} mins"
                 : null
         };

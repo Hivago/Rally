@@ -105,6 +105,7 @@
 //}
 
 using FluentValidation;
+using RallyAPI.Orders.Domain.Enums;
 
 namespace RallyAPI.Orders.Application.Commands.PlaceOrder;
 
@@ -127,6 +128,10 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
         RuleFor(x => x.PaymentId)
             .NotEmpty()
             .WithMessage("Payment ID is required");
+
+        RuleFor(x => x.Request.FulfillmentType)
+            .IsInEnum()
+            .WithMessage("Invalid fulfillment type");
 
         RuleFor(x => x.Request.RestaurantId)
             .NotEmpty()
@@ -174,28 +179,35 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
                 .WithMessage("Unit price cannot be negative");
         });
 
-        RuleFor(x => x.Request.DeliveryAddress).ChildRules(addr =>
+        // Delivery address is required only for delivery orders
+        RuleFor(x => x.Request.DeliveryAddress)
+            .NotNull()
+            .WithMessage("Delivery address is required for delivery orders")
+            .When(x => x.Request.FulfillmentType == FulfillmentType.Delivery);
+
+        When(x => x.Request.FulfillmentType == FulfillmentType.Delivery
+                && x.Request.DeliveryAddress is not null, () =>
         {
-            addr.RuleFor(a => a.Street)
+            RuleFor(x => x.Request.DeliveryAddress!.Street)
                 .NotEmpty()
                 .MaximumLength(255)
                 .WithMessage("Delivery street is required");
 
-            addr.RuleFor(a => a.City)
+            RuleFor(x => x.Request.DeliveryAddress!.City)
                 .NotEmpty()
                 .MaximumLength(100)
                 .WithMessage("Delivery city is required");
 
-            addr.RuleFor(a => a.Pincode)
+            RuleFor(x => x.Request.DeliveryAddress!.Pincode)
                 .NotEmpty()
                 .MaximumLength(10)
                 .WithMessage("Delivery pincode is required");
 
-            addr.RuleFor(a => a.Latitude)
+            RuleFor(x => x.Request.DeliveryAddress!.Latitude)
                 .InclusiveBetween(-90, 90)
                 .WithMessage("Invalid delivery latitude");
 
-            addr.RuleFor(a => a.Longitude)
+            RuleFor(x => x.Request.DeliveryAddress!.Longitude)
                 .InclusiveBetween(-180, 180)
                 .WithMessage("Invalid delivery longitude");
         });
