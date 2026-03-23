@@ -63,20 +63,24 @@ public class OtpService : IOtpService
         await _redis.StringSetAsync(
             $"otp:code:{phoneKey}",
             hashedOtp,
-            TimeSpan.FromMinutes(OtpExpiryMinutes));
+            TimeSpan.FromMinutes(OtpExpiryMinutes),
+            When.Always,
+            CommandFlags.None);
 
         // Reset attempt counter
         await _redis.StringSetAsync(
             $"otp:attempts:{phoneKey}",
             0,
-            TimeSpan.FromMinutes(OtpExpiryMinutes));
+            TimeSpan.FromMinutes(OtpExpiryMinutes),
+            When.Always,
+            CommandFlags.None);
 
         // Increment rate limit counter
         await _redis.StringIncrementAsync(rateKey);
         // Set expiry only if this is the first request in the window
         if (!currentRate.HasValue)
         {
-            await _redis.KeyExpireAsync(rateKey, TimeSpan.FromMinutes(RateLimitWindowMinutes));
+            await _redis.KeyExpireAsync(rateKey, TimeSpan.FromMinutes(RateLimitWindowMinutes), CommandFlags.None);
         }
 
         // TODO: Send via SMS provider (Twilio/MSG91)
@@ -122,7 +126,9 @@ public class OtpService : IOtpService
             await _redis.StringSetAsync(
                 $"otp:lock:{phoneKey}",
                 "locked",
-                TimeSpan.FromMinutes(LockoutMinutes));
+                TimeSpan.FromMinutes(LockoutMinutes),
+                When.Always,
+                CommandFlags.None);
 
             // Clean up OTP keys
             await CleanupKeys(phoneKey);
