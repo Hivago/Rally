@@ -1,9 +1,8 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
-using RallyAPI.Delivery.Application.Commands.CreateDeliveryRequest;
 using RallyAPI.Delivery.Application.Commands.GetQuote;
 using RallyAPI.Delivery.Application.DTOs;
 using RallyAPI.Delivery.Endpoints.Requests;
@@ -26,22 +25,6 @@ public static class DeliveryEndpoints
             .WithSummary("Get delivery quote at checkout")
             .Produces<DeliveryQuoteDto>(StatusCodes.Status200OK)
             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest);
-
-        // Create Delivery Request (after order confirmed)
-        group.MapPost("/request", CreateDeliveryRequest)
-            .WithName("CreateDeliveryRequest")
-            .WithSummary("Create delivery request for an order")
-            .RequireAuthorization()
-            .Produces<DeliveryRequestDto>(StatusCodes.Status201Created)
-            .Produces<ProblemDetails>(StatusCodes.Status400BadRequest);
-
-        // Get Delivery by Order ID
-        group.MapGet("/order/{orderId:guid}", GetDeliveryByOrderId)
-            .WithName("GetDeliveryByOrderId")
-            .WithSummary("Get delivery request by order ID")
-            .RequireAuthorization()
-            .Produces<DeliveryRequestDto>(StatusCodes.Status200OK)
-            .Produces<ProblemDetails>(StatusCodes.Status404NotFound);
 
         return app;
     }
@@ -70,46 +53,4 @@ public static class DeliveryEndpoints
             ? Results.Ok(result.Value)
             : result.Error.ToErrorResult();
     }
-
-    private static async Task<IResult> CreateDeliveryRequest(
-        [FromBody] CreateDeliveryRequestRequest request,
-        IMediator mediator,
-        CancellationToken ct)
-    {
-        var command = new CreateDeliveryRequestCommand
-        {
-            OrderId = request.OrderId,
-            OrderNumber = request.OrderNumber,
-            QuoteId = request.QuoteId,
-            PickupLatitude = request.PickupLatitude,
-            PickupLongitude = request.PickupLongitude,
-            PickupPincode = request.PickupPincode,
-            PickupAddress = request.PickupAddress,
-            PickupContactName = request.PickupContactName,
-            PickupContactPhone = request.PickupContactPhone,
-            DropLatitude = request.DropLatitude,
-            DropLongitude = request.DropLongitude,
-            DropPincode = request.DropPincode,
-            DropAddress = request.DropAddress,
-            DropContactName = request.DropContactName,
-            DropContactPhone = request.DropContactPhone,
-            ItemCount = request.ItemCount
-        };
-
-        var result = await mediator.Send(command, ct);
-
-        return result.IsSuccess
-            ? Results.Created($"/api/delivery/{result.Value.Id}", result.Value)
-            : result.Error.ToErrorResult();
-    }
-
-    private static async Task<IResult> GetDeliveryByOrderId(
-        Guid orderId,
-        IMediator mediator,
-        CancellationToken ct)
-    {
-        // TODO: Add GetDeliveryByOrderIdQuery
-        return Results.Ok();
-    }
-
 }
