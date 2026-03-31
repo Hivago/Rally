@@ -24,4 +24,10 @@ public interface IPayoutLedgerRepository
     /// </summary>
     Task<IReadOnlyList<Guid>> GetOwnerIdsWithPendingEntriesAsync(
         DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns ledger entries for an owner within a date range.
+    /// </summary>
+    Task<IReadOnlyList<PayoutLedger>> GetByOwnerIdAndDateRangeAsync(
+        Guid ownerId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
 }

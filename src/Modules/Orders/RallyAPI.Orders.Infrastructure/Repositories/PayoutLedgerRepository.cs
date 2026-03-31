@@ -63,4 +63,15 @@ public class PayoutLedgerRepository : IPayoutLedgerRepository
             .Distinct()
             .ToListAsync(ct);
     }
+
+    public async Task<IReadOnlyList<PayoutLedger>> GetByOwnerIdAndDateRangeAsync(
+        Guid ownerId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
+    {
+        return await _context.PayoutLedgers
+            .Where(l => l.OwnerId == ownerId
+                     && l.CreatedAt >= fromUtc
+                     && l.CreatedAt < toUtc)
+            .OrderBy(l => l.CreatedAt)
+            .ToListAsync(ct);
+    }
 }

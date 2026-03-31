@@ -6,9 +6,12 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using RallyAPI.Orders.Application.Commands.ProcessPayout;
 using RallyAPI.Orders.Application.DTOs;
+using RallyAPI.Orders.Application.Queries.GetGstSummary;
+using RallyAPI.Orders.Application.Queries.GetPayoutDetail;
 using RallyAPI.Orders.Application.Queries.GetPayoutsByOwner;
 using RallyAPI.Orders.Application.Queries.GetPendingPayouts;
 using RallyAPI.Orders.Application.Queries.GetRestaurantEarnings;
+using RallyAPI.Orders.Application.Queries.GetTdsSummary;
 
 namespace RallyAPI.Orders.Endpoints;
 
@@ -29,6 +32,18 @@ public static class PayoutEndpoints
         restaurantGroup.MapGet("/", GetPayoutHistory)
             .WithName("GetPayoutHistory")
             .WithSummary("Get payout history for the restaurant owner");
+
+        restaurantGroup.MapGet("/{payoutId:guid}", GetPayoutDetail)
+            .WithName("GetPayoutDetail")
+            .WithSummary("Get payout detail with order-level breakdown");
+
+        restaurantGroup.MapGet("/gst-summary", GetGstSummary)
+            .WithName("GetGstSummary")
+            .WithSummary("Get GST summary for a date range");
+
+        restaurantGroup.MapGet("/tds-summary", GetTdsSummary)
+            .WithName("GetTdsSummary")
+            .WithSummary("Get TDS summary for a date range");
 
         // Admin endpoints
         var adminGroup = app.MapGroup("/api/admin/payouts")
@@ -140,6 +155,108 @@ public static class PayoutEndpoints
 
         return result.IsSuccess
             ? Results.Ok(new { message = "Payout processed successfully" })
+            : Results.BadRequest(new { error = result.Error.Message });
+    }
+    private static async Task<IResult> GetPayoutDetail(
+        Guid payoutId,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var restaurantId = httpContext.User.FindFirst("sub")?.Value;
+        if (string.IsNullOrEmpty(restaurantId))
+            return Results.Unauthorized();
+
+        var restaurantQueryService = httpContext.RequestServices
+            .GetRequiredService<RallyAPI.SharedKernel.Abstractions.Restaurants.IRestaurantQueryService>();
+
+        var restaurant = await restaurantQueryService.GetByIdAsync(Guid.Parse(restaurantId), ct);
+        if (restaurant?.OwnerId is null)
+            return Results.NotFound(new { error = "Restaurant owner not found" });
+
+        var query = new GetPayoutDetailQuery
+        {
+            PayoutId = payoutId,
+            OwnerId = restaurant.OwnerId.Value
+        };
+
+        var result = await mediator.Send(query, ct);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.NotFound(new { error = result.Error.Message });
+    }
+
+    private static async Task<IResult> GetGstSummary(
+        HttpContext httpContext,
+        IMediator mediator,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        var restaurantId = httpContext.User.FindFirst("sub")?.Value;
+        if (string.IsNullOrEmpty(restaurantId))
+            return Results.Unauthorized();
+
+        var restaurantQueryService = httpContext.RequestServices
+            .GetRequiredService<RallyAPI.SharedKernel.Abstractions.Restaurants.IRestaurantQueryService>();
+
+        var restaurant = await restaurantQueryService.GetByIdAsync(Guid.Parse(restaurantId), ct);
+        if (restaurant?.OwnerId is null)
+            return Results.NotFound(new { error = "Restaurant owner not found" });
+
+        // Default to current month if no range specified
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var fromDate = from ?? new DateOnly(today.Year, today.Month, 1);
+        var toDate = to ?? today;
+
+        var query = new GetGstSummaryQuery
+        {
+            OwnerId = restaurant.OwnerId.Value,
+            FromDate = fromDate,
+            ToDate = toDate
+        };
+
+        var result = await mediator.Send(query, ct);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Message });
+    }
+
+    private static async Task<IResult> GetTdsSummary(
+        HttpContext httpContext,
+        IMediator mediator,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        var restaurantId = httpContext.User.FindFirst("sub")?.Value;
+        if (string.IsNullOrEmpty(restaurantId))
+            return Results.Unauthorized();
+
+        var restaurantQueryService = httpContext.RequestServices
+            .GetRequiredService<RallyAPI.SharedKernel.Abstractions.Restaurants.IRestaurantQueryService>();
+
+        var restaurant = await restaurantQueryService.GetByIdAsync(Guid.Parse(restaurantId), ct);
+        if (restaurant?.OwnerId is null)
+            return Results.NotFound(new { error = "Restaurant owner not found" });
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var fromDate = from ?? new DateOnly(today.Year, today.Month, 1);
+        var toDate = to ?? today;
+
+        var query = new GetTdsSummaryQuery
+        {
+            OwnerId = restaurant.OwnerId.Value,
+            FromDate = fromDate,
+            ToDate = toDate
+        };
+
+        var result = await mediator.Send(query, ct);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error.Message });
     }
 }
