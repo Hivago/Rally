@@ -30,6 +30,7 @@ internal sealed class UpdateRestaurantProfileCommandHandler
         if (restaurant is null)
             return Result.Failure(Error.NotFound("Restaurant", request.RestaurantId));
 
+        // Basic profile fields
         PhoneNumber? phone = null;
         if (!string.IsNullOrWhiteSpace(request.Phone))
         {
@@ -39,9 +40,44 @@ internal sealed class UpdateRestaurantProfileCommandHandler
             phone = phoneResult.Value;
         }
 
-        var result = restaurant.UpdateProfile(request.Name, request.AddressLine, phone);
-        if (result.IsFailure)
-            return result;
+        var profileResult = restaurant.UpdateProfile(request.Name, request.AddressLine, phone);
+        if (profileResult.IsFailure)
+            return profileResult;
+
+        // Cuisine types
+        if (request.CuisineTypes is not null)
+        {
+            var cuisineResult = restaurant.SetCuisineTypes(request.CuisineTypes);
+            if (cuisineResult.IsFailure)
+                return cuisineResult;
+        }
+
+        // Dietary attributes (only update if any dietary field is provided)
+        if (request.IsPureVeg.HasValue || request.IsVeganFriendly.HasValue || request.HasJainOptions.HasValue)
+        {
+            var dietaryResult = restaurant.SetDietaryAttributes(
+                request.IsPureVeg ?? restaurant.IsPureVeg,
+                request.IsVeganFriendly ?? restaurant.IsVeganFriendly,
+                request.HasJainOptions ?? restaurant.HasJainOptions);
+            if (dietaryResult.IsFailure)
+                return dietaryResult;
+        }
+
+        // Min order amount
+        if (request.MinOrderAmount.HasValue)
+        {
+            var minOrderResult = restaurant.SetMinOrderAmount(request.MinOrderAmount.Value);
+            if (minOrderResult.IsFailure)
+                return minOrderResult;
+        }
+
+        // FSSAI number
+        if (!string.IsNullOrWhiteSpace(request.FssaiNumber))
+        {
+            var fssaiResult = restaurant.SetFssaiNumber(request.FssaiNumber);
+            if (fssaiResult.IsFailure)
+                return fssaiResult;
+        }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

@@ -53,7 +53,7 @@ internal sealed class CreateMenuItemCommandHandler
             request.IsVegetarian,
             request.PreparationTimeMinutes);
 
-        // Add options if provided
+        // Add standalone options if provided (backward compatible)
         if (request.Options?.Any() == true)
         {
             foreach (var optionDto in request.Options)
@@ -68,6 +68,44 @@ internal sealed class CreateMenuItemCommandHandler
 
                 menuItem.AddOption(option);
             }
+        }
+
+        // Add option groups if provided
+        if (request.OptionGroups?.Any() == true)
+        {
+            foreach (var groupDto in request.OptionGroups)
+            {
+                var group = MenuItemOptionGroup.Create(
+                    menuItem.Id,
+                    groupDto.GroupName,
+                    groupDto.IsRequired,
+                    groupDto.MinSelections,
+                    groupDto.MaxSelections,
+                    groupDto.DisplayOrder);
+
+                foreach (var optionDto in groupDto.Options)
+                {
+                    var optionType = Enum.Parse<OptionType>(optionDto.Type, ignoreCase: true);
+                    var option = MenuItemOption.Create(
+                        menuItem.Id,
+                        optionDto.Name,
+                        optionType,
+                        optionDto.AdditionalPrice,
+                        optionDto.IsDefault,
+                        group.Id);
+
+                    group.AddOption(option);
+                    menuItem.AddOption(option);
+                }
+
+                menuItem.AddOptionGroup(group);
+            }
+        }
+
+        // Set tags if provided
+        if (request.Tags is not null)
+        {
+            menuItem.SetTags(request.Tags);
         }
 
         _menuItemRepository.Add(menuItem);

@@ -143,7 +143,19 @@ public class UpdateMenuItem : IEndpoint
                 o.Name,
                 o.Type,
                 o.AdditionalPrice,
-                o.IsDefault)).ToList());
+                o.IsDefault)).ToList(),
+            request.OptionGroups?.Select(g => new OptionGroupDto(
+                g.GroupName,
+                g.IsRequired,
+                g.MinSelections,
+                g.MaxSelections,
+                g.DisplayOrder,
+                g.Options.Select(o => new MenuItemOptionDto(
+                    o.Name,
+                    o.Type,
+                    o.AdditionalPrice,
+                    o.IsDefault)).ToList())).ToList(),
+            request.Tags);
 
         var result = await sender.Send(command, ct);
 
@@ -161,4 +173,6 @@ public record UpdateMenuItemRequest(
     int DisplayOrder,
     bool IsVegetarian,
     int PreparationTimeMinutes,
-    List<MenuItemOptionRequest>? Options);
+    List<MenuItemOptionRequest>? Options,
+    List<OptionGroupRequest>? OptionGroups,
+    List<string>? Tags);

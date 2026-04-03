@@ -305,6 +305,7 @@ app.MapCatalogEndpoints();
 app.MapOrdersEndpoints();
 app.MapCartEndpoints();
 app.MapPaymentEndpoints();
+app.MapPayoutEndpoints();
 app.MapDeliveryModuleEndpoints();
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapGet("/", () => "Rally API is running!");

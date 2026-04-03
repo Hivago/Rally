@@ -62,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<IRiderRepository, RiderRepository>();
         services.AddScoped<IRestaurantRepository, RestaurantRepository>();
         services.AddScoped<IAdminRepository, AdminRepository>();
+        services.AddScoped<IRestaurantOwnerRepository, RestaurantOwnerRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IRestaurantQueryService, RestaurantQueryService>();

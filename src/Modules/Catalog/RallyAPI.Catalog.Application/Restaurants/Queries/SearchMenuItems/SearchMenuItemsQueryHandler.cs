@@ -59,6 +59,7 @@ internal sealed class SearchMenuItemsQueryHandler
                     i.ImageUrl,
                     i.IsVegetarian,
                     i.PreparationTimeMinutes,
+                    i.Tags,
                     restaurant.Id,
                     restaurant.Name,
                     restaurant.IsAcceptingOrders);

@@ -268,6 +268,12 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("CuisineTypes")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("cuisine_types")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
@@ -277,6 +283,17 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("email");
+
+                    b.Property<string>("FssaiNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("fssai_number");
+
+                    b.Property<bool>("HasJainOptions")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("has_jain_options");
 
                     b.Property<bool>("IsAcceptingOrders")
                         .ValueGeneratedOnAdd()
@@ -289,6 +306,18 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
+
+                    b.Property<bool>("IsPureVeg")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_pure_veg");
+
+                    b.Property<bool>("IsVeganFriendly")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_vegan_friendly");
 
                     b.Property<decimal>("Latitude")
                         .HasPrecision(10, 8)
@@ -310,6 +339,13 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(11,8)")
                         .HasColumnName("longitude");
 
+                    b.Property<decimal>("MinOrderAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("min_order_amount");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -319,6 +355,10 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                     b.Property<TimeOnly>("OpeningTime")
                         .HasColumnType("time without time zone")
                         .HasColumnName("opening_time");
+
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -353,7 +393,98 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                     b.HasIndex("Latitude", "Longitude")
                         .HasDatabaseName("idx_restaurants_location");
 
+                    b.HasIndex("OwnerId")
+                        .HasDatabaseName("ix_restaurants_owner_id");
+
                     b.ToTable("restaurants", "users");
+                });
+
+            modelBuilder.Entity("RallyAPI.Users.Domain.Entities.RestaurantOwner", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BankAccountName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("bank_account_name");
+
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("bank_account_number");
+
+                    b.Property<string>("BankIfscCode")
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)")
+                        .HasColumnName("bank_ifsc_code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("GstNumber")
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)")
+                        .HasColumnName("gst_number");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("PanNumber")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("pan_number");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)")
+                        .HasColumnName("phone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasDatabaseName("idx_restaurant_owners_email");
+
+                    b.ToTable("restaurant_owners", "users");
                 });
 
             modelBuilder.Entity("RallyAPI.Users.Domain.Entities.Rider", b =>
@@ -532,6 +663,14 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_rider_kyc_documents_rider_type");
 
                     b.ToTable("rider_kyc_documents", "users");
+                });
+
+            modelBuilder.Entity("RallyAPI.Users.Domain.Entities.Restaurant", b =>
+                {
+                    b.HasOne("RallyAPI.Users.Domain.Entities.RestaurantOwner", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("RallyAPI.Users.Domain.Entities.CustomerAddress", b =>

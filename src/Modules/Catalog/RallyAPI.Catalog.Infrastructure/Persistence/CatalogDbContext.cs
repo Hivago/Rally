@@ -14,6 +14,7 @@ public class CatalogDbContext : DbContext
     public DbSet<Menu> Menus => Set<Menu>();
     public DbSet<MenuItem> MenuItems => Set<MenuItem>();
     public DbSet<MenuItemOption> MenuItemOptions => Set<MenuItemOption>();
+    public DbSet<MenuItemOptionGroup> MenuItemOptionGroups => Set<MenuItemOptionGroup>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -53,6 +53,11 @@ internal sealed class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
         builder.Property(m => m.PreparationTimeMinutes)
             .HasColumnName("preparation_time_minutes");
 
+        builder.Property(m => m.Tags)
+            .HasColumnName("tags")
+            .HasColumnType("text[]")
+            .HasDefaultValueSql("'{}'");
+
         builder.Property(m => m.CreatedAt)
             .HasColumnName("created_at");
 
@@ -62,6 +67,11 @@ internal sealed class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
         builder.HasMany(m => m.Options)
             .WithOne()
             .HasForeignKey(o => o.MenuItemId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(m => m.OptionGroups)
+            .WithOne()
+            .HasForeignKey(g => g.MenuItemId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(m => m.MenuId)

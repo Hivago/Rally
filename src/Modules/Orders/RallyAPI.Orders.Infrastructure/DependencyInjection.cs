@@ -57,12 +57,17 @@ public static class DependencyInjection
         // Repositories
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<ICartRepository, CartRepository>();
+        services.AddScoped<IPayoutRepository, PayoutRepository>();
+        services.AddScoped<IPayoutLedgerRepository, PayoutLedgerRepository>();
 
         // Cart Cache (Redis write-through)
         services.AddScoped<ICartCacheService, RedisCartCacheService>();
 
         // Cart cleanup background service
         services.AddHostedService<CartCleanupService>();
+
+        // Weekly payout batch creation (Mondays 6 AM IST)
+        services.AddHostedService<WeeklyPayoutBatchService>();
 
         // Unit of Work
         services.AddScoped<IUnitOfWork, UnitOfWork>();

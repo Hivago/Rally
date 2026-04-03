@@ -18,6 +18,7 @@ public sealed record SearchMenuItemResponse(
     string? ImageUrl,
     bool IsVegetarian,
     int PreparationTimeMinutes,
+    List<string> Tags,
     Guid RestaurantId,
     string RestaurantName,
     bool IsAcceptingOrders);

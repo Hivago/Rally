@@ -22,6 +22,8 @@ internal sealed class MenuItemRepository : IMenuItemRepository
     {
         return await _context.MenuItems
             .Include(m => m.Options)
+            .Include(m => m.OptionGroups)
+                .ThenInclude(g => g.Options)
             .FirstOrDefaultAsync(m => m.Id == id, ct);
     }
 
@@ -29,6 +31,8 @@ internal sealed class MenuItemRepository : IMenuItemRepository
     {
         return await _context.MenuItems
             .Include(m => m.Options)
+            .Include(m => m.OptionGroups)
+                .ThenInclude(g => g.Options)
             .Where(m => m.MenuId == menuId)
             .OrderBy(m => m.DisplayOrder)
             .ToListAsync(ct);
@@ -38,6 +42,8 @@ internal sealed class MenuItemRepository : IMenuItemRepository
     {
         return await _context.MenuItems
             .Include(m => m.Options)
+            .Include(m => m.OptionGroups)
+                .ThenInclude(g => g.Options)
             .Where(m => m.RestaurantId == restaurantId)
             .OrderBy(m => m.DisplayOrder)
             .ToListAsync(ct);
@@ -49,6 +55,8 @@ internal sealed class MenuItemRepository : IMenuItemRepository
 
         return await _context.MenuItems
             .Include(m => m.Options)
+            .Include(m => m.OptionGroups)
+                .ThenInclude(g => g.Options)
             .Where(m => m.IsAvailable &&
                 (EF.Functions.ILike(m.Name, searchTerm) ||
                  (m.Description != null && EF.Functions.ILike(m.Description, searchTerm))))

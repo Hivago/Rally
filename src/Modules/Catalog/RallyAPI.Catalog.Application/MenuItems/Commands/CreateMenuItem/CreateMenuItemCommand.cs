@@ -13,12 +13,22 @@ public sealed record CreateMenuItemCommand(
     int DisplayOrder,
     bool IsVegetarian,
     int PreparationTimeMinutes,
-    List<MenuItemOptionDto>? Options) : IRequest<Result<CreateMenuItemResponse>>;
+    List<MenuItemOptionDto>? Options,
+    List<OptionGroupDto>? OptionGroups,
+    List<string>? Tags) : IRequest<Result<CreateMenuItemResponse>>;
 
 public sealed record MenuItemOptionDto(
     string Name,
     string Type,
     decimal AdditionalPrice,
     bool IsDefault);
+
+public sealed record OptionGroupDto(
+    string GroupName,
+    bool IsRequired,
+    int MinSelections,
+    int MaxSelections,
+    int DisplayOrder,
+    List<MenuItemOptionDto> Options);
 
 public sealed record CreateMenuItemResponse(Guid MenuItemId);

@@ -37,7 +37,13 @@ internal sealed class MenuItemOptionConfiguration : IEntityTypeConfiguration<Men
         builder.Property(o => o.IsDefault)
             .HasColumnName("is_default");
 
+        builder.Property(o => o.OptionGroupId)
+            .HasColumnName("option_group_id");
+
         builder.HasIndex(o => o.MenuItemId)
             .HasDatabaseName("ix_menu_item_options_menu_item_id");
+
+        builder.HasIndex(o => o.OptionGroupId)
+            .HasDatabaseName("ix_menu_item_options_option_group_id");
     }
 }

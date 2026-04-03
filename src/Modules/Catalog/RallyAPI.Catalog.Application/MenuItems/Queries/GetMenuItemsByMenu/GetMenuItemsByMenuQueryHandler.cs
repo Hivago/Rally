@@ -33,12 +33,26 @@ internal sealed class GetMenuItemsByMenuQueryHandler
                 i.IsAvailable,
                 i.IsVegetarian,
                 i.PreparationTimeMinutes,
-                i.Options.Select(o => new MenuItemOptionResponse(
+                i.Options.Where(o => o.OptionGroupId == null).Select(o => new MenuItemOptionResponse(
                     o.Id,
                     o.Name,
                     o.Type.ToString(),
                     o.AdditionalPrice,
-                    o.IsDefault)).ToList()))
+                    o.IsDefault)).ToList(),
+                i.OptionGroups.OrderBy(g => g.DisplayOrder).Select(g => new OptionGroupResponse(
+                    g.Id,
+                    g.GroupName,
+                    g.IsRequired,
+                    g.MinSelections,
+                    g.MaxSelections,
+                    g.DisplayOrder,
+                    g.Options.Select(o => new MenuItemOptionResponse(
+                        o.Id,
+                        o.Name,
+                        o.Type.ToString(),
+                        o.AdditionalPrice,
+                        o.IsDefault)).ToList())).ToList(),
+                i.Tags))
             .ToList();
 
         return response;

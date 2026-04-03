@@ -5,6 +5,7 @@ namespace RallyAPI.Catalog.Domain.MenuItems;
 public class MenuItem : AggregateRoot
 {
     private readonly List<MenuItemOption> _options = new();
+    private readonly List<MenuItemOptionGroup> _optionGroups = new();
 
     public Guid MenuId { get; private set; }
     public Guid RestaurantId { get; private set; }
@@ -16,10 +17,12 @@ public class MenuItem : AggregateRoot
     public bool IsAvailable { get; private set; }
     public bool IsVegetarian { get; private set; }
     public int PreparationTimeMinutes { get; private set; }
+    public List<string> Tags { get; private set; } = new();
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
     public IReadOnlyCollection<MenuItemOption> Options => _options.AsReadOnly();
+    public IReadOnlyCollection<MenuItemOptionGroup> OptionGroups => _optionGroups.AsReadOnly();
 
     private MenuItem() { } // EF Core
 
@@ -99,6 +102,33 @@ public class MenuItem : AggregateRoot
     public void ClearOptions()
     {
         _options.Clear();
+    }
+
+    public void AddOptionGroup(MenuItemOptionGroup group)
+    {
+        _optionGroups.Add(group);
+    }
+
+    public void RemoveOptionGroup(Guid groupId)
+    {
+        var group = _optionGroups.FirstOrDefault(g => g.Id == groupId);
+        if (group != null)
+            _optionGroups.Remove(group);
+    }
+
+    public void ClearOptionGroups()
+    {
+        _optionGroups.Clear();
+    }
+
+    public void SetTags(List<string> tags)
+    {
+        Tags = tags
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t.Trim().ToLowerInvariant())
+            .Distinct()
+            .ToList();
+        UpdatedAt = DateTime.UtcNow;
     }
 
     /// <summary>

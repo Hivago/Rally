@@ -14,4 +14,6 @@ public sealed record UpdateMenuItemCommand(
     int DisplayOrder,
     bool IsVegetarian,
     int PreparationTimeMinutes,
-    List<MenuItemOptionDto>? Options) : IRequest<Result>;
+    List<MenuItemOptionDto>? Options,
+    List<OptionGroupDto>? OptionGroups,
+    List<string>? Tags) : IRequest<Result>;

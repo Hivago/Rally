@@ -7,4 +7,10 @@ public sealed record UpdateRestaurantProfileCommand(
     Guid RestaurantId,
     string? Name,
     string? AddressLine,
-    string? Phone) : IRequest<Result>;
+    string? Phone,
+    List<string>? CuisineTypes,
+    bool? IsPureVeg,
+    bool? IsVeganFriendly,
+    bool? HasJainOptions,
+    decimal? MinOrderAmount,
+    string? FssaiNumber) : IRequest<Result>;

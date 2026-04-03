@@ -150,5 +150,46 @@ public class RestaurantConfiguration : IEntityTypeConfiguration<Restaurant>
         builder.Property(e => e.LogoFileKey)
                .HasColumnName("logo_file_key")
                .HasMaxLength(500);
+
+        // Owner link (multi-outlet support)
+        builder.Property(r => r.OwnerId)
+            .HasColumnName("owner_id");
+
+        builder.HasOne<RestaurantOwner>()
+            .WithMany()
+            .HasForeignKey(r => r.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // FSSAI compliance
+        builder.Property(r => r.FssaiNumber)
+            .HasColumnName("fssai_number")
+            .HasMaxLength(20);
+
+        // Cuisine/dietary attributes
+        builder.Property(r => r.CuisineTypes)
+            .HasColumnName("cuisine_types")
+            .HasColumnType("jsonb")
+            .HasDefaultValueSql("'[]'::jsonb");
+
+        builder.Property(r => r.IsPureVeg)
+            .HasColumnName("is_pure_veg")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        builder.Property(r => r.IsVeganFriendly)
+            .HasColumnName("is_vegan_friendly")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        builder.Property(r => r.HasJainOptions)
+            .HasColumnName("has_jain_options")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        builder.Property(r => r.MinOrderAmount)
+            .HasColumnName("min_order_amount")
+            .HasPrecision(10, 2)
+            .HasDefaultValue(0m)
+            .IsRequired();
     }
 }

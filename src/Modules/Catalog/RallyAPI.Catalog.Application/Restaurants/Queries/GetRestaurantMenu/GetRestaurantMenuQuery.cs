@@ -31,7 +31,9 @@ public sealed record MenuItemResponse(
     bool IsAvailable,
     bool IsVegetarian,
     int PreparationTimeMinutes,
-    List<MenuItemOptionResponse> Options);
+    List<MenuItemOptionResponse> Options,
+    List<OptionGroupResponse> OptionGroups,
+    List<string> Tags);
 
 public sealed record MenuItemOptionResponse(
     Guid Id,
@@ -39,3 +41,12 @@ public sealed record MenuItemOptionResponse(
     string Type,
     decimal AdditionalPrice,
     bool IsDefault);
+
+public sealed record OptionGroupResponse(
+    Guid Id,
+    string GroupName,
+    bool IsRequired,
+    int MinSelections,
+    int MaxSelections,
+    int DisplayOrder,
+    List<MenuItemOptionResponse> Options);

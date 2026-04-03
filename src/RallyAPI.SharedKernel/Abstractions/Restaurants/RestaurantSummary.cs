@@ -16,6 +16,12 @@ public sealed record RestaurantSummary
     public required int AvgPrepTimeMins { get; init; }
     public required TimeOnly OpeningTime { get; init; }
     public required TimeOnly ClosingTime { get; init; }
+    public required List<string> CuisineTypes { get; init; }
+    public required bool IsPureVeg { get; init; }
+    public required bool IsVeganFriendly { get; init; }
+    public required bool HasJainOptions { get; init; }
+    public required decimal MinOrderAmount { get; init; }
+    public string? LogoUrl { get; init; }
 
     /// <summary>
     /// Distance from the queried location in km. Null if no location was provided.
