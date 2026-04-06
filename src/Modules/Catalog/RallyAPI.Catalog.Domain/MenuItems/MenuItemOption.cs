@@ -34,6 +34,14 @@ public class MenuItemOption : BaseEntity
         };
     }
 
+    public void Update(string name, OptionType type, decimal additionalPrice, bool isDefault)
+    {
+        Name = name;
+        Type = type;
+        AdditionalPrice = additionalPrice;
+        IsDefault = isDefault;
+    }
+
     public void SetOptionGroup(Guid? optionGroupId)
     {
         OptionGroupId = optionGroupId;

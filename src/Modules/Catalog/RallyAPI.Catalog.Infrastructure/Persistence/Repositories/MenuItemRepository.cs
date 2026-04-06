@@ -66,6 +66,24 @@ internal sealed class MenuItemRepository : IMenuItemRepository
     }
 
 
+    public async Task<MenuItem?> GetByOptionGroupIdAsync(Guid optionGroupId, CancellationToken ct = default)
+    {
+        return await _context.MenuItems
+            .Include(m => m.Options)
+            .Include(m => m.OptionGroups)
+                .ThenInclude(g => g.Options)
+            .FirstOrDefaultAsync(m => m.OptionGroups.Any(g => g.Id == optionGroupId), ct);
+    }
+
+    public async Task<MenuItem?> GetByOptionIdAsync(Guid optionId, CancellationToken ct = default)
+    {
+        return await _context.MenuItems
+            .Include(m => m.Options)
+            .Include(m => m.OptionGroups)
+                .ThenInclude(g => g.Options)
+            .FirstOrDefaultAsync(m => m.Options.Any(o => o.Id == optionId), ct);
+    }
+
     public void Add(MenuItem item) => _context.MenuItems.Add(item);
 
     public void Update(MenuItem item, CancellationToken ct = default) => _context.MenuItems.Update(item);
