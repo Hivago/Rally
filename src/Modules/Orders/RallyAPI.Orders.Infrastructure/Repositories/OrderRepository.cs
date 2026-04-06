@@ -196,6 +196,73 @@ public sealed class OrderRepository : IOrderRepository
         return await _context.Orders.AnyAsync(o => o.OrderNumber.Value == orderNumber, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Order>> GetFilteredAsync(
+        OrderStatus? status = null,
+        Guid? restaurantId = null,
+        DateTime? from = null,
+        DateTime? to = null,
+        string? search = null,
+        int skip = 0,
+        int take = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var query = BuildFilteredQuery(status, restaurantId, from, to, search);
+
+        return await query
+            .OrderByDescending(o => o.CreatedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<int> GetFilteredCountAsync(
+        OrderStatus? status = null,
+        Guid? restaurantId = null,
+        DateTime? from = null,
+        DateTime? to = null,
+        string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await BuildFilteredQuery(status, restaurantId, from, to, search)
+            .CountAsync(cancellationToken);
+    }
+
+    private IQueryable<Order> BuildFilteredQuery(
+        OrderStatus? status,
+        Guid? restaurantId,
+        DateTime? from,
+        DateTime? to,
+        string? search)
+    {
+        var query = _context.Orders
+            .Include(o => o.Items)
+            .Include(o => o.DeliveryInfo)
+            .AsQueryable();
+
+        if (status.HasValue)
+            query = query.Where(o => o.Status == status.Value);
+
+        if (restaurantId.HasValue)
+            query = query.Where(o => o.RestaurantId == restaurantId.Value);
+
+        if (from.HasValue)
+            query = query.Where(o => o.CreatedAt >= from.Value);
+
+        if (to.HasValue)
+            query = query.Where(o => o.CreatedAt <= to.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(o =>
+                o.OrderNumber.Value.Contains(term) ||
+                o.CustomerName.Contains(term) ||
+                o.RestaurantName.Contains(term));
+        }
+
+        return query;
+    }
+
     public async Task<List<Order>> GetOrdersByStatusOlderThanAsync(
     OrderStatus status,
     DateTime olderThan,

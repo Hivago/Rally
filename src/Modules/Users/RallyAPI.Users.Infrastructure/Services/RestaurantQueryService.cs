@@ -24,6 +24,7 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
         CancellationToken ct = default)
     {
         var query = _context.Restaurants
+            .AsNoTracking()
             .Where(r => r.IsActive && r.DeletedAt == null);
 
         var restaurants = await query.ToListAsync(ct);
@@ -81,6 +82,7 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
         CancellationToken ct = default)
     {
         var r = await _context.Restaurants
+            .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == restaurantId && r.IsActive && r.DeletedAt == null, ct);
 
         if (r is null) return null;

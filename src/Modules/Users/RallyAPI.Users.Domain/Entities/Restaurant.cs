@@ -265,4 +265,14 @@ public sealed class Restaurant : AggregateRoot
         MarkAsUpdated();
         return Result.Success();
     }
+
+    public Result SetCommissionPercentage(decimal percentage)
+    {
+        if (percentage < 0 || percentage > 100)
+            return Result.Failure(Error.Validation("Commission percentage must be between 0 and 100."));
+
+        CommissionPercentage = percentage;
+        MarkAsUpdated();
+        return Result.Success();
+    }
 }

@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RallyAPI.Users.Domain.Entities;
 using RallyAPI.Users.Domain.ValueObjects;
@@ -165,11 +167,19 @@ public class RestaurantConfiguration : IEntityTypeConfiguration<Restaurant>
             .HasColumnName("fssai_number")
             .HasMaxLength(20);
 
-        // Cuisine/dietary attributes
+        // Cuisine/dietary attributes — jsonb requires explicit converter for List<string>
+        // (Npgsql 8.x maps List<string> to text[] by default, not jsonb)
         builder.Property(r => r.CuisineTypes)
             .HasColumnName("cuisine_types")
             .HasColumnType("jsonb")
-            .HasDefaultValueSql("'[]'::jsonb");
+            .HasDefaultValueSql("'[]'::jsonb")
+            .HasConversion(
+                v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new(),
+                new ValueComparer<List<string>>(
+                    (a, b) => a != null && b != null && a.SequenceEqual(b),
+                    c => c.Aggregate(0, (hash, item) => HashCode.Combine(hash, item.GetHashCode())),
+                    c => c.ToList()));
 
         builder.Property(r => r.IsPureVeg)
             .HasColumnName("is_pure_veg")
