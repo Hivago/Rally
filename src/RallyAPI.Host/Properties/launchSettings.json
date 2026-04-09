@@ -7,7 +7,9 @@
       "launchBrowser": true,
       "applicationUrl": "http://localhost:5023",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Database": "Host=localhost;Port=5432;Database=rallydb;Username=rally;Password=rally123",
+        "ConnectionStrings__Redis": "localhost:6379"
       }
     },
     "https": {
@@ -16,7 +18,9 @@
       "launchBrowser": true,
       "applicationUrl": "https://localhost:7041;http://localhost:5023",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Database": "Host=localhost;Port=5432;Database=rallydb;Username=rally;Password=rally123",
+        "ConnectionStrings__Redis": "localhost:6379"
       }
     }
   }

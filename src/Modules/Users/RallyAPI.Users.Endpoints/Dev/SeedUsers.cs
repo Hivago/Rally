@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Hosting;
 using RallyAPI.Users.Application.Abstractions;
@@ -46,13 +47,13 @@ public class SeedUsers : IEndpoint
         string? VehicleNumber);
 
     private static async Task<IResult> HandleAsync(
-        SeedUsersRequest request,
-        IHostEnvironment env,
-        IAdminRepository adminRepository,
-        IRestaurantRepository restaurantRepository,
-        IRiderRepository riderRepository,
-        IPasswordHasher passwordHasher,
-        IUnitOfWork unitOfWork,
+        [FromBody] SeedUsersRequest request,
+        [FromServices] IHostEnvironment env,
+        [FromServices] IAdminRepository adminRepository,
+        [FromServices] IRestaurantRepository restaurantRepository,
+        [FromServices] IRiderRepository riderRepository,
+        [FromServices] IPasswordHasher passwordHasher,
+        [FromServices] IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
         if (!env.IsDevelopment())
