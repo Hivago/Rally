@@ -14,7 +14,7 @@ namespace RallyAPI.Orders.Application.Commands.PlaceOrder;
 
 /// <summary>
 /// Handler for PlaceOrderCommand.
-/// Creates order AFTER payment is successful.
+/// Creates a PENDING order. Payment is handled separately via InitiatePayment + PayU webhook.
 /// If the customer has a persisted cart, its items are used instead of the request body items.
 /// The cart is cleared after a successful order creation.
 /// </summary>
@@ -50,18 +50,11 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         try
         {
             _logger.LogInformation(
-                "Creating paid order for Customer {CustomerId}, Restaurant {RestaurantId}, Payment {PaymentId}",
+                "Creating pending order for Customer {CustomerId}, Restaurant {RestaurantId}",
                 command.CustomerId,
-                command.Request.RestaurantId,
-                command.PaymentId);
+                command.Request.RestaurantId);
 
-            // Step 1: Validate payment ID exists
-            if (string.IsNullOrWhiteSpace(command.PaymentId))
-            {
-                return Result.Failure<OrderDto>(OrderErrors.PaymentIdRequired);
-            }
-
-            // Step 2: Validate customer
+            // Step 1: Validate customer
             var customerValidation = await _validationService.ValidateCustomerAsync(
                 command.CustomerId, cancellationToken);
 
@@ -170,8 +163,8 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
             _logger.LogInformation("OrderPricing created - SubTotal: {Sub}, Total: {Total}",
             pricing.SubTotal.Amount, pricing.Total.Amount);
 
-            // Step 9: Create paid order
-            var order = Order.CreatePaidOrder(
+            // Step 9: Create pending order (payment handled separately)
+            var order = Order.CreatePendingOrder(
                 orderNumber,
                 command.CustomerId,
                 command.CustomerName,
@@ -179,8 +172,6 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
                 command.Request.RestaurantName,
                 deliveryInfo,
                 pricing,
-                command.PaymentId,
-                command.PaymentTransactionId,
                 command.DeliveryQuoteId,
                 command.CustomerPhone,
                 command.CustomerEmail,
@@ -196,8 +187,8 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
             order.Pricing.Tax.Amount,
             order.Pricing.Total.Amount);
 
-            // Step 11: Finalize and save
-            order.FinalizeOrder();
+            // Step 11: Validate and save (OrderPaidEvent fires only after webhook confirms payment)
+            order.ValidateOrder();
 
             await _orderRepository.AddAsync(order, cancellationToken);
 
@@ -219,7 +210,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Paid order {OrderNumber} created successfully. Total: {Total}. Awaiting restaurant response.",
+                "Pending order {OrderNumber} created successfully. Total: {Total}. Awaiting payment.",
                 order.OrderNumber.Value,
                 order.Pricing.Total.ToDisplayString());
 

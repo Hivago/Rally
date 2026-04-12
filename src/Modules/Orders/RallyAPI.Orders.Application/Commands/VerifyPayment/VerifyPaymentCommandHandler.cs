@@ -4,6 +4,7 @@
 
 using MediatR;
 using Microsoft.Extensions.Logging;
+using RallyAPI.Orders.Domain.Abstractions;
 using RallyAPI.Orders.Domain.Repositories;
 using RallyAPI.Orders.Application.Abstractions;
 using RallyAPI.SharedKernel;
@@ -15,15 +16,21 @@ public class VerifyPaymentCommandHandler
     : IRequestHandler<VerifyPaymentCommand, Result<VerifyPaymentResponse>>
 {
     private readonly IPaymentRepository _paymentRepository;
+    private readonly IOrderRepository _orderRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IPayUService _payUService;
     private readonly ILogger<VerifyPaymentCommandHandler> _logger;
 
     public VerifyPaymentCommandHandler(
         IPaymentRepository paymentRepository,
+        IOrderRepository orderRepository,
+        IUnitOfWork unitOfWork,
         IPayUService payUService,
         ILogger<VerifyPaymentCommandHandler> logger)
     {
         _paymentRepository = paymentRepository;
+        _orderRepository = orderRepository;
+        _unitOfWork = unitOfWork;
         _payUService = payUService;
         _logger = logger;
     }
@@ -61,7 +68,18 @@ public class VerifyPaymentCommandHandler
             && payment.Status != Domain.Enums.PaymentStatus.Paid)
         {
             payment.MarkSuccess(result.PayuId, result.Mode ?? "", result.BankRefNum);
-            await _paymentRepository.UpdateAsync(payment, ct);
+
+            // Also transition order Pending → Paid (safety net for delayed/lost webhooks)
+            var order = await _orderRepository.GetByIdAsync(payment.OrderId, ct);
+            if (order is not null && order.Status == Domain.Enums.OrderStatus.Pending)
+            {
+                order.ConfirmPayment(payment.TxnId, result.PayuId);
+                _logger.LogInformation(
+                    "Order {OrderId} transitioned Pending → Paid via verify API for TxnId {TxnId}",
+                    payment.OrderId, command.TxnId);
+            }
+
+            await _unitOfWork.SaveChangesAsync(ct);
 
             _logger.LogInformation(
                 "Payment verified as SUCCESS via API for TxnId {TxnId} (webhook may have been delayed)",

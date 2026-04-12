@@ -2,6 +2,7 @@
 
 using MediatR;
 using Microsoft.Extensions.Logging;
+using RallyAPI.Orders.Domain.Abstractions;
 using RallyAPI.Orders.Domain.Repositories;
 using RallyAPI.SharedKernel;
 using RallyAPI.SharedKernel.Results;
@@ -13,15 +14,21 @@ public class ProcessPayuWebhookCommandHandler
     : IRequestHandler<ProcessPayuWebhookCommand, Result<bool>>
 {
     private readonly IPaymentRepository _paymentRepository;
+    private readonly IOrderRepository _orderRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IPayUService _payUService;
     private readonly ILogger<ProcessPayuWebhookCommandHandler> _logger;
 
     public ProcessPayuWebhookCommandHandler(
         IPaymentRepository paymentRepository,
+        IOrderRepository orderRepository,
+        IUnitOfWork unitOfWork,
         IPayUService payUService,
         ILogger<ProcessPayuWebhookCommandHandler> logger)
     {
         _paymentRepository = paymentRepository;
+        _orderRepository = orderRepository;
+        _unitOfWork = unitOfWork;
         _payUService = payUService;
         _logger = logger;
     }
@@ -77,9 +84,19 @@ public class ProcessPayuWebhookCommandHandler
         {
             payment.MarkSuccess(payuId, mode, bankRefNum);
 
+            // Transition order from Pending → Paid (the ONLY trusted path)
+            var order = await _orderRepository.GetByIdAsync(payment.OrderId, ct);
+            if (order is not null && order.Status == Domain.Enums.OrderStatus.Pending)
+            {
+                order.ConfirmPayment(payment.TxnId, payuId);
+                _logger.LogInformation(
+                    "Order {OrderId} transitioned Pending → Paid via webhook for TxnId {TxnId}",
+                    payment.OrderId, txnId);
+            }
+
             try
             {
-                await _paymentRepository.UpdateAsync(payment, ct);
+                await _unitOfWork.SaveChangesAsync(ct);
             }
             catch (Exception ex)
             {
@@ -95,12 +112,6 @@ public class ProcessPayuWebhookCommandHandler
             _logger.LogInformation(
                 "Payment SUCCESS for Order {OrderId}, TxnId: {TxnId}, PayuId: {PayuId}, Mode: {Mode}",
                 payment.OrderId, txnId, payuId, mode);
-
-            // TODO: If using payment-first flow where Order doesn't exist yet,
-            // trigger PlaceOrder here via MediatR.
-            // For now, the Order already exists (created before payment initiation).
-            // Update the Order's PaymentStatus:
-            // await _mediator.Send(new UpdateOrderPaymentStatusCommand(payment.OrderId, payuId, txnId));
         }
         else
         {
@@ -108,7 +119,7 @@ public class ProcessPayuWebhookCommandHandler
 
             try
             {
-                await _paymentRepository.UpdateAsync(payment, ct);
+                await _unitOfWork.SaveChangesAsync(ct);
             }
             catch (Exception ex)
             {

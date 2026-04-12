@@ -6,6 +6,9 @@
 /// </summary>
 public enum OrderStatus
 {
+    /// <summary>Order created, awaiting payment</summary>
+    Pending = -5,
+
     /// <summary>Payment completed, waiting for restaurant response</summary>
     Paid = 0,
 
@@ -63,6 +66,7 @@ public static class OrderStatusExtensions
     /// </summary>
     public static bool IsActive(this OrderStatus status) => status switch
     {
+        OrderStatus.Pending => true,
         OrderStatus.Paid => true,
         OrderStatus.Confirmed => true,
         OrderStatus.Preparing => true,
@@ -76,6 +80,7 @@ public static class OrderStatusExtensions
     /// </summary>
     public static bool CanBeCancelled(this OrderStatus status) => status switch
     {
+        OrderStatus.Pending => true,    // Before payment completes
         OrderStatus.Paid => true,       // Before restaurant confirms
         OrderStatus.Confirmed => true,  // Before preparation starts
         _ => false
@@ -103,6 +108,7 @@ public static class OrderStatusExtensions
     /// </summary>
     public static string GetDisplayName(this OrderStatus status) => status switch
     {
+        OrderStatus.Pending => "Pending Payment",
         OrderStatus.Paid => "Paid - Awaiting Restaurant",
         OrderStatus.Confirmed => "Confirmed",
         OrderStatus.Preparing => "Preparing",

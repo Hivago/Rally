@@ -11,7 +11,7 @@ public class OrderAggregateTests
 {
     #region Test Helpers
 
-    private static Order CreatePaidOrder(
+    private static Order CreatePendingOrder(
         Guid? customerId = null,
         Guid? restaurantId = null)
     {
@@ -33,44 +33,111 @@ public class OrderAggregateTests
             subTotal: 250m,
             deliveryFee: 40m);
 
-        return Order.CreatePaidOrder(
+        return Order.CreatePendingOrder(
             orderNumber: OrderNumber.Create(dailySequence: 1),
             customerId: customerId ?? Guid.NewGuid(),
             customerName: "Ravi Kumar",
             restaurantId: restaurantId ?? Guid.NewGuid(),
             restaurantName: "Biryani House",
             deliveryInfo: deliveryInfo,
-            pricing: pricing,
-            paymentId: "PAY-001");
+            pricing: pricing);
+    }
+
+    private static Order CreatePaidOrder(
+        Guid? customerId = null,
+        Guid? restaurantId = null)
+    {
+        var order = CreatePendingOrder(customerId, restaurantId);
+        order.AddItem(OrderItem.Create(
+            Guid.NewGuid(), "Test Item",
+            Money.FromDecimal(250m, "INR"), 1));
+        order.ConfirmPayment("PAY-001", null);
+        return order;
     }
 
     #endregion
 
-    #region CreatePaidOrder
+    #region CreatePendingOrder
 
     [Fact]
-    public void CreatePaidOrder_WithValidData_ShouldHavePaidStatus()
+    public void CreatePendingOrder_WithValidData_ShouldHavePendingStatus()
     {
-        var order = CreatePaidOrder();
+        var order = CreatePendingOrder();
 
-        order.Status.Should().Be(OrderStatus.Paid);
-        order.PaymentStatus.Should().Be(PaymentStatus.Paid);
+        order.Status.Should().Be(OrderStatus.Pending);
+        order.PaymentStatus.Should().Be(PaymentStatus.Pending);
+        order.PaymentId.Should().BeNull();
     }
 
     [Fact]
-    public void CreatePaidOrder_WithEmptyCustomerId_ShouldThrow()
+    public void CreatePendingOrder_WithEmptyCustomerId_ShouldThrow()
     {
-        var act = () => CreatePaidOrder(customerId: Guid.Empty);
+        var act = () => CreatePendingOrder(customerId: Guid.Empty);
 
         act.Should().Throw<ArgumentException>().WithMessage("*Customer ID*");
     }
 
     [Fact]
-    public void CreatePaidOrder_WithEmptyRestaurantId_ShouldThrow()
+    public void CreatePendingOrder_WithEmptyRestaurantId_ShouldThrow()
     {
-        var act = () => CreatePaidOrder(restaurantId: Guid.Empty);
+        var act = () => CreatePendingOrder(restaurantId: Guid.Empty);
 
         act.Should().Throw<ArgumentException>().WithMessage("*Restaurant ID*");
+    }
+
+    #endregion
+
+    #region ConfirmPayment
+
+    [Fact]
+    public void ConfirmPayment_WhenPending_ShouldTransitionToPaid()
+    {
+        var order = CreatePendingOrder();
+        order.AddItem(OrderItem.Create(
+            Guid.NewGuid(), "Biryani",
+            Money.FromDecimal(250m, "INR"), 1));
+
+        order.ConfirmPayment("PAY-001", "PAYU-123");
+
+        order.Status.Should().Be(OrderStatus.Paid);
+        order.PaymentStatus.Should().Be(PaymentStatus.Paid);
+        order.PaymentId.Should().Be("PAY-001");
+        order.PaymentTransactionId.Should().Be("PAYU-123");
+    }
+
+    [Fact]
+    public void ConfirmPayment_WhenPending_ShouldRaiseOrderPaidEvent()
+    {
+        var order = CreatePendingOrder();
+        order.AddItem(OrderItem.Create(
+            Guid.NewGuid(), "Biryani",
+            Money.FromDecimal(250m, "INR"), 1));
+
+        order.ConfirmPayment("PAY-001", null);
+
+        order.DomainEvents.Should().ContainSingle(e => e is OrderPaidEvent);
+    }
+
+    [Fact]
+    public void ConfirmPayment_WhenAlreadyPaid_ShouldBeIdempotent()
+    {
+        var order = CreatePaidOrder();
+
+        order.ConfirmPayment("PAY-002", null);
+
+        order.Status.Should().Be(OrderStatus.Paid);
+        order.PaymentId.Should().Be("PAY-001"); // Original payment ID preserved
+    }
+
+    [Fact]
+    public void ConfirmPayment_WhenConfirmed_ShouldThrow()
+    {
+        var order = CreatePaidOrder();
+        order.Confirm();
+
+        var act = () => order.ConfirmPayment("PAY-002", null);
+
+        act.Should().Throw<InvalidOperationException>();
     }
 
     #endregion

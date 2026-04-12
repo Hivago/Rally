@@ -23,4 +23,9 @@ public sealed class AutoCancelOptions
     /// Must be greater than EscalationMinutes.
     /// </summary>
     public int HardCancelMinutes { get; set; } = 3;
+
+    /// <summary>
+    /// Minutes after Pending order creation before auto-cancelling unpaid orders. Default: 15
+    /// </summary>
+    public int PaymentTimeoutMinutes { get; set; } = 15;
 }

@@ -37,10 +37,12 @@ public sealed class OrderAutoCancelService : BackgroundService
             "OrderAutoCancelService started. " +
             "Check interval: {IntervalSeconds}s | " +
             "Escalate after: {EscalationMinutes} min | " +
-            "Hard cancel after: {HardCancelMinutes} min",
+            "Hard cancel after: {HardCancelMinutes} min | " +
+            "Payment timeout: {PaymentTimeoutMinutes} min",
             _options.CheckIntervalSeconds,
             _options.EscalationMinutes,
-            _options.HardCancelMinutes);
+            _options.HardCancelMinutes,
+            _options.PaymentTimeoutMinutes);
 
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_options.CheckIntervalSeconds));
 
@@ -64,10 +66,40 @@ public sealed class OrderAutoCancelService : BackgroundService
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         var now = DateTime.UtcNow;
+
+        // Auto-cancel unpaid Pending orders (payment timeout)
+        var paymentTimeoutCutoff = now.AddMinutes(-_options.PaymentTimeoutMinutes);
+        var pendingOrders = await orderRepository.GetOrdersByStatusOlderThanAsync(
+            OrderStatus.Pending,
+            paymentTimeoutCutoff,
+            cancellationToken);
+
+        var paymentTimeoutCount = 0;
+        foreach (var pending in pendingOrders)
+        {
+            try
+            {
+                pending.Cancel(CancellationReason.PaymentTimeout, notes: "Auto-cancelled: payment not received within time limit");
+                paymentTimeoutCount++;
+
+                _logger.LogWarning(
+                    "AUTO-CANCELLED unpaid order {OrderId} ({OrderNumber}). " +
+                    "Payment not received after {TimeoutMinutes} minutes",
+                    pending.Id, pending.OrderNumber, _options.PaymentTimeoutMinutes);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to auto-cancel pending order {OrderId}", pending.Id);
+            }
+        }
+
+        if (paymentTimeoutCount > 0)
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Escalate / hard-cancel unconfirmed Paid orders
         var escalationCutoff = now.AddMinutes(-_options.EscalationMinutes);
         var hardCancelCutoff = now.AddMinutes(-_options.HardCancelMinutes);
 
-        // Get all orders still in Paid status older than the escalation threshold
         var staleOrders = await orderRepository.GetOrdersByStatusOlderThanAsync(
             OrderStatus.Paid,
             escalationCutoff,

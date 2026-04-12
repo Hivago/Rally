@@ -124,10 +124,6 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
             .MaximumLength(200)
             .WithMessage("Customer name is required");
 
-        RuleFor(x => x.PaymentId)
-            .NotEmpty()
-            .WithMessage("Payment ID is required");
-
         RuleFor(x => x.Request.RestaurantId)
             .NotEmpty()
             .WithMessage("Restaurant ID is required");

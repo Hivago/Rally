@@ -50,6 +50,7 @@ public static class OrderEndpoints
             .WithName("PlaceOrder")
             .WithSummary("Place a new order")
             .RequireAuthorization("Customer")
+            .RequireRateLimiting("login")
             .Produces<OrderDto>(StatusCodes.Status201Created)
             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest)
             .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized);
@@ -250,21 +251,10 @@ public static class OrderEndpoints
         var command = PlaceOrderCommand.Create(
             customerId: currentUser.UserId.Value,
             customerName: currentUser.UserName ?? "Customer",
-            paymentId: request.PaymentId,
             request: request,
-            paymentTransactionId: request.PaymentTransactionId,
             deliveryQuoteId: request.DeliveryQuoteId,
             customerPhone: currentUser.Phone,
             customerEmail: currentUser.Email);
-
-
-        //var command = PlaceOrderCommand.Create(
-        //    currentUser.UserId.Value,
-        //    currentUser.UserName ?? "Customer",
-        //     paymentId: request.PaymentId,
-        //    request,
-        //    currentUser.Phone,
-        //    currentUser.Email);
 
         var result = await mediator.Send(command, cancellationToken);
 

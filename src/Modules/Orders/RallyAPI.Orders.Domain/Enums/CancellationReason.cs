@@ -30,6 +30,9 @@ public enum CancellationReason
     /// <summary>Order timeout - not confirmed in time</summary>
     Timeout = 70,
 
+    /// <summary>Payment not received within time limit</summary>
+    PaymentTimeout = 75,
+
     /// <summary>System/technical error</summary>
     SystemError = 80,
 
@@ -53,6 +56,7 @@ public static class CancellationReasonExtensions
         CancellationReason.RestaurantClosed => true,
         CancellationReason.NoRidersAvailable => true,
         CancellationReason.PaymentFailed => false,
+        CancellationReason.PaymentTimeout => false,  // No payment was made
         CancellationReason.DeliveryAddressIssue => true,
         CancellationReason.Timeout => true,
         CancellationReason.SystemError => true,
@@ -72,6 +76,7 @@ public static class CancellationReasonExtensions
         CancellationReason.RestaurantClosed => "System",
         CancellationReason.NoRidersAvailable => "System",
         CancellationReason.PaymentFailed => "System",
+        CancellationReason.PaymentTimeout => "System",
         CancellationReason.DeliveryAddressIssue => "Rider",
         CancellationReason.Timeout => "System",
         CancellationReason.SystemError => "System",

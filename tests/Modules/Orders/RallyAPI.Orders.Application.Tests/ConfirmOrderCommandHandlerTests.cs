@@ -128,15 +128,20 @@ public class ConfirmOrderCommandHandlerTests
 
         var pricing = OrderPricing.CreateSimple(subTotal: 300m, deliveryFee: 50m);
 
-        return Order.CreatePaidOrder(
+        var order = Order.CreatePendingOrder(
             orderNumber: OrderNumber.Create(dailySequence: 42),
             customerId: Guid.NewGuid(),
             customerName: "Priya Singh",
             restaurantId: restaurantId,
             restaurantName: "Dosa Corner",
             deliveryInfo: deliveryInfo,
-            pricing: pricing,
-            paymentId: "PAY-TEST-001");
+            pricing: pricing);
+
+        order.AddItem(OrderItem.Create(
+            Guid.NewGuid(), "Test Item",
+            Money.FromDecimal(300m, "INR"), 1));
+        order.ConfirmPayment("PAY-TEST-001", null);
+        return order;
     }
 
     #endregion

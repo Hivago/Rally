@@ -6,8 +6,8 @@ using RallyAPI.SharedKernel.Results;
 namespace RallyAPI.Orders.Application.Commands.PlaceOrder;
 
 /// <summary>
-/// Command to create a paid order.
-/// Called AFTER payment is successful.
+/// Command to create a pending order awaiting payment.
+/// Payment is handled separately via InitiatePayment + PayU webhook.
 /// </summary>
 public sealed record PlaceOrderCommand : IRequest<Result<OrderDto>>
 {
@@ -16,10 +16,6 @@ public sealed record PlaceOrderCommand : IRequest<Result<OrderDto>>
     public string CustomerName { get; init; } = string.Empty;
     public string? CustomerPhone { get; init; }
     public string? CustomerEmail { get; init; }
-
-    // Payment info (REQUIRED - order is already paid)
-    public string PaymentId { get; init; } = string.Empty;
-    public string? PaymentTransactionId { get; init; }
 
     // Delivery quote (from Delivery Module)
     public string? DeliveryQuoteId { get; init; }
@@ -30,9 +26,7 @@ public sealed record PlaceOrderCommand : IRequest<Result<OrderDto>>
     public static PlaceOrderCommand Create(
         Guid customerId,
         string customerName,
-        string paymentId,
         PlaceOrderRequest request,
-        string? paymentTransactionId = null,
         string? deliveryQuoteId = null,
         string? customerPhone = null,
         string? customerEmail = null)
@@ -41,8 +35,6 @@ public sealed record PlaceOrderCommand : IRequest<Result<OrderDto>>
         {
             CustomerId = customerId,
             CustomerName = customerName,
-            PaymentId = paymentId,
-            PaymentTransactionId = paymentTransactionId,
             DeliveryQuoteId = deliveryQuoteId,
             CustomerPhone = customerPhone,
             CustomerEmail = customerEmail,

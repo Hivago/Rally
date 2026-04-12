@@ -87,8 +87,6 @@ public sealed class Order : AggregateRoot
         string? restaurantPhone,
         DeliveryInfo deliveryInfo,
         OrderPricing pricing,
-        string? paymentId,
-        string? paymentTransactionId,
         string? deliveryQuoteId,
         string? specialInstructions)
     {
@@ -104,15 +102,13 @@ public sealed class Order : AggregateRoot
         RestaurantName = restaurantName;
         RestaurantPhone = restaurantPhone;
 
-        // Order starts as PAID (customer already paid)
-        Status = OrderStatus.Paid;
-        PaymentStatus = PaymentStatus.Paid;
+        // Order starts as PENDING — only webhook can transition to Paid
+        Status = OrderStatus.Pending;
+        PaymentStatus = PaymentStatus.Pending;
 
         DeliveryInfo = deliveryInfo;
         Pricing = pricing;
 
-        PaymentId = paymentId;
-        PaymentTransactionId = paymentTransactionId;
         DeliveryQuoteId = deliveryQuoteId;
 
         SpecialInstructions = specialInstructions;
@@ -124,10 +120,10 @@ public sealed class Order : AggregateRoot
     #region Factory Methods
 
     /// <summary>
-    /// Creates a new paid order.
-    /// Called AFTER payment is successful.
+    /// Creates a new pending order awaiting payment.
+    /// Only the PayU webhook (after hash verification) can transition to Paid.
     /// </summary>
-    public static Order CreatePaidOrder(
+    public static Order CreatePendingOrder(
         OrderNumber orderNumber,
         Guid customerId,
         string customerName,
@@ -135,8 +131,6 @@ public sealed class Order : AggregateRoot
         string restaurantName,
         DeliveryInfo deliveryInfo,
         OrderPricing pricing,
-        string paymentId,
-        string? paymentTransactionId = null,
         string? deliveryQuoteId = null,
         string? customerPhone = null,
         string? customerEmail = null,
@@ -161,9 +155,6 @@ public sealed class Order : AggregateRoot
         if (pricing is null)
             throw new ArgumentNullException(nameof(pricing));
 
-        if (string.IsNullOrWhiteSpace(paymentId))
-            throw new ArgumentException("Payment ID is required", nameof(paymentId));
-
         var order = new Order(
             orderNumber,
             customerId,
@@ -175,8 +166,6 @@ public sealed class Order : AggregateRoot
             restaurantPhone?.Trim(),
             deliveryInfo,
             pricing,
-            paymentId,
-            paymentTransactionId,
             deliveryQuoteId,
             specialInstructions?.Trim());
 
@@ -216,6 +205,33 @@ public sealed class Order : AggregateRoot
     #endregion
 
     #region Status Transitions
+
+    /// <summary>
+    /// Confirms payment and transitions order from Pending to Paid.
+    /// Called ONLY by the PayU webhook handler (after hash verification) or
+    /// the VerifyPayment handler (as a delayed-webhook safety net).
+    /// </summary>
+    public void ConfirmPayment(string paymentId, string? paymentTransactionId)
+    {
+        if (Status == OrderStatus.Paid)
+            return; // Idempotent
+
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException($"Cannot confirm payment for order in {Status} status");
+
+        if (string.IsNullOrWhiteSpace(paymentId))
+            throw new ArgumentException("Payment ID is required", nameof(paymentId));
+
+        Status = OrderStatus.Paid;
+        PaymentStatus = PaymentStatus.Paid;
+        PaymentId = paymentId;
+        PaymentTransactionId = paymentTransactionId;
+        UpdatedAt = DateTime.UtcNow;
+
+        AddDomainEvent(new OrderPaidEvent(
+            Id, OrderNumber.Value, CustomerId, RestaurantId,
+            Pricing.Total.Amount, _items.Count));
+    }
 
     /// <summary>
     /// Restaurant confirms/accepts the order.
@@ -400,6 +416,7 @@ public sealed class Order : AggregateRoot
     {
         return Status switch
         {
+            OrderStatus.Pending => new[] { OrderStatus.Paid, OrderStatus.Cancelled },
             OrderStatus.Paid => new[] { OrderStatus.Confirmed, OrderStatus.Rejected, OrderStatus.Cancelled },
             OrderStatus.Confirmed => new[] { OrderStatus.Preparing, OrderStatus.Cancelled },
             OrderStatus.Preparing => new[] { OrderStatus.ReadyForPickup },
@@ -452,24 +469,16 @@ public sealed class Order : AggregateRoot
     #region Finalization
 
     /// <summary>
-    /// Finalizes the order after all items are set.
-    /// Raises OrderPaidEvent (order is ready for restaurant).
+    /// Validates the order after all items are set.
+    /// Called during order creation to ensure order is valid before persisting.
     /// </summary>
-    public void FinalizeOrder()
+    public void ValidateOrder()
     {
         if (!_items.Any())
-            throw new InvalidOperationException("Cannot finalize order without items");
+            throw new InvalidOperationException("Cannot create order without items");
 
         if (Pricing.Total.Amount <= 0)
             throw new InvalidOperationException("Order total must be greater than zero");
-
-        AddDomainEvent(new OrderPaidEvent(
-            Id,
-            OrderNumber.Value,
-            CustomerId,
-            RestaurantId,
-            Pricing.Total.Amount,
-            _items.Count));
     }
 
     #endregion
