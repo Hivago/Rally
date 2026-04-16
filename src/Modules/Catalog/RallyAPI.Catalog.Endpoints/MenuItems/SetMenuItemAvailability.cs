@@ -1,32 +1,33 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using RallyAPI.Catalog.Application.MenuItems.Commands.ToggleMenuItemAvailability;
+using RallyAPI.Catalog.Application.MenuItems.Commands.SetMenuItemAvailability;
 using RallyAPI.SharedKernel.Extensions;
 
 namespace RallyAPI.Catalog.Endpoints.MenuItems;
 
-public class ToggleMenuItemAvailability : IEndpoint
+public class SetMenuItemAvailability : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
         app.MapPatch("/api/restaurant/items/{itemId:guid}/availability", HandleAsync)
             .WithTags("Restaurant Menu Items")
-            .WithSummary("Toggle menu item availability")
+            .WithSummary("Set menu item availability (in stock / out of stock)")
             .RequireAuthorization("Restaurant");
     }
 
     private static async Task<IResult> HandleAsync(
         Guid itemId,
+        SetMenuItemAvailabilityRequest request,
         ClaimsPrincipal user,
         ISender sender,
         CancellationToken ct)
     {
         var restaurantId = Guid.Parse(user.FindFirstValue("sub")!);
 
-        var command = new ToggleMenuItemAvailabilityCommand(itemId, restaurantId);
+        var command = new SetMenuItemAvailabilityCommand(itemId, restaurantId, request.IsAvailable);
         var result = await sender.Send(command, ct);
 
         return result.IsSuccess
@@ -34,3 +35,5 @@ public class ToggleMenuItemAvailability : IEndpoint
             : result.Error.ToErrorResult();
     }
 }
+
+public record SetMenuItemAvailabilityRequest(bool IsAvailable);

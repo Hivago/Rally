@@ -45,9 +45,10 @@ internal sealed class GetRestaurantMenuQueryHandler
         var allItems = await _menuItemRepository.GetByRestaurantIdAsync(
             request.RestaurantId, cancellationToken);
 
-        // Group items by menu
+        // Group items by menu. Unavailable items are still returned so clients
+        // can render them as "out of stock" (Swiggy/Zomato style) instead of
+        // hiding them, and so the restaurant dashboard sees its own full list.
         var itemsByMenu = allItems
-            .Where(i => i.IsAvailable)
             .GroupBy(i => i.MenuId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
