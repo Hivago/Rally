@@ -250,13 +250,13 @@ public sealed class Order : AggregateRoot
     /// <summary>
     /// Restaurant rejects the order.
     /// </summary>
-    public void Reject(string? reason = null)
+    public void Reject(string reason)
     {
         if (!Status.CanBeRejected())
             throw new InvalidOperationException($"Cannot reject order in {Status} status");
 
         Status = OrderStatus.Rejected;
-        RejectionReason = reason?.Trim();
+        RejectionReason = reason.Trim();
         RejectedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
 

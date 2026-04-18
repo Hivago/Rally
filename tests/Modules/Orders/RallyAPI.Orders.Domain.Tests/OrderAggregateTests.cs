@@ -208,7 +208,7 @@ public class OrderAggregateTests
     {
         var order = CreatePaidOrder();
 
-        order.Reject();
+        order.Reject("Kitchen closed");
 
         order.DomainEvents.Should().ContainSingle(e => e is OrderRejectedEvent);
     }
@@ -219,7 +219,7 @@ public class OrderAggregateTests
         var order = CreatePaidOrder();
         order.Confirm();
 
-        var act = () => order.Reject();
+        var act = () => order.Reject("Item unavailable");
 
         act.Should().Throw<InvalidOperationException>();
     }
