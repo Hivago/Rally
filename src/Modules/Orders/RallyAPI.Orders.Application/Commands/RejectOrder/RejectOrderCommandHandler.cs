@@ -62,7 +62,7 @@ public sealed class RejectOrderCommandHandler : IRequestHandler<RejectOrderComma
                 "Order {OrderNumber} rejected by restaurant {RestaurantId}. Reason: {Reason}",
                 order.OrderNumber.Value,
                 command.RestaurantId,
-                command.Reason ?? "Not specified");
+                command.Reason);
 
             return Result.Success(order.ToDto());
         }

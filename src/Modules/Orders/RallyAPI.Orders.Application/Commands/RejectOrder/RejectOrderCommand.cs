@@ -11,5 +11,5 @@ public sealed record RejectOrderCommand : IRequest<Result<OrderDto>>
 {
     public Guid OrderId { get; init; }
     public Guid RestaurantId { get; init; }
-    public string? Reason { get; init; }
+    public string Reason { get; init; } = string.Empty;
 }

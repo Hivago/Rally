@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RallyAPI.Catalog.Endpoints;
 using RallyAPI.Delivery.Endpoints;
+using RallyAPI.Host.DevEndpoints;
 using RallyAPI.Host.Hubs;
 using RallyAPI.Host.Services;
 using RallyAPI.Infrastructure;
@@ -309,6 +310,10 @@ app.MapCartEndpoints();
 app.MapPaymentEndpoints();
 app.MapPayoutEndpoints();
 app.MapDeliveryModuleEndpoints();
+if (app.Environment.IsDevelopment())
+{
+    app.MapPurgeOrdersByRestaurant();
+}
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapGet("/", () => "Rally API is running!");
 app.MapHealthChecks("/health", new HealthCheckOptions
