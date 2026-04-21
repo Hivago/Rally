@@ -87,6 +87,13 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
             .HasConversion<int>()
             .IsRequired();
 
+        // Fulfillment Type
+        builder.Property(o => o.FulfillmentType)
+            .HasColumnName("fulfillment_type")
+            .HasConversion<int>()
+            .HasDefaultValue(FulfillmentType.Delivery)
+            .IsRequired();
+
         // Pricing (Owned Entity / Complex Property)
         builder.OwnsOne(o => o.Pricing, pricing =>
         {
@@ -210,10 +217,11 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
                 .HasMaxLength(255);
         });
 
-        // Delivery Info (Owned Entity)
+        // Delivery Info (optional for pickup orders)
         builder.HasOne(o => o.DeliveryInfo)
             .WithOne()
             .HasForeignKey<DeliveryInfo>("OrderId")
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Cascade);
 
         // Items (One-to-Many)

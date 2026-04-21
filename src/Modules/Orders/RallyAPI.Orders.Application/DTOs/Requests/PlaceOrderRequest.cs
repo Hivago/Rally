@@ -1,4 +1,6 @@
-﻿namespace RallyAPI.Orders.Application.DTOs.Requests;
+﻿using RallyAPI.Orders.Domain.Enums;
+
+namespace RallyAPI.Orders.Application.DTOs.Requests;
 
 /// <summary>
 /// Request model for placing a new order.
@@ -6,6 +8,11 @@
 /// </summary>
 public sealed record PlaceOrderRequest
 {
+    // === FULFILLMENT TYPE (Delivery or Pickup) ===
+    /// <summary>
+    /// How the customer receives the order. Defaults to Delivery.
+    /// </summary>
+    public FulfillmentType FulfillmentType { get; init; } = FulfillmentType.Delivery;
 
     public string? DeliveryQuoteId { get; init; }
 
@@ -20,8 +27,8 @@ public sealed record PlaceOrderRequest
     public string PickupPincode { get; init; } = string.Empty;
     public string? PickupAddress { get; init; }
 
-    // Delivery address
-    public DeliveryAddressRequest DeliveryAddress { get; init; } = new();
+    // Delivery address (required for Delivery, ignored for Pickup)
+    public DeliveryAddressRequest? DeliveryAddress { get; init; }
 
     // Items
     public IReadOnlyList<OrderItemRequest> Items { get; init; } = Array.Empty<OrderItemRequest>();

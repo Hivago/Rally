@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using RallyAPI.Orders.Domain.Abstractions;
+using RallyAPI.Orders.Domain.Enums;
 using RallyAPI.Orders.Domain.Events;
 using RallyAPI.SharedKernel.IntegrationEvents.Orders;
 
@@ -47,6 +48,8 @@ public sealed class OrderConfirmedEventHandler : INotificationHandler<OrderConfi
             quoteId = parsedGuid;
         }
 
+        var isPickup = order.FulfillmentType == FulfillmentType.Pickup;
+
         var integrationEvent = new OrderConfirmedIntegrationEvent(
             orderId: order.Id,
             orderNumber: order.OrderNumber.Value,
@@ -55,23 +58,24 @@ public sealed class OrderConfirmedEventHandler : INotificationHandler<OrderConfi
             // Pickup
             restaurantName: order.RestaurantName,
             restaurantPhone: order.RestaurantPhone ?? string.Empty,
-            pickupAddress: order.DeliveryInfo.PickupAddress ?? string.Empty,
-            pickupLatitude: order.DeliveryInfo.PickupLocation.Latitude,
-            pickupLongitude: order.DeliveryInfo.PickupLocation.Longitude,
-            pickupPincode: order.DeliveryInfo.PickupPincode,
-            // Drop
+            pickupAddress: order.DeliveryInfo?.PickupAddress ?? string.Empty,
+            pickupLatitude: order.DeliveryInfo?.PickupLocation.Latitude ?? 0,
+            pickupLongitude: order.DeliveryInfo?.PickupLocation.Longitude ?? 0,
+            pickupPincode: order.DeliveryInfo?.PickupPincode ?? string.Empty,
+            // Drop (empty for pickup orders)
             customerName: order.CustomerName,
             customerPhone: order.CustomerPhone ?? string.Empty,
-            dropAddress: order.DeliveryInfo.DeliveryAddress.FullAddress,
-            dropLatitude: order.DeliveryInfo.DeliveryAddress.Latitude,
-            dropLongitude: order.DeliveryInfo.DeliveryAddress.Longitude,
-            dropPincode: order.DeliveryInfo.DeliveryAddress.Pincode,
+            dropAddress: order.DeliveryInfo?.DeliveryAddress.FullAddress ?? string.Empty,
+            dropLatitude: order.DeliveryInfo?.DeliveryAddress.Latitude ?? 0,
+            dropLongitude: order.DeliveryInfo?.DeliveryAddress.Longitude ?? 0,
+            dropPincode: order.DeliveryInfo?.DeliveryAddress.Pincode ?? string.Empty,
             // Details
             itemCount: order.Items.Count,
             totalAmount: order.Pricing.Total.Amount,
             deliveryInstructions: order.SpecialInstructions,
             quoteId: quoteId,
-            confirmedAt: order.ConfirmedAt ?? DateTime.UtcNow
+            confirmedAt: order.ConfirmedAt ?? DateTime.UtcNow,
+            isPickupOrder: isPickup
         );
 
         await _publisher.Publish(integrationEvent, cancellationToken);

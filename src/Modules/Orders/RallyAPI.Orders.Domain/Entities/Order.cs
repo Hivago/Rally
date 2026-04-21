@@ -28,6 +28,9 @@ public sealed class Order : AggregateRoot
     public OrderStatus Status { get; private set; }
     public PaymentStatus PaymentStatus { get; private set; }
 
+    // Fulfillment
+    public FulfillmentType FulfillmentType { get; private set; }
+
     // Items
     private readonly List<OrderItem> _items = new();
     public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
@@ -35,8 +38,8 @@ public sealed class Order : AggregateRoot
     // Pricing
     public OrderPricing Pricing { get; private set; }
 
-    // Delivery
-    public DeliveryInfo DeliveryInfo { get; private set; }
+    // Delivery (null for pickup orders)
+    public DeliveryInfo? DeliveryInfo { get; private set; }
 
     // Payment Reference
     public string? PaymentId { get; private set; }
@@ -85,7 +88,8 @@ public sealed class Order : AggregateRoot
         Guid restaurantId,
         string restaurantName,
         string? restaurantPhone,
-        DeliveryInfo deliveryInfo,
+        FulfillmentType fulfillmentType,
+        DeliveryInfo? deliveryInfo,
         OrderPricing pricing,
         string? deliveryQuoteId,
         string? specialInstructions)
@@ -106,6 +110,7 @@ public sealed class Order : AggregateRoot
         Status = OrderStatus.Pending;
         PaymentStatus = PaymentStatus.Pending;
 
+        FulfillmentType = fulfillmentType;
         DeliveryInfo = deliveryInfo;
         Pricing = pricing;
 
@@ -129,8 +134,9 @@ public sealed class Order : AggregateRoot
         string customerName,
         Guid restaurantId,
         string restaurantName,
-        DeliveryInfo deliveryInfo,
         OrderPricing pricing,
+        FulfillmentType fulfillmentType = FulfillmentType.Delivery,
+        DeliveryInfo? deliveryInfo = null,
         string? deliveryQuoteId = null,
         string? customerPhone = null,
         string? customerEmail = null,
@@ -149,8 +155,8 @@ public sealed class Order : AggregateRoot
         if (string.IsNullOrWhiteSpace(restaurantName))
             throw new ArgumentException("Restaurant name is required", nameof(restaurantName));
 
-        if (deliveryInfo is null)
-            throw new ArgumentNullException(nameof(deliveryInfo));
+        if (fulfillmentType == FulfillmentType.Delivery && deliveryInfo is null)
+            throw new ArgumentNullException(nameof(deliveryInfo), "Delivery info is required for delivery orders");
 
         if (pricing is null)
             throw new ArgumentNullException(nameof(pricing));
@@ -164,6 +170,7 @@ public sealed class Order : AggregateRoot
             restaurantId,
             restaurantName.Trim(),
             restaurantPhone?.Trim(),
+            fulfillmentType,
             deliveryInfo,
             pricing,
             deliveryQuoteId,
@@ -292,13 +299,16 @@ public sealed class Order : AggregateRoot
     }
 
     /// <summary>
-    /// Marks order as picked up by rider.
+    /// Marks order as picked up by rider. Only valid for delivery orders.
     /// </summary>
     public void MarkPickedUp()
     {
+        if (FulfillmentType == FulfillmentType.Pickup)
+            throw new InvalidOperationException("Pickup orders do not have a rider pickup step. Use MarkDelivered instead.");
+
         EnsureValidTransition(OrderStatus.PickedUp);
 
-        if (!DeliveryInfo.RiderId.HasValue || DeliveryInfo.RiderId == Guid.Empty)
+        if (DeliveryInfo is null || !DeliveryInfo.RiderId.HasValue || DeliveryInfo.RiderId == Guid.Empty)
             throw new InvalidOperationException("Cannot mark order as picked up: no rider has been assigned.");
 
         Status = OrderStatus.PickedUp;
@@ -310,7 +320,7 @@ public sealed class Order : AggregateRoot
     }
 
     /// <summary>
-    /// Marks order as delivered.
+    /// Marks order as delivered (by rider) or collected (by customer for pickup orders).
     /// </summary>
     public void MarkDelivered()
     {
@@ -319,27 +329,31 @@ public sealed class Order : AggregateRoot
         Status = OrderStatus.Delivered;
         DeliveredAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
-        DeliveryInfo.MarkDelivered();
+        DeliveryInfo?.MarkDelivered();
 
-        AddDomainEvent(new OrderDeliveredEvent(Id, OrderNumber.Value, CustomerId, DeliveryInfo.RiderId));
+        AddDomainEvent(new OrderDeliveredEvent(Id, OrderNumber.Value, CustomerId, DeliveryInfo?.RiderId));
     }
 
     /// <summary>
-    /// Assigns a rider to the order.
+    /// Assigns a rider to the order. Only valid for delivery orders.
     /// </summary>
     public void AssignRider(Guid? riderId, string? riderName = null, string? riderPhone = null, string? trackingUrl = null)
     {
-        // 3PL might not have a Guid RiderId, so we use empty for domestic consistency if needed
-        // but DeliveryInfo.AssignRider requires it. If null/empty, we handle gracefully.
+        if (FulfillmentType == FulfillmentType.Pickup)
+            throw new InvalidOperationException("Cannot assign rider to a pickup order");
+
+        if (DeliveryInfo is null)
+            throw new InvalidOperationException("Cannot assign rider: no delivery info");
+
         DeliveryInfo.AssignRider(riderId ?? Guid.Empty, riderName, riderPhone);
-        
+
         if (!string.IsNullOrWhiteSpace(trackingUrl))
         {
             DeliveryInfo.SetTrackingUrl(trackingUrl);
         }
-        
+
         UpdatedAt = DateTime.UtcNow;
-        
+
         AddDomainEvent(new RiderAssignedEvent(Id, OrderNumber.Value, riderId ?? Guid.Empty));
     }
 
@@ -411,6 +425,7 @@ public sealed class Order : AggregateRoot
 
     /// <summary>
     /// Gets valid status transitions from current status.
+    /// Pickup orders skip PickedUp and go directly ReadyForPickup → Delivered.
     /// </summary>
     public IReadOnlyList<OrderStatus> GetValidTransitions()
     {
@@ -420,7 +435,9 @@ public sealed class Order : AggregateRoot
             OrderStatus.Paid => new[] { OrderStatus.Confirmed, OrderStatus.Rejected, OrderStatus.Cancelled },
             OrderStatus.Confirmed => new[] { OrderStatus.Preparing, OrderStatus.Cancelled },
             OrderStatus.Preparing => new[] { OrderStatus.ReadyForPickup },
-            OrderStatus.ReadyForPickup => new[] { OrderStatus.PickedUp },
+            OrderStatus.ReadyForPickup => FulfillmentType == FulfillmentType.Pickup
+                ? new[] { OrderStatus.Delivered }
+                : new[] { OrderStatus.PickedUp },
             OrderStatus.PickedUp => new[] { OrderStatus.Delivered, OrderStatus.Failed },
             _ => Array.Empty<OrderStatus>()
         };
@@ -437,6 +454,9 @@ public sealed class Order : AggregateRoot
     {
         if (Status.IsTerminal())
             throw new InvalidOperationException("Cannot update rider for completed order");
+
+        if (FulfillmentType == FulfillmentType.Pickup || DeliveryInfo is null)
+            throw new InvalidOperationException("Cannot update rider for a pickup order");
 
         DeliveryInfo.AssignRider(riderId ?? Guid.Empty, riderName, riderPhone);
         UpdatedAt = DateTime.UtcNow;

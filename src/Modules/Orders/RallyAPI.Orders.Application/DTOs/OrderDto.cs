@@ -21,6 +21,9 @@ public sealed record OrderDto
     public string RestaurantName { get; init; } = string.Empty;
     public string? RestaurantPhone { get; init; }
 
+    // Fulfillment
+    public FulfillmentType FulfillmentType { get; init; }
+
     // Status
     public OrderStatus Status { get; init; }
     public string StatusDisplay { get; init; } = string.Empty;
@@ -34,8 +37,8 @@ public sealed record OrderDto
     // Pricing
     public OrderPricingDto Pricing { get; init; } = new();
 
-    // Delivery
-    public DeliveryInfoDto DeliveryInfo { get; init; } = new();
+    // Delivery (null for pickup orders)
+    public DeliveryInfoDto? DeliveryInfo { get; init; }
 
     // Timestamps
     public DateTime CreatedAt { get; init; }

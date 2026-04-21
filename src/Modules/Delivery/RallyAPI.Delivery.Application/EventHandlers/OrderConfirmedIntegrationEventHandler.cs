@@ -37,6 +37,18 @@ public sealed class OrderConfirmedIntegrationEventHandler
             notification.OrderNumber);
 
         // ═══════════════════════════════════════════════════════════════
+        // PICKUP ORDERS — No delivery needed
+        // ═══════════════════════════════════════════════════════════════
+
+        if (notification.IsPickupOrder)
+        {
+            _logger.LogInformation(
+                "🏪 Order {OrderNumber} is a pickup order — skipping delivery request creation.",
+                notification.OrderNumber);
+            return;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
         // IDEMPOTENCY CHECK - Prevent duplicate DeliveryRequests
         // ═══════════════════════════════════════════════════════════════
 

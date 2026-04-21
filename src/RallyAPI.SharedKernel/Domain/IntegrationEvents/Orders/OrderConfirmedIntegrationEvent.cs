@@ -76,6 +76,12 @@ public sealed class OrderConfirmedIntegrationEvent : BaseDomainEvent
     public Guid? QuoteId { get; }
     public DateTime ConfirmedAt { get; }
 
+    /// <summary>
+    /// Whether this is a delivery or customer-pickup order.
+    /// Pickup orders do NOT need a DeliveryRequest.
+    /// </summary>
+    public bool IsPickupOrder { get; }
+
     #endregion
 
     public OrderConfirmedIntegrationEvent(
@@ -103,7 +109,8 @@ public sealed class OrderConfirmedIntegrationEvent : BaseDomainEvent
         decimal totalAmount,
         string? deliveryInstructions,
         Guid? quoteId,
-        DateTime confirmedAt)
+        DateTime confirmedAt,
+        bool isPickupOrder = false)
     {
         OrderId = orderId;
         OrderNumber = orderNumber;
@@ -129,5 +136,6 @@ public sealed class OrderConfirmedIntegrationEvent : BaseDomainEvent
         DeliveryInstructions = deliveryInstructions;
         QuoteId = quoteId;
         ConfirmedAt = confirmedAt;
+        IsPickupOrder = isPickupOrder;
     }
 }
