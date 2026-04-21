@@ -591,6 +591,10 @@ migrationBuilder.Sql(@"CREATE INDEX ... ON orders.""Carts"" ...");
 migrationBuilder.Sql(@"ALTER TABLE users.""Riders"" ...");
 ```
 
+**Even better — don't hand-write DDL that EF can model.** Use `migrationBuilder.AlterColumn(...)`, `AddColumn(...)`, `DropColumn(...)`, `CreateTable(...)` etc. These read the real table/column names from your `IEntityTypeConfiguration<T>` mappings, so typos become impossible. Reserve `migrationBuilder.Sql(...)` for data migrations, sequences, or raw DDL that EF genuinely can't express (triggers, extensions, complex constraints).
+
+Real incident (2026-04-21): a hand-written `ALTER TABLE orders."DeliveryInfos" ALTER COLUMN "OrderId"` migration crashed every Railway startup because the actual table is `orders.delivery_info` with column `order_id`. Auto-generated `AlterColumn(...)` would have used the right names.
+
 ### 7. Add JsonStringEnumConverter to BOTH JSON option chains in Program.cs
 
 `Program.cs` configures JSON serialization in two places. Missing either one causes enum values to serialize as integers in some responses.
@@ -616,3 +620,25 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 - [ ] PayU webhook hash verified in `ProcessPayuWebhook`
 - [ ] Rate limiting on OTP endpoints (SendOtp)
 - [ ] CORS configured for allowed origins only
+
+### Pre-Commit Checklist — Migrations (MANDATORY)
+
+If the commit touches any file under `**/Migrations/**` OR changes any EF entity/configuration, run through this before `git commit`:
+
+- [ ] **Migration is auto-generated, not hand-written** — ran `dotnet ef migrations add X` rather than pasting raw SQL. Raw `migrationBuilder.Sql(...)` is allowed only for sequences, data migrations, or DDL EF can't model.
+- [ ] **Table and column names verified** — if you DID write raw SQL, grep the initial migration or the `IEntityTypeConfiguration<T>` to confirm the exact casing (`delivery_info` not `"DeliveryInfos"`, `order_id` not `"OrderId"`).
+- [ ] **Schema qualified** — every `migrationBuilder.Sql(...)` includes the schema (`orders.`, `users.`, etc.).
+- [ ] **Applied locally** — ran `dotnet ef database update --context <Name>DbContext --project src/Modules/<Module>/.../Infrastructure --startup-project src/RallyAPI.Host` against local Postgres and it succeeded.
+- [ ] **`dotnet build` is green** with zero errors.
+- [ ] **Startup smoke test** — `dotnet run --project src/RallyAPI.Host` boots without throwing in the migration block (`Migrating X database...` lines all succeed).
+
+Why this checklist exists: a bad migration crashes Railway startup silently — the old container keeps serving traffic with stale schema, and you only find out hours later when a query hits a missing column. Catch it locally.
+
+### Pre-Commit Reminder for AI Agents
+
+Before proposing `git commit`, always prompt the user with:
+1. The pre-commit migration checklist above if any migration/entity file changed.
+2. A confirmation that `dotnet build` succeeded.
+3. A reminder that Railway auto-migrates on boot — if the migration is broken, the deploy silently stays on the old container.
+
+Never run `git commit` without explicit user approval when migration files are in the diff.

@@ -20,6 +20,13 @@ public class RestaurantRepository : IRestaurantRepository
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
     }
 
+    public async Task<Restaurant?> GetByIdWithScheduleAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _context.Restaurants
+            .Include(r => r.ScheduleSlots)
+            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+    }
+
     public async Task<Restaurant?> GetByEmailAsync(Email email, CancellationToken cancellationToken = default)
     {
         return await _context.Restaurants

@@ -201,5 +201,59 @@ public class RestaurantConfiguration : IEntityTypeConfiguration<Restaurant>
             .HasPrecision(10, 2)
             .HasDefaultValue(0m)
             .IsRequired();
+
+        // Description
+        builder.Property(r => r.Description)
+            .HasColumnName("description")
+            .HasMaxLength(2000);
+
+        // Dietary type (enum stored as integer)
+        builder.Property(r => r.DietaryType)
+            .HasColumnName("dietary_type")
+            .HasConversion<int>()
+            .HasDefaultValue(Domain.Enums.DietaryType.Both)
+            .IsRequired();
+
+        // Delivery mode (enum stored as integer, default Hivago)
+        builder.Property(r => r.DeliveryMode)
+            .HasColumnName("delivery_mode")
+            .HasConversion<int>()
+            .HasDefaultValue(Domain.Enums.DeliveryMode.Hivago)
+            .IsRequired();
+
+        // Use custom weekly schedule flag
+        builder.Property(r => r.UseCustomSchedule)
+            .HasColumnName("use_custom_schedule")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        // Notification preferences — owned value object
+        builder.OwnsOne(r => r.Notifications, nav =>
+        {
+            nav.Property(n => n.EmailAlerts)
+                .HasColumnName("notify_email_alerts")
+                .HasDefaultValue(true)
+                .IsRequired();
+
+            nav.Property(n => n.BrowserNotifications)
+                .HasColumnName("notify_browser")
+                .HasDefaultValue(true)
+                .IsRequired();
+
+            nav.Property(n => n.OrderSound)
+                .HasColumnName("notify_order_sound")
+                .HasDefaultValue(true)
+                .IsRequired();
+        });
+
+        // Weekly schedule slots — one-to-many
+        builder.HasMany(r => r.ScheduleSlots)
+            .WithOne()
+            .HasForeignKey(s => s.RestaurantId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Metadata
+            .FindNavigation(nameof(Restaurant.ScheduleSlots))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
     }
 }

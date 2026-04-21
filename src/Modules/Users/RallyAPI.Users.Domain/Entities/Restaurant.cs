@@ -1,5 +1,6 @@
 ﻿using RallyAPI.SharedKernel.Domain;
 using RallyAPI.SharedKernel.Results;
+using RallyAPI.Users.Domain.Enums;
 using RallyAPI.Users.Domain.ValueObjects;
 
 namespace RallyAPI.Users.Domain.Entities;
@@ -29,12 +30,31 @@ public sealed class Restaurant : AggregateRoot
     // Compliance
     public string? FssaiNumber { get; private set; }
 
+    // Description
+    public string? Description { get; private set; }
+
     // Restaurant attributes (cuisine/dietary)
     public List<string> CuisineTypes { get; private set; } = new();
     public bool IsPureVeg { get; private set; }
     public bool IsVeganFriendly { get; private set; }
     public bool HasJainOptions { get; private set; }
     public decimal MinOrderAmount { get; private set; }
+
+    // Dietary category (primary) + additive flags above
+    public DietaryType DietaryType { get; private set; } = DietaryType.Both;
+
+    // Delivery fulfilment preference
+    public DeliveryMode DeliveryMode { get; private set; } = DeliveryMode.Hivago;
+
+    // Use custom weekly schedule (slots) instead of legacy single OpeningTime/ClosingTime
+    public bool UseCustomSchedule { get; private set; }
+
+    // Notification preferences (owned value object)
+    public NotificationPreferences Notifications { get; private set; } = NotificationPreferences.Default();
+
+    // Weekly schedule — up to 3 slots per DayOfWeek
+    private readonly List<RestaurantScheduleSlot> _scheduleSlots = new();
+    public IReadOnlyCollection<RestaurantScheduleSlot> ScheduleSlots => _scheduleSlots.AsReadOnly();
 
     // EF Core
     private Restaurant() { }
@@ -272,6 +292,88 @@ public sealed class Restaurant : AggregateRoot
             return Result.Failure(Error.Validation("Commission percentage must be between 0 and 100."));
 
         CommissionPercentage = percentage;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetDescription(string? description)
+    {
+        if (description is { Length: > 2000 })
+            return Result.Failure(Error.Validation("Description must be 2000 characters or fewer."));
+
+        Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetEmail(Email email)
+    {
+        Email = email;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetDietaryType(DietaryType dietaryType)
+    {
+        DietaryType = dietaryType;
+        IsPureVeg = dietaryType == DietaryType.PureVeg;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetDeliveryMode(DeliveryMode mode)
+    {
+        DeliveryMode = mode;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetUseCustomSchedule(bool useCustom)
+    {
+        UseCustomSchedule = useCustom;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetNotificationPreferences(NotificationPreferences preferences)
+    {
+        if (preferences is null)
+            return Result.Failure(Error.Validation("Notification preferences are required."));
+
+        Notifications = preferences;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result ReplaceScheduleForDay(DayOfWeek day, IReadOnlyList<(TimeOnly OpensAt, TimeOnly ClosesAt)> slots)
+    {
+        if (slots is null)
+            return Result.Failure(Error.Validation("Slots collection is required."));
+
+        if (slots.Count > 3)
+            return Result.Failure(Error.Validation($"{day}: at most 3 slots per day are allowed."));
+
+        var ordered = slots.OrderBy(s => s.OpensAt).ToList();
+
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            if (ordered[i].OpensAt >= ordered[i].ClosesAt)
+                return Result.Failure(Error.Validation($"{day} slot {i + 1}: opens-at must be earlier than closes-at."));
+
+            if (i > 0 && ordered[i].OpensAt < ordered[i - 1].ClosesAt)
+                return Result.Failure(Error.Validation($"{day}: slots must not overlap."));
+        }
+
+        _scheduleSlots.RemoveAll(s => s.DayOfWeek == day);
+
+        foreach (var (opensAt, closesAt) in ordered)
+        {
+            var slotResult = RestaurantScheduleSlot.Create(Id, day, opensAt, closesAt);
+            if (slotResult.IsFailure)
+                return Result.Failure(slotResult.Error);
+            _scheduleSlots.Add(slotResult.Value);
+        }
+
         MarkAsUpdated();
         return Result.Success();
     }

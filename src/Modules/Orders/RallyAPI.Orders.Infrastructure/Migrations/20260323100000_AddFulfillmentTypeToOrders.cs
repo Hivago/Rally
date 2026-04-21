@@ -20,7 +20,7 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
 
             // Make delivery_info FK nullable (pickup orders have no DeliveryInfo)
             migrationBuilder.Sql(
-                @"ALTER TABLE orders.""DeliveryInfos"" ALTER COLUMN ""OrderId"" DROP NOT NULL;");
+                @"ALTER TABLE orders.delivery_info ALTER COLUMN order_id DROP NOT NULL;");
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
@@ -31,7 +31,7 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                 table: "orders");
 
             migrationBuilder.Sql(
-                @"ALTER TABLE orders.""DeliveryInfos"" ALTER COLUMN ""OrderId"" SET NOT NULL;");
+                @"ALTER TABLE orders.delivery_info ALTER COLUMN order_id SET NOT NULL;");
         }
     }
 }
