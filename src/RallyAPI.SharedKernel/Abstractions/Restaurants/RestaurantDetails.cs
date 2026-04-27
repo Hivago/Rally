@@ -20,5 +20,6 @@ public sealed record RestaurantDetails
     public required TimeOnly OpeningTime { get; init; }
     public required TimeOnly ClosingTime { get; init; }
     public required decimal CommissionPercentage { get; init; }
+    public required decimal CommissionFlatFee { get; init; }
     public Guid? OwnerId { get; init; }
 }

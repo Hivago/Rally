@@ -19,4 +19,5 @@ public sealed record RestaurantProfileResponse(
     int AvgPrepTimeMins,
     TimeOnly OpeningTime,
     TimeOnly ClosingTime,
-    decimal CommissionPercentage);
+    decimal CommissionPercentage,
+    decimal CommissionFlatFee);

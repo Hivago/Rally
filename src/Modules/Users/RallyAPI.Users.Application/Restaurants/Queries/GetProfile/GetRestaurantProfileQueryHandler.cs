@@ -39,7 +39,8 @@ internal sealed class GetRestaurantProfileQueryHandler
             restaurant.AvgPrepTimeMins,
             restaurant.OpeningTime,
             restaurant.ClosingTime,
-            restaurant.CommissionPercentage);
+            restaurant.CommissionPercentage,
+            restaurant.CommissionFlatFee);
 
         return Result.Success(response);
     }

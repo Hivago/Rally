@@ -63,7 +63,8 @@ internal sealed class GetRestaurantDetailsQueryHandler
                 restaurant.AutoAcceptOrders,
                 restaurant.AvgPrepTimeMins,
                 restaurant.MinOrderAmount,
-                restaurant.CommissionPercentage),
+                restaurant.CommissionPercentage,
+                restaurant.CommissionFlatFee),
             new RestaurantHoursSection(
                 restaurant.UseCustomSchedule,
                 restaurant.OpeningTime,

@@ -20,6 +20,11 @@ public sealed class Restaurant : AggregateRoot
     public TimeOnly OpeningTime { get; private set; }
     public TimeOnly ClosingTime { get; private set; }
     public decimal CommissionPercentage { get; private set; }
+
+    // Phase 2 payouts: flat-fee commission (₹ per order) replacing percentage going forward.
+    // CommissionPercentage is kept for one release as a rollback safety net.
+    public decimal CommissionFlatFee { get; private set; }
+
     public bool AutoAcceptOrders { get; private set; }
     public string? LogoUrl { get; private set; }
     public string? LogoFileKey { get; private set; }
@@ -81,7 +86,8 @@ public sealed class Restaurant : AggregateRoot
         AvgPrepTimeMins = 20; // Default
         OpeningTime = new TimeOnly(9, 0);
         ClosingTime = new TimeOnly(22, 0);
-        CommissionPercentage = 20.0m; // Default 20%
+        CommissionPercentage = 20.0m; // Default 20% (legacy)
+        CommissionFlatFee = 30.0m;    // Default ₹30 flat per order (Phase 2)
     }
 
     public static Result<Restaurant> Create(
@@ -292,6 +298,19 @@ public sealed class Restaurant : AggregateRoot
             return Result.Failure(Error.Validation("Commission percentage must be between 0 and 100."));
 
         CommissionPercentage = percentage;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetCommissionFlatFee(decimal flatFee)
+    {
+        if (flatFee < 0)
+            return Result.Failure(Error.Validation("Commission flat fee cannot be negative."));
+
+        if (flatFee > 10000)
+            return Result.Failure(Error.Validation("Commission flat fee is unreasonably large."));
+
+        CommissionFlatFee = flatFee;
         MarkAsUpdated();
         return Result.Success();
     }

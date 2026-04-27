@@ -9,6 +9,7 @@ public sealed record EditRestaurantCommand(
     string? Phone,
     string? AddressLine,
     decimal? CommissionPercentage,
+    decimal? CommissionFlatFee,
     int? AvgPrepTimeMins,
     List<string>? CuisineTypes,
     bool? IsPureVeg,

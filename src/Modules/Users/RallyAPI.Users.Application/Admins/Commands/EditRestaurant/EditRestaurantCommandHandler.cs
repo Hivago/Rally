@@ -46,7 +46,18 @@ internal sealed class EditRestaurantCommandHandler
         }
 
         if (request.CommissionPercentage.HasValue)
-            restaurant.SetCommissionPercentage(request.CommissionPercentage.Value);
+        {
+            var commissionResult = restaurant.SetCommissionPercentage(request.CommissionPercentage.Value);
+            if (commissionResult.IsFailure)
+                return commissionResult;
+        }
+
+        if (request.CommissionFlatFee.HasValue)
+        {
+            var flatFeeResult = restaurant.SetCommissionFlatFee(request.CommissionFlatFee.Value);
+            if (flatFeeResult.IsFailure)
+                return flatFeeResult;
+        }
 
         if (request.AvgPrepTimeMins.HasValue)
             restaurant.SetPrepTime(request.AvgPrepTimeMins.Value);

@@ -102,11 +102,18 @@ public class RestaurantConfiguration : IEntityTypeConfiguration<Restaurant>
             .HasColumnName("closing_time")
             .IsRequired();
 
-        // Commission
+        // Commission (legacy — percentage of order subtotal)
         builder.Property(r => r.CommissionPercentage)
             .HasColumnName("commission_percentage")
             .HasPrecision(5, 2)
             .HasDefaultValue(20.00m)
+            .IsRequired();
+
+        // Commission flat fee (Phase 2 — ₹ per delivered order)
+        builder.Property(r => r.CommissionFlatFee)
+            .HasColumnName("commission_flat_fee")
+            .HasPrecision(10, 2)
+            .HasDefaultValue(30.00m)
             .IsRequired();
 
         // Base Entity properties

@@ -102,6 +102,7 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
             OpeningTime = r.OpeningTime,
             ClosingTime = r.ClosingTime,
             CommissionPercentage = r.CommissionPercentage,
+            CommissionFlatFee = r.CommissionFlatFee,
             OwnerId = r.OwnerId
         };
     }

@@ -40,7 +40,8 @@ public sealed record RestaurantOperationsSection(
     bool AutoAcceptOrders,
     int AvgPrepTimeMins,
     decimal MinOrderAmount,
-    decimal CommissionPercentage);
+    decimal CommissionPercentage,
+    decimal CommissionFlatFee);
 
 public sealed record RestaurantHoursSection(
     bool UseCustomSchedule,
