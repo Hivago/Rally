@@ -1,16 +1,16 @@
 using MediatR;
-using RallyAPI.Users.Application.Abstractions;
 using RallyAPI.SharedKernel.Results;
+using RallyAPI.Users.Application.Abstractions;
 
-namespace RallyAPI.Users.Application.Admins.Commands.DeactivateRestaurant;
+namespace RallyAPI.Users.Application.Admins.Commands.SetRestaurantStatus;
 
-internal sealed class DeactivateRestaurantCommandHandler
-    : IRequestHandler<DeactivateRestaurantCommand, Result>
+internal sealed class SetRestaurantStatusCommandHandler
+    : IRequestHandler<SetRestaurantStatusCommand, Result>
 {
     private readonly IRestaurantRepository _restaurantRepository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public DeactivateRestaurantCommandHandler(
+    public SetRestaurantStatusCommandHandler(
         IRestaurantRepository restaurantRepository,
         IUnitOfWork unitOfWork)
     {
@@ -19,7 +19,7 @@ internal sealed class DeactivateRestaurantCommandHandler
     }
 
     public async Task<Result> Handle(
-        DeactivateRestaurantCommand request,
+        SetRestaurantStatusCommand request,
         CancellationToken cancellationToken)
     {
         var restaurant = await _restaurantRepository.GetByIdAsync(request.RestaurantId, cancellationToken);
@@ -27,7 +27,13 @@ internal sealed class DeactivateRestaurantCommandHandler
         if (restaurant is null)
             return Result.Failure(Error.NotFound("Restaurant", request.RestaurantId));
 
-        var result = restaurant.Deactivate();
+        // Idempotent: same state requested means nothing to do.
+        if (restaurant.IsActive == request.IsActive)
+            return Result.Success();
+
+        var result = request.IsActive
+            ? restaurant.Activate()
+            : restaurant.Deactivate();
 
         if (result.IsFailure)
             return result;

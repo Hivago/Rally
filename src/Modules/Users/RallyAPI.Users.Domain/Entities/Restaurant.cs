@@ -7,6 +7,13 @@ namespace RallyAPI.Users.Domain.Entities;
 
 public sealed class Restaurant : AggregateRoot
 {
+    /// <summary>
+    /// Short human-readable identifier for ops staff (e.g. "RST001"). Unique per restaurant.
+    /// Assigned at create time by Users.Application; nullable here only because legacy rows
+    /// pre-date the column and are backfilled by migration.
+    /// </summary>
+    public string? RstCode { get; private set; }
+
     public string Name { get; private set; }
     public PhoneNumber Phone { get; private set; }
     public Email Email { get; private set; }
@@ -71,7 +78,8 @@ public sealed class Restaurant : AggregateRoot
         string passwordHash,
         string addressLine,
         decimal latitude,
-        decimal longitude)
+        decimal longitude,
+        string? rstCode)
     {
         Name = name;
         Phone = phone;
@@ -80,6 +88,7 @@ public sealed class Restaurant : AggregateRoot
         AddressLine = addressLine;
         Latitude = latitude;
         Longitude = longitude;
+        RstCode = rstCode;
         IsActive = true;
         IsAcceptingOrders = false; // Start as not accepting
         AutoAcceptOrders = false; // Restaurant must opt in
@@ -97,7 +106,8 @@ public sealed class Restaurant : AggregateRoot
         string passwordHash,
         string addressLine,
         decimal latitude,
-        decimal longitude)
+        decimal longitude,
+        string? rstCode = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return Result.Failure<Restaurant>(Error.Validation("Restaurant name is required."));
@@ -115,7 +125,15 @@ public sealed class Restaurant : AggregateRoot
         if (latitude < 6 || latitude > 38 || longitude < 68 || longitude > 98)
             return Result.Failure<Restaurant>(Error.Validation("Invalid location coordinates."));
 
-        return new Restaurant(name.Trim(), phone, email, passwordHash, addressLine.Trim(), latitude, longitude);
+        return new Restaurant(
+            name.Trim(),
+            phone,
+            email,
+            passwordHash,
+            addressLine.Trim(),
+            latitude,
+            longitude,
+            string.IsNullOrWhiteSpace(rstCode) ? null : rstCode.Trim());
     }
 
     public Result UpdateProfile(string? name, string? addressLine, PhoneNumber? phone)

@@ -21,6 +21,16 @@ public class RestaurantConfiguration : IEntityTypeConfiguration<Restaurant>
             .HasColumnName("id")
             .ValueGeneratedNever();
 
+        // RstCode — short ops identifier (e.g. "RST001"). Unique, backfilled for legacy rows.
+        builder.Property(r => r.RstCode)
+            .HasColumnName("rst_code")
+            .HasMaxLength(20);
+
+        builder.HasIndex(r => r.RstCode)
+            .IsUnique()
+            .HasDatabaseName("idx_restaurants_rst_code")
+            .HasFilter("\"rst_code\" IS NOT NULL");
+
         // Name
         builder.Property(r => r.Name)
             .HasColumnName("name")

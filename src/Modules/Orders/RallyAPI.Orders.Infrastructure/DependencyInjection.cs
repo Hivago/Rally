@@ -75,6 +75,8 @@ public static class DependencyInjection
         // Cross-module services (consumed by admin queries via SharedKernel abstractions)
         services.AddScoped<IOrderStatsService, OrderStatsService>();
         services.AddScoped<IEscalatedOrderQueryService, EscalatedOrderQueryService>();
+        services.AddScoped<ILiveOrderFeedService, LiveOrderFeedService>();
+        services.AddScoped<IAdminAlertsService, AdminAlertsService>();
 
         // Services
         services.AddScoped<IOrderNumberGenerator, OrderNumberGenerator>();

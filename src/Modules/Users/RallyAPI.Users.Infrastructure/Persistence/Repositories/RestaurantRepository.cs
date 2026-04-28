@@ -62,4 +62,36 @@ public class RestaurantRepository : IRestaurantRepository
     {
         return await _context.Restaurants.CountAsync(cancellationToken);
     }
+
+    public Task<int> CountActiveAsync(CancellationToken cancellationToken = default)
+        => _context.Restaurants.CountAsync(r => r.IsActive, cancellationToken);
+
+    public async Task<(IReadOnlyList<Restaurant> Items, int TotalCount)> GetPagedAsync(
+        bool? isActive,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.Restaurants.AsNoTracking().AsQueryable();
+
+        if (isActive.HasValue)
+            query = query.Where(r => r.IsActive == isActive.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(r => r.Name.ToLower().Contains(term));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderBy(r => r.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, total);
+    }
 }
