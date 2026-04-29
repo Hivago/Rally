@@ -43,8 +43,9 @@ public class RefundPaymentCommandHandler
             return Result.Failure<RefundPaymentResponse>(
                 Error.Create("Payment.NotFound", "No payment found for this order"));
 
-        // 2. Check refundable
-        if (!payment.Status.IsRefundable())
+        // 2. Check refundable (admin can bypass with ForceRefund)
+        var bypassRefundableCheck = command.ForceRefund && command.CallerRole == "Admin";
+        if (!bypassRefundableCheck && !payment.Status.IsRefundable())
             return Result.Failure<RefundPaymentResponse>(
                 Error.Create("Payment.NotRefundable", $"Payment in {payment.Status} status cannot be refunded"));
 

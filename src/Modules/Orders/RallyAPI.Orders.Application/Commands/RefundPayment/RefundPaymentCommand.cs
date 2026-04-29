@@ -10,7 +10,9 @@ namespace RallyAPI.Orders.Application.Commands.RefundPayment;
 
 public record RefundPaymentCommand(
     Guid OrderId,
-    decimal? Amount  // null = full refund
+    decimal? Amount,           // null = full refund
+    string? CallerRole = null, // "Admin" required to honor ForceRefund
+    bool ForceRefund = false   // bypass payment.Status.IsRefundable() guard
 ) : IRequest<Result<RefundPaymentResponse>>;
 
 public record RefundPaymentResponse(

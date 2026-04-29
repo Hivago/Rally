@@ -75,6 +75,11 @@ public static class DependencyInjection
         // Cross-module services (consumed by admin queries via SharedKernel abstractions)
         services.AddScoped<IOrderStatsService, OrderStatsService>();
         services.AddScoped<IEscalatedOrderQueryService, EscalatedOrderQueryService>();
+        services.AddScoped<ILiveOrderFeedService, LiveOrderFeedService>();
+        services.AddScoped<IAdminAlertsService, AdminAlertsService>();
+        services.AddScoped<IAdminOrderQueryService, AdminOrderQueryService>();
+        services.AddScoped<RallyAPI.SharedKernel.Abstractions.Payouts.IPayoutGateway, StubPayoutGateway>();
+        services.AddScoped<RallyAPI.SharedKernel.Abstractions.Payouts.IAdminPayoutQueryService, AdminPayoutQueryService>();
 
         // Services
         services.AddScoped<IOrderNumberGenerator, OrderNumberGenerator>();

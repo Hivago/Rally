@@ -397,6 +397,11 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(15)")
                         .HasColumnName("phone");
 
+                    b.Property<string>("RstCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("rst_code");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -419,6 +424,11 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_restaurants_email");
 
                     b.HasIndex("OwnerId");
+
+                    b.HasIndex("RstCode")
+                        .IsUnique()
+                        .HasDatabaseName("idx_restaurants_rst_code")
+                        .HasFilter("\"rst_code\" IS NOT NULL");
 
                     b.HasIndex("IsActive", "IsAcceptingOrders")
                         .HasDatabaseName("idx_restaurants_active");

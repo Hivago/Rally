@@ -360,9 +360,22 @@ public sealed class Order : AggregateRoot
     /// <summary>
     /// Cancels the order.
     /// </summary>
-    public void Cancel(CancellationReason reason, Guid? cancelledBy = null, string? notes = null)
+    /// <param name="allowAnyActive">
+    /// When true, allows cancellation from any non-terminal state (Preparing, ReadyForPickup,
+    /// PickedUp). Reserved for admin-overridden cancellations. When false (default),
+    /// only the normal allowlist (Pending/Paid/Confirmed) applies.
+    /// </param>
+    public void Cancel(
+        CancellationReason reason,
+        Guid? cancelledBy = null,
+        string? notes = null,
+        bool allowAnyActive = false)
     {
-        if (!Status.CanBeCancelled())
+        var canCancel = allowAnyActive
+            ? !Status.IsTerminal()
+            : Status.CanBeCancelled();
+
+        if (!canCancel)
             throw new InvalidOperationException($"Cannot cancel order in {Status} status");
 
         Status = OrderStatus.Cancelled;

@@ -105,4 +105,62 @@ public sealed class Payout : AggregateRoot
         Notes = notes?.Trim();
         MarkAsUpdated();
     }
+
+    /// <summary>
+    /// Admin pause: takes a Pending payout out of the auto-run queue.
+    /// Call <see cref="ReleaseHold"/> to bring it back.
+    /// </summary>
+    public void PutOnHold(string? reason = null)
+    {
+        if (Status != PayoutStatus.Pending)
+            throw new InvalidOperationException($"Cannot put on hold from {Status} status. Only Pending payouts can be paused.");
+
+        Status = PayoutStatus.OnHold;
+        if (!string.IsNullOrWhiteSpace(reason))
+            Notes = reason.Trim();
+        MarkAsUpdated();
+    }
+
+    /// <summary>
+    /// Admin release: returns an OnHold payout to Pending so the next auto-run picks it up.
+    /// </summary>
+    public void ReleaseHold()
+    {
+        if (Status != PayoutStatus.OnHold)
+            throw new InvalidOperationException($"Cannot release hold from {Status} status.");
+
+        Status = PayoutStatus.Pending;
+        MarkAsUpdated();
+    }
+
+    /// <summary>
+    /// Admin retry: moves a Failed payout back to Pending and clears the failure note.
+    /// </summary>
+    public void MarkRetry()
+    {
+        if (Status != PayoutStatus.Failed)
+            throw new InvalidOperationException($"Cannot retry from {Status} status. Only Failed payouts can be retried.");
+
+        Status = PayoutStatus.Pending;
+        Notes = null;
+        MarkAsUpdated();
+    }
+
+    /// <summary>
+    /// Admin pay-now: marks a Pending or OnHold payout as Paid via the gateway result.
+    /// Skips the Processing intermediate step that the scheduler uses.
+    /// </summary>
+    public void MarkPaidImmediate(string transactionReference)
+    {
+        if (Status != PayoutStatus.Pending && Status != PayoutStatus.OnHold)
+            throw new InvalidOperationException($"Cannot pay-now from {Status} status.");
+
+        if (string.IsNullOrWhiteSpace(transactionReference))
+            throw new ArgumentException("Transaction reference is required.", nameof(transactionReference));
+
+        Status = PayoutStatus.Paid;
+        TransactionReference = transactionReference.Trim();
+        PaidAt = DateTime.UtcNow;
+        MarkAsUpdated();
+    }
 }

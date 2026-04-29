@@ -2,28 +2,31 @@ using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using RallyAPI.Orders.Application.Commands.AdminAssignRider;
 using RallyAPI.SharedKernel.Extensions;
-using RallyAPI.Users.Application.Admins.Commands.DeactivateRestaurant;
 
 namespace RallyAPI.Users.Endpoints.Admins;
 
-public class DeactivateRestaurant : IEndpoint
+public class AdminAssignRider : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapPut("/api/admins/restaurants/{restaurantId:guid}/deactivate", HandleAsync)
-            .WithName("AdminDeactivateRestaurant")
+        app.MapPost("/api/admin/orders/{orderId:guid}/assign-rider", HandleAsync)
+            .WithName("AdminAssignRider")
             .WithTags("Admins")
-            .WithSummary("Deactivate a restaurant (admin)")
+            .WithSummary("Manually assign a rider to an order (admin panel)")
             .RequireAuthorization("Admin");
     }
 
+    public record AdminAssignRiderRequest(Guid RiderId);
+
     private static async Task<IResult> HandleAsync(
-        Guid restaurantId,
+        Guid orderId,
+        AdminAssignRiderRequest request,
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var command = new DeactivateRestaurantCommand(restaurantId);
+        var command = new AdminAssignRiderCommand(orderId, request.RiderId);
         var result = await sender.Send(command, cancellationToken);
 
         return result.IsSuccess

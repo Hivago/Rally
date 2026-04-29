@@ -106,5 +106,9 @@ public sealed class PayoutLedgerConfiguration : IEntityTypeConfiguration<PayoutL
 
         builder.HasIndex(l => new { l.OwnerId, l.Status })
             .HasDatabaseName("ix_payout_ledger_owner_status");
+
+        // Ledger rows are not soft-deleted (PayoutLedger extends BaseEntity which exposes
+        // DeletedAt; the column was never added to orders.payout_ledger).
+        builder.Ignore(l => l.DeletedAt);
     }
 }

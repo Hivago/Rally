@@ -36,16 +36,24 @@ internal sealed class GetAdminStatsQueryHandler
         if (admin is null)
             return Result.Failure<AdminStatsResponse>(Error.NotFound("Admin", request.RequestedByAdminId));
 
-        var (totalCustomers, totalRestaurants, totalRiders, onlineRiders,
-             totalOrders, activeOrders, todayOrders) = await (
-            _customerRepository.CountAsync(cancellationToken),
-            _restaurantRepository.CountAsync(cancellationToken),
-            _riderRepository.CountAsync(cancellationToken: cancellationToken),
-            _riderRepository.CountAsync(isOnline: true, cancellationToken: cancellationToken),
-            _orderStats.GetTotalCountAsync(cancellationToken),
-            _orderStats.GetActiveCountAsync(cancellationToken),
-            _orderStats.GetTodayCountAsync(cancellationToken)
-        ).WhenAll();
+        var startOfDay = DateTime.UtcNow.Date;
+
+        // Sequential. Repos share UsersDbContext and OrderStatsService uses OrdersDbContext;
+        // EF Core does not support concurrent operations on the same DbContext, so we run
+        // these one at a time. The total wall time is still well under 100ms in practice.
+        var totalCustomers = await _customerRepository.CountAsync(cancellationToken);
+        var totalRestaurants = await _restaurantRepository.CountAsync(cancellationToken);
+        var totalRiders = await _riderRepository.CountAsync(cancellationToken: cancellationToken);
+        var onlineRiders = await _riderRepository.CountAsync(isOnline: true, cancellationToken: cancellationToken);
+        var totalOrders = await _orderStats.GetTotalCountAsync(cancellationToken);
+        var activeOrders = await _orderStats.GetActiveCountAsync(cancellationToken);
+        var todayOrders = await _orderStats.GetTodayCountAsync(cancellationToken);
+        var todayRevenue = await _orderStats.GetRevenueSinceAsync(startOfDay, cancellationToken);
+        var todayCommission = await _orderStats.GetCommissionSinceAsync(startOfDay, cancellationToken);
+        var lifetimeRevenue = await _orderStats.GetLifetimeRevenueAsync(cancellationToken);
+        var lifetimeCommission = await _orderStats.GetLifetimeCommissionAsync(cancellationToken);
+        var pendingLedger = await _orderStats.GetPendingLedgerEntriesCountAsync(cancellationToken);
+        var unpaidPayout = await _orderStats.GetUnpaidPayoutAmountAsync(cancellationToken);
 
         return Result.Success(new AdminStatsResponse(
             totalCustomers,
@@ -54,19 +62,12 @@ internal sealed class GetAdminStatsQueryHandler
             onlineRiders,
             totalOrders,
             activeOrders,
-            todayOrders));
-    }
-}
-
-file static class TaskExtensions
-{
-    internal static async Task<(T1, T2, T3, T4, T5, T6, T7)> WhenAll<T1, T2, T3, T4, T5, T6, T7>(
-        this (Task<T1> t1, Task<T2> t2, Task<T3> t3, Task<T4> t4,
-              Task<T5> t5, Task<T6> t6, Task<T7> t7) tasks)
-    {
-        await Task.WhenAll(tasks.t1, tasks.t2, tasks.t3, tasks.t4,
-                           tasks.t5, tasks.t6, tasks.t7);
-        return (tasks.t1.Result, tasks.t2.Result, tasks.t3.Result, tasks.t4.Result,
-                tasks.t5.Result, tasks.t6.Result, tasks.t7.Result);
+            todayOrders,
+            todayRevenue,
+            todayCommission,
+            lifetimeRevenue,
+            lifetimeCommission,
+            pendingLedger,
+            unpaidPayout));
     }
 }

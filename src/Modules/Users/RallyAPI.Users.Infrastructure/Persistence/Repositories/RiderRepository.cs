@@ -54,6 +54,9 @@ public class RiderRepository : IRiderRepository
         return await query.CountAsync(cancellationToken);
     }
 
+    public Task<int> CountPendingKycAsync(CancellationToken cancellationToken = default)
+        => _context.Riders.CountAsync(r => r.KycStatus == Domain.Enums.KycStatus.Pending, cancellationToken);
+
     public async Task AddAsync(Rider rider, CancellationToken cancellationToken = default)
     {
         await _context.Riders.AddAsync(rider, cancellationToken);

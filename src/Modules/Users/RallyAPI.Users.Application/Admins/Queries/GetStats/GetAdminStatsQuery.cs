@@ -13,4 +13,10 @@ public sealed record AdminStatsResponse(
     int OnlineRiders,
     int TotalOrders,
     int ActiveOrders,
-    int TodayOrders);
+    int TodayOrders,
+    decimal TodayRevenue,
+    decimal TodayCommission,
+    decimal LifetimeRevenue,
+    decimal LifetimeCommission,
+    int PendingPayoutLedgerEntries,
+    decimal UnpaidPayoutAmount);

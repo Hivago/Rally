@@ -112,5 +112,11 @@ public sealed class PayoutConfiguration : IEntityTypeConfiguration<Payout>
 
         // Ignore domain events
         builder.Ignore(p => p.DomainEvents);
+
+        // Payouts are not soft-deleted and don't use optimistic concurrency.
+        // The columns inherited from BaseEntity were never added to orders.payouts;
+        // explicit Ignore lets EF skip them in SELECT/INSERT (matches Cart/CartItem pattern).
+        builder.Ignore(p => p.DeletedAt);
+        builder.Ignore(p => p.Version);
     }
 }

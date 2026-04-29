@@ -11,6 +11,7 @@ public interface IRiderRepository
     Task<List<Rider>> GetOnlineRidersAsync(CancellationToken cancellationToken = default);
     Task<Rider?> GetByIdWithKycAsync(Guid id, CancellationToken cancellationToken = default);
     Task<int> CountAsync(bool? isOnline = null, CancellationToken cancellationToken = default);
+    Task<int> CountPendingKycAsync(CancellationToken cancellationToken = default);
     Task AddAsync(Rider rider, CancellationToken cancellationToken = default);
     void Update(Rider rider, CancellationToken cancellationToken = default);
 }

@@ -253,6 +253,19 @@ builder.Services.AddRateLimiter(options =>
                 SegmentsPerWindow = 2
             }));
 
+    // Admin CSV export: 5 requests/minute per admin (by JWT sub claim).
+    // Falls back to remote IP if unauthenticated, but the endpoint also requires auth.
+    options.AddPolicy("admin-export", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst("sub")?.Value
+                ?? context.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = isDev ? 100 : 5,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+
     options.RejectionStatusCode = 429;
 });
 

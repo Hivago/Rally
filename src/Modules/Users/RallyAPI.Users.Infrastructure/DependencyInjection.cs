@@ -66,6 +66,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IRestaurantQueryService, RestaurantQueryService>();
+        services.AddScoped<IRestaurantCodeGenerator, RestaurantCodeGenerator>();
 
 
         // Rider services for cross-module communication

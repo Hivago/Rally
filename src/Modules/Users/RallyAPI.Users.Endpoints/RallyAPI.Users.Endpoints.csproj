@@ -19,6 +19,8 @@
 		<ProjectReference Include="..\..\..\RallyAPI.Infrastructure\RallyAPI.Infrastructure.csproj" />
 		<ProjectReference Include="..\RallyAPI.Users.Application\RallyAPI.Users.Application.csproj" />
 		<ProjectReference Include="..\RallyAPI.Users.Infrastructure\RallyAPI.Users.Infrastructure.csproj" />
+		<ProjectReference Include="..\..\Orders\RallyAPI.Orders.Application\RallyAPI.Orders.Application.csproj" />
+		<ProjectReference Include="..\..\Orders\RallyAPI.Orders.Domain\RallyAPI.Orders.Domain.csproj" />
 	</ItemGroup>
 
 
