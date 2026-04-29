@@ -22,4 +22,20 @@ public interface IRestaurantQueryService
     Task<RestaurantDetails?> GetByIdAsync(
         Guid restaurantId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// For each given owner id, returns the owner's display name and outlet count.
+    /// Used by the admin payouts page so the payout list can show a single label per
+    /// owner regardless of how many restaurants they run.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, OwnerPayoutDisplay>> GetOwnerPayoutDisplaysAsync(
+        IReadOnlyCollection<Guid> ownerIds,
+        CancellationToken ct = default);
 }
+
+public sealed record OwnerPayoutDisplay(
+    Guid OwnerId,
+    string OwnerName,
+    int OutletCount,
+    string? FirstRestaurantName);
+
