@@ -1,6 +1,7 @@
 using MediatR;
 using RallyAPI.SharedKernel.Results;
 using RallyAPI.Users.Application.Abstractions;
+using RallyAPI.Users.Domain.Enums;
 
 namespace RallyAPI.Users.Application.Admins.Queries.ListRiders;
 
@@ -22,16 +23,23 @@ internal sealed class ListRidersQueryHandler
         ListRidersQuery request,
         CancellationToken cancellationToken)
     {
-        // Verify admin exists
         var admin = await _adminRepository.GetByIdAsync(request.RequestedByAdminId, cancellationToken);
         if (admin is null)
             return Result.Failure<ListRidersResponse>(Error.NotFound("Admin", request.RequestedByAdminId));
 
-        // Note: Full implementation will be in Infrastructure layer
-        // This is a placeholder showing the pattern
-        // Repository will handle filtering, pagination
+        KycStatus? kycStatus = null;
+        if (request.KycStatus is not null)
+        {
+            if (!Enum.TryParse<KycStatus>(request.KycStatus, ignoreCase: true, out var parsed))
+                return Result.Failure<ListRidersResponse>(Error.Validation("Invalid KycStatus value."));
+            kycStatus = parsed;
+        }
 
-        var riders = await _riderRepository.GetOnlineRidersAsync(cancellationToken);
+        var page = request.Page < 1 ? 1 : request.Page;
+        var pageSize = request.PageSize is < 1 or > 100 ? 20 : request.PageSize;
+
+        var (riders, totalCount) = await _riderRepository.GetPagedAsync(
+            request.IsOnline, kycStatus, page, pageSize, cancellationToken);
 
         var riderItems = riders.Select(r => new RiderListItem(
             r.Id,
@@ -42,10 +50,6 @@ internal sealed class ListRidersQueryHandler
             r.IsActive,
             r.IsOnline)).ToList();
 
-        return new ListRidersResponse(
-            riderItems,
-            riderItems.Count,
-            request.Page,
-            request.PageSize);
+        return new ListRidersResponse(riderItems, totalCount, page, pageSize);
     }
 }

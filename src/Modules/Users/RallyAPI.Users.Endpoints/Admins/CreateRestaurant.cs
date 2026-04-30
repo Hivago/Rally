@@ -47,8 +47,8 @@ public class CreateRestaurant : IEndpoint
 
         var result = await sender.Send(command, cancellationToken);
 
-        return result.IsFailure
-            ? result.Error.ToErrorResult()
-            : Results.Created($"/api/restaurants/{result.Value}", new { restaurantId = result.Value });
+        return result.IsSuccess
+            ? Results.Created($"/api/restaurants/{result.Value}", new { restaurantId = result.Value })
+            : result.Error.ToErrorResult();
     }
 }
