@@ -1,6 +1,7 @@
 // File: src/Modules/Orders/RallyAPI.Orders.Endpoints/PaymentEndpoints.cs
 using MediatR;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using RallyAPI.Orders.Application.Commands.InitiatePayment;
@@ -42,15 +43,115 @@ public static class PaymentEndpoints
         // 2. PayU webhook (S2S callback) — source of truth
         group.MapPost("/webhook", async (
             HttpContext httpContext,
+            Microsoft.Extensions.Configuration.IConfiguration config,
+            RallyAPI.SharedKernel.Infrastructure.RedisIdempotencyService idempotencyService,
+            RallyAPI.Infrastructure.Persistence.AuditDbContext auditDb,
             ISender sender) =>
         {
+            var auditLog = new RallyAPI.SharedKernel.Domain.Entities.WebhookAuditLog
+            {
+                Id = Guid.NewGuid(),
+                Source = "payu",
+                ReceivedAt = DateTimeOffset.UtcNow,
+                SourceIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                CorrelationId = Guid.NewGuid()
+            };
+
             // PayU sends form-urlencoded POST
             var form = await httpContext.Request.ReadFormAsync();
             var formData = form.ToDictionary(
                 x => x.Key,
                 x => x.Value.ToString());
 
+            // 1. Audit logic
+            var rawBody = string.Join("&", formData.Select(kv => $"{kv.Key}={System.Uri.EscapeDataString(kv.Value)}"));
+            auditLog.RawBody = rawBody; // in real systems we'd encrypt
+            
+            var txnId = formData.GetValueOrDefault("txnid", "");
+            var status = formData.GetValueOrDefault("status", "unknown");
+            var mihpayid = formData.GetValueOrDefault("mihpayid", "");
+            
+            auditLog.EventId = $"payu:{txnId}:{mihpayid}:{status}";
+
+            // 2. Time Drift logic
+            // Extract `addedon` via precise IST parsing and convert to UTC.
+            var addedOn = formData.GetValueOrDefault("addedon", "");
+            if (string.IsNullOrWhiteSpace(addedOn))
+            {
+                auditLog.ProcessingStatus = "rejected_timestamp_missing";
+                auditDb.WebhookAuditLogs.Add(auditLog);
+                await auditDb.SaveChangesAsync();
+                return Results.Ok(); // PayU requires OK to stop retries
+            }
+
+            try 
+            {
+                var istZone = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+                var istTime = DateTime.ParseExact(addedOn, "yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+                var utcTime = TimeZoneInfo.ConvertTimeToUtc(istTime, istZone);
+                
+                // 10-minute time drift checking vs UTC.
+                var toleranceSecs = config.GetValue<int>("WEBHOOK_PAYU_TIMESTAMP_TOLERANCE_SECONDS", 600);
+                if (Math.Abs((DateTime.UtcNow - utcTime).TotalSeconds) > toleranceSecs)
+                {
+                    auditLog.ProcessingStatus = "rejected_timestamp_drift";
+                    auditLog.TimestampValid = false;
+                    auditDb.WebhookAuditLogs.Add(auditLog);
+                    await auditDb.SaveChangesAsync();
+                    return Results.Ok();
+                }
+                auditLog.TimestampValid = true;
+            }
+            catch
+            {
+                auditLog.ProcessingStatus = "rejected_timestamp_invalid";
+                auditLog.TimestampValid = false;
+                auditDb.WebhookAuditLogs.Add(auditLog);
+                await auditDb.SaveChangesAsync();
+                return Results.Ok();
+            }
+
+            // 3. Idempotency Check using Redis
+            var redisKey = $"webhook:payu:eventId:{auditLog.EventId}";
+            var hash = "sha256:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawBody)));
+            var idempotencyLock = await idempotencyService.AcquireLockAsync(redisKey, hash, TimeSpan.FromHours(24));
+
+            if (!idempotencyLock)
+            {
+                auditLog.ProcessingStatus = "rejected_duplicate";
+                auditLog.IsDuplicate = true;
+                auditDb.WebhookAuditLogs.Add(auditLog);
+                await auditDb.SaveChangesAsync();
+                return Results.Ok(); 
+            }
+
+            // 4. Send to MediatR 
+            // Note: signature verification happens inside the handler 
             var result = await sender.Send(new ProcessPayuWebhookCommand(formData));
+
+            if (result.IsSuccess)
+            {
+                auditLog.ProcessingStatus = "accepted";
+            }
+            else
+            {
+                auditLog.ProcessingStatus = "failed";
+                auditLog.ErrorMessage = result.Error.Message;
+            }
+            
+            // HMAC is verified inside handler, assuming valid if it reaches here and succeeds
+            if (result.Error.Code == "Payment.InvalidHash") 
+            {
+                auditLog.SignatureValid = false;
+                auditLog.ProcessingStatus = "rejected_signature";
+            }
+            else
+            {
+                auditLog.SignatureValid = true;
+            }
+
+            auditDb.WebhookAuditLogs.Add(auditLog);
+            await auditDb.SaveChangesAsync();
 
             // Always return 200 to PayU — even on failure, to prevent retries
             return Results.Ok();

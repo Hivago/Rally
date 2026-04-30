@@ -1,4 +1,4 @@
-﻿// File: src/Modules/Orders/RallyAPI.Orders.Infrastructure/Services/PayU/PayUService.cs
+// File: src/Modules/Orders/RallyAPI.Orders.Infrastructure/Services/PayU/PayUService.cs
 
 using System.Security.Cryptography;
 using System.Text;
@@ -82,13 +82,19 @@ public class PayUService : IPayUService
             var reverseHashString = $"{_options.MerchantSalt}|{status}||||||{udf5}|{udf4}|{udf3}|{udf2}|{udf1}|{email}|{firstName}|{productInfo}|{amount}|{txnId}|{key}";
             var expectedHash = ComputeSha512(reverseHashString);
 
-            var isValid = string.Equals(expectedHash, receivedHash, StringComparison.OrdinalIgnoreCase);
+            var isValid = false;
+            if (expectedHash.Length == receivedHash.Length)
+            {
+                isValid = CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(expectedHash),
+                    Encoding.UTF8.GetBytes(receivedHash.ToLowerInvariant()));
+            }
 
             if (!isValid)
             {
                 _logger.LogWarning(
                     "PayU webhook hash mismatch for txnId {TxnId}. Expected: {Expected}, Received: {Received}",
-                    txnId, expectedHash[..16] + "...", receivedHash[..16] + "...");
+                    txnId, expectedHash[..16] + "...", receivedHash.Length > 16 ? receivedHash[..16] + "..." : receivedHash);
             }
 
             return isValid;

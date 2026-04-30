@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -22,6 +22,7 @@
 		<ProjectReference Include="..\RallyAPI.Orders.Application\RallyAPI.Orders.Application.csproj" />
 		<ProjectReference Include="..\RallyAPI.Orders.Domain\RallyAPI.Orders.Domain.csproj" />
 		<ProjectReference Include="..\..\..\RallyAPI.SharedKernel\RallyAPI.SharedKernel.csproj" />
+		<ProjectReference Include="..\..\..\RallyAPI.Infrastructure\RallyAPI.Infrastructure.csproj" />
 		<ProjectReference Include="..\RallyAPI.Orders.Infrastructure\RallyAPI.Orders.Infrastructure.csproj" />
 	</ItemGroup>
 

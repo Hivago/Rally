@@ -23,7 +23,6 @@ public static class DependencyInjection
 
         // Register validators
         services.AddValidatorsFromAssembly(assembly);
-
         return services;
     }
 }

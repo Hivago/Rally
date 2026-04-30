@@ -1,5 +1,8 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
+using RallyAPI.Infrastructure.Persistence;
+using RallyAPI.SharedKernel.Infrastructure;
 using RallyAPI.Infrastructure.GoogleMaps;
 using RallyAPI.Infrastructure.Storage;
 using RallyAPI.SharedKernel.Abstractions.Distance;
@@ -31,6 +34,11 @@ public static class DependencyInjection
         });
 
         services.AddStorageServices(configuration);
+
+        services.AddDbContext<AuditDbContext>(options =>
+            options.UseNpgsql(configuration.GetConnectionString("Database")));
+
+        services.AddSingleton<RedisIdempotencyService>();
 
         return services;
     }

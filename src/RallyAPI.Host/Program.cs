@@ -364,6 +364,10 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("Migrating Pricing database...");
         pricingDb.Database.Migrate();
 
+        var auditDb = scope.ServiceProvider.GetRequiredService<RallyAPI.Infrastructure.Persistence.AuditDbContext>();
+        logger.LogInformation("Migrating Audit database...");
+        auditDb.Database.Migrate();
+
         logger.LogInformation("All migrations completed successfully.");
     }
     catch (Exception ex)

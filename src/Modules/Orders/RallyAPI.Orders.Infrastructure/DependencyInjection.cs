@@ -78,6 +78,7 @@ public static class DependencyInjection
         services.AddScoped<ILiveOrderFeedService, LiveOrderFeedService>();
         services.AddScoped<IAdminAlertsService, AdminAlertsService>();
         services.AddScoped<IAdminOrderQueryService, AdminOrderQueryService>();
+        services.AddScoped<IDeliveryEarningsQueryService, DeliveryEarningsQueryService>();
         services.AddScoped<RallyAPI.SharedKernel.Abstractions.Payouts.IPayoutGateway, StubPayoutGateway>();
         services.AddScoped<RallyAPI.SharedKernel.Abstractions.Payouts.IAdminPayoutQueryService, AdminPayoutQueryService>();
 

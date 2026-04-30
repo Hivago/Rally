@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -31,6 +31,7 @@ using RallyAPI.SharedKernel.Abstractions.Distance;
 using RallyAPI.SharedKernel.Abstractions.Pricing;
 using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.SharedKernel.Results;
+using RallyAPI.SharedKernel.Filters;
 
 namespace RallyAPI.Orders.Endpoints;
 
@@ -51,6 +52,7 @@ public static class OrderEndpoints
             .WithSummary("Place a new order")
             .RequireAuthorization("Customer")
             .RequireRateLimiting("login")
+            .RequireIdempotency()
             .Produces<OrderDto>(StatusCodes.Status201Created)
             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest)
             .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized);

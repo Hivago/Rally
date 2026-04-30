@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -17,6 +17,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\..\..\RallyAPI.SharedKernel\RallyAPI.SharedKernel.csproj" />
+	  <ProjectReference Include="..\..\..\RallyAPI.Infrastructure\RallyAPI.Infrastructure.csproj" />
 	  <ProjectReference Include="..\..\Integrations\ProRouting\ProRouting.csproj" />
 	  <ProjectReference Include="..\RallyAPI.Delivery.Application\RallyAPI.Delivery.Application.csproj" />
 	  <ProjectReference Include="..\RallyAPI.Delivery.Domain\RallyAPI.Delivery.Domain.csproj" />
