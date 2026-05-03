@@ -48,6 +48,12 @@ public sealed class RedisIdempotencyService
         return await db.StringSetAsync(key, json, ttl, When.NotExists);
     }
 
+    public async Task ReleaseLockAsync(string key)
+    {
+        var db = _redis.GetDatabase();
+        await db.KeyDeleteAsync(key);
+    }
+
     public async Task CacheResponseAsync(string key, string payloadHash, int statusCode, Dictionary<string, string> headers, string body, TimeSpan ttl)
     {
         var db = _redis.GetDatabase();

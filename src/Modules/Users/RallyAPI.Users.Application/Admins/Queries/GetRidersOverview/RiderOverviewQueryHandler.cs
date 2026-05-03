@@ -1,105 +1,73 @@
-﻿using MediatR;
-using Microsoft.EntityFrameworkCore;
+using MediatR;
+using RallyAPI.SharedKernel.Abstractions.Orders;
 using RallyAPI.SharedKernel.Results;
-using RallyAPI.Users.Domain.Errors;
-using RallyAPI.Persistence; // adjust to your DbContext namespace
+using RallyAPI.Users.Application.Abstractions;
+using RallyAPI.Users.Domain.Enums;
 
 namespace RallyAPI.Users.Application.Queries.RiderOverview;
 
 public class RiderOverviewQueryHandler
-    : IRequestHandler<RiderOverviewQuery, Result<RiderOverviewResponse>>
+    : IRequestHandler<RiderOverviewQuery, Result<RiderOverviewResponseDTO>>
 {
-    private readonly IAppDbContext _dbContext;
+    private readonly IRiderRepository _riders;
+    private readonly IRiderOrderStatsService _orderStats;
+    private readonly IRiderPayoutLedgerRepository _payouts;
 
-    public RiderOverviewQueryHandler(IAppDbContext dbContext)
+    public RiderOverviewQueryHandler(
+        IRiderRepository riders,
+        IRiderOrderStatsService orderStats,
+        IRiderPayoutLedgerRepository payouts)
     {
-        _dbContext = dbContext;
+        _riders = riders;
+        _orderStats = orderStats;
+        _payouts = payouts;
     }
 
-    public async Task<Result<RiderOverviewResponse>> Handle(
+    public async Task<Result<RiderOverviewResponseDTO>> Handle(
         RiderOverviewQuery request,
         CancellationToken cancellationToken)
     {
-        var rider = await _dbContext.Riders
-            .AsNoTracking()
-            .Where(r => r.Id == request.RiderId)
-            .FirstOrDefaultAsync(cancellationToken);
+        var rider = await _riders.GetByIdAsync(request.RiderId, cancellationToken);
 
         if (rider is null)
-            return Result<RiderOverviewResponse>.Failure(UserErrors.RiderNotFound);
+            return Result.Failure<RiderOverviewResponseDTO>(Error.NotFound("Rider", request.RiderId));
 
-        var now = DateTime.UtcNow;
-        var startOfWeek = now.Date.AddDays(-(int)now.DayOfWeek);
-        var startOfMonth = new DateTime(now.Year, now.Month, 1);
+        var deliveries = await _orderStats.GetDeliveryStatsAsync(rider.Id, cancellationToken);
+        var earnings = await _payouts.GetEarningsBreakdownAsync(rider.Id, DateTime.UtcNow, cancellationToken);
 
-        // Aggregate order stats
-        var orders = _dbContext.Orders
-            .AsNoTracking()
-            .Where(o => o.RiderId == request.RiderId);
+        var status = !rider.IsActive ? "Inactive" : (rider.IsOnline ? "Online" : "Offline");
 
-        var totalDeliveries = await orders.CountAsync(cancellationToken);
-        var completedDeliveries = await orders.CountAsync(o => o.Status == OrderStatus.Completed, cancellationToken);
-        var cancelledDeliveries = await orders.CountAsync(o => o.Status == OrderStatus.Cancelled, cancellationToken);
-        var ongoingDeliveries = await orders.CountAsync(o =>
-            o.Status == OrderStatus.Assigned ||
-            o.Status == OrderStatus.PickedUp ||
-            o.Status == OrderStatus.InTransit, cancellationToken);
-
-        // Ratings
-        var ratingsQuery = _dbContext.Ratings
-            .AsNoTracking()
-            .Where(r => r.RiderId == request.RiderId);
-
-        var totalRatings = await ratingsQuery.CountAsync(cancellationToken);
-        var averageRating = totalRatings > 0
-            ? await ratingsQuery.AverageAsync(r => (decimal)r.Score, cancellationToken)
-            : 0m;
-
-        // Earnings
-        var earningsQuery = _dbContext.RiderEarnings
-            .AsNoTracking()
-            .Where(e => e.RiderId == request.RiderId);
-
-        var totalEarnings = await earningsQuery.SumAsync(e => (decimal?)e.Amount, cancellationToken) ?? 0m;
-        var pendingEarnings = await earningsQuery
-            .Where(e => !e.IsPaidOut)
-            .SumAsync(e => (decimal?)e.Amount, cancellationToken) ?? 0m;
-        var earningsThisWeek = await earningsQuery
-            .Where(e => e.CreatedAt >= startOfWeek)
-            .SumAsync(e => (decimal?)e.Amount, cancellationToken) ?? 0m;
-        var earningsThisMonth = await earningsQuery
-            .Where(e => e.CreatedAt >= startOfMonth)
-            .SumAsync(e => (decimal?)e.Amount, cancellationToken) ?? 0m;
-
-        var response = new RiderOverviewResponse(
+        // Ratings: no Ratings module exists yet. Returning zeros until rider rating
+        // collection ships (tracked separately).
+        var response = new RiderOverviewResponseDTO(
             RiderId: rider.Id,
-            FullName: $"{rider.FirstName} {rider.LastName}".Trim(),
-            Email: rider.Email,
-            PhoneNumber: rider.PhoneNumber,
-            Status: rider.Status.ToString(),
-            IsVerified: rider.IsVerified,
+            FullName: rider.Name,
+            Email: rider.Email?.Value ?? string.Empty,
+            PhoneNumber: rider.Phone.Value,
+            Status: status,
+            IsVerified: rider.KycStatus == KycStatus.Verified,
             IsActive: rider.IsActive,
             JoinedAt: rider.CreatedAt,
-            VehicleType: rider.Vehicle?.Type,
-            VehiclePlateNumber: rider.Vehicle?.PlateNumber,
+            VehicleType: rider.VehicleType.ToString(),
+            VehiclePlateNumber: rider.VehicleNumber,
 
-            TotalDeliveries: totalDeliveries,
-            CompletedDeliveries: completedDeliveries,
-            CancelledDeliveries: cancelledDeliveries,
-            OngoingDeliveries: ongoingDeliveries,
-            AverageRating: Math.Round(averageRating, 2),
-            TotalRatings: totalRatings,
+            TotalDeliveries: deliveries.Total,
+            CompletedDeliveries: deliveries.Completed,
+            CancelledDeliveries: deliveries.Cancelled,
+            OngoingDeliveries: deliveries.Ongoing,
+            AverageRating: 0m,
+            TotalRatings: 0,
 
-            TotalEarnings: totalEarnings,
-            PendingEarnings: pendingEarnings,
-            EarningsThisWeek: earningsThisWeek,
-            EarningsThisMonth: earningsThisMonth,
+            TotalEarnings: earnings.Total,
+            PendingEarnings: earnings.Pending,
+            EarningsThisWeek: earnings.ThisWeek,
+            EarningsThisMonth: earnings.ThisMonth,
 
-            LastKnownLatitude: rider.LastKnownLocation?.Latitude,
-            LastKnownLongitude: rider.LastKnownLocation?.Longitude,
-            LastActiveAt: rider.LastActiveAt
+            LastKnownLatitude: rider.CurrentLatitude.HasValue ? (double?)rider.CurrentLatitude.Value : null,
+            LastKnownLongitude: rider.CurrentLongitude.HasValue ? (double?)rider.CurrentLongitude.Value : null,
+            LastActiveAt: rider.LastLocationUpdate
         );
 
-        return Result<RiderOverviewResponse>.Success(response);
+        return Result.Success(response);
     }
 }

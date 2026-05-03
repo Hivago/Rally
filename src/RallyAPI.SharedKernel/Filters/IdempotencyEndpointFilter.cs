@@ -131,10 +131,7 @@ public sealed class IdempotencyEndpointFilter : IEndpointFilter
         }
         catch
         {
-            // If exception occurs, we should release the lock by deleting the redis key.
-            // A simple implementation of caching allows natural expiration, but to be safe:
-            // Since we don't have Delete key in RedisIdempotencyService yet, we just let it expire or implement Delete.
-            // For MVP, we will let it fail and bubble up.
+            await _idempotencyService.ReleaseLockAsync(redisKey);
             throw;
         }
         finally
