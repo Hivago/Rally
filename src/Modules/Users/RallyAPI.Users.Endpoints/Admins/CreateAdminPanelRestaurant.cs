@@ -55,10 +55,10 @@ public class CreateAdminPanelRestaurant : IEndpoint
 
         var result = await sender.Send(command, cancellationToken);
 
-        return result.IsFailure
-            ? result.Error.ToErrorResult()
-            : Results.Created(
+        return result.IsSuccess
+            ? Results.Created(
                 $"/api/admin/restaurants/{result.Value.RestaurantId}",
-                new { restaurantId = result.Value.RestaurantId, rstCode = result.Value.RstCode });
+                new { restaurantId = result.Value.RestaurantId, rstCode = result.Value.RstCode })
+            : result.Error.ToErrorResult();
     }
 }

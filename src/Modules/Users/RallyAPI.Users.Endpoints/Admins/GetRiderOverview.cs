@@ -1,9 +1,10 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using RallyAPI.Users.Application.Queries.RiderOverview;
 using RallyAPI.SharedKernel.Extensions;
+using RallyAPI.Users.Application.Admins.Queries.GetRiderOverview;
+using System.Security.Claims;
 
 namespace RallyAPI.Users.Endpoints.Admins;
 
@@ -11,20 +12,21 @@ public class GetRiderOverview : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/admin/riders/{riderId:guid}/overview", HandleAsync)
-            .WithName("RiderOverview")
+        app.MapGet("/api/admins/riders/{riderId:guid}", HandleAsync)
+            .WithName("GetRiderOverview")
             .WithTags("Admins")
-            .WithSummary("Get a detailed overview of a rider (admin panel)")
+            .WithSummary("Get full rider profile and status for admin panel")
             .RequireAuthorization("Admin");
     }
 
     private static async Task<IResult> HandleAsync(
         Guid riderId,
+        ClaimsPrincipal user,
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var query = new RiderOverviewQuery(riderId);
-        var result = await sender.Send(query, cancellationToken);
+        var adminId = Guid.Parse(user.FindFirstValue("sub")!);
+        var result = await sender.Send(new GetRiderOverviewQuery(adminId, riderId), cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)

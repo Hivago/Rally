@@ -1,4 +1,5 @@
 using RallyAPI.Users.Domain.Entities;
+using RallyAPI.Users.Domain.Enums;
 using RallyAPI.Users.Domain.ValueObjects;
 
 namespace RallyAPI.Users.Application.Abstractions;
@@ -12,6 +13,7 @@ public interface IRiderRepository
     Task<Rider?> GetByIdWithKycAsync(Guid id, CancellationToken cancellationToken = default);
     Task<int> CountAsync(bool? isOnline = null, CancellationToken cancellationToken = default);
     Task<int> CountPendingKycAsync(CancellationToken cancellationToken = default);
+    Task<(List<Rider> Items, int TotalCount)> GetPagedAsync(bool? isOnline, KycStatus? kycStatus, int page, int pageSize, CancellationToken cancellationToken = default);
     Task AddAsync(Rider rider, CancellationToken cancellationToken = default);
     void Update(Rider rider, CancellationToken cancellationToken = default);
 }

@@ -33,8 +33,8 @@ public class CreateRider : IEndpoint
     {
         var adminId = Guid.Parse(user.FindFirstValue("sub")!);
 
-        if (!Enum.TryParse<VehicleType>(request.VehicleType, true, out var vehicleType))
-            return Results.BadRequest(new { error = "Invalid vehicle type. Use: Bicycle, Bike, Scooter, Car, Auto" });
+        if (!Enum.TryParse<VehicleType>(request.VehicleType, ignoreCase: true, out var vehicleType))
+            return Results.UnprocessableEntity(new { code = "Validation.Error", message = $"Invalid vehicle type '{request.VehicleType}'. Valid values: Bicycle, Scooter, Bike." });
 
         var command = new CreateRiderCommand(
             adminId,
@@ -45,8 +45,8 @@ public class CreateRider : IEndpoint
 
         var result = await sender.Send(command, cancellationToken);
 
-        return result.IsFailure
-            ? result.Error.ToErrorResult()
-            : Results.Created($"/api/riders/{result.Value}", new { riderId = result.Value });
+        return result.IsSuccess
+            ? Results.Created($"/api/riders/{result.Value}", new { riderId = result.Value })
+            : result.Error.ToErrorResult();
     }
 }
