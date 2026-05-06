@@ -33,13 +33,16 @@ public sealed class ConfirmRiderKycDocumentCommandHandler
 {
     private readonly IRiderRepository _riderRepository;
     private readonly IStorageService _storage;
+    private readonly IUnitOfWork _unitOfWork;
 
     public ConfirmRiderKycDocumentCommandHandler(
         IRiderRepository riderRepository,
-        IStorageService storage)
+        IStorageService storage,
+        IUnitOfWork unitOfWork)
     {
         _riderRepository = riderRepository;
         _storage = storage;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<Result<ConfirmRiderKycDocumentResponse>> Handle(
@@ -79,6 +82,7 @@ public sealed class ConfirmRiderKycDocumentCommandHandler
 
         // 6. Save rider — EF Core cascade saves the KycDocuments collection
         _riderRepository.Update(rider, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new ConfirmRiderKycDocumentResponse(
             document.Id,
