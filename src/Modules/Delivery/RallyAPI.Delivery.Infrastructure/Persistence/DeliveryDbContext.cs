@@ -15,6 +15,7 @@ public sealed class DeliveryDbContext : DbContext
     public DbSet<DeliveryQuote> Quotes => Set<DeliveryQuote>();
     public DbSet<DeliveryRequest> DeliveryRequests => Set<DeliveryRequest>();
     public DbSet<RiderOffer> RiderOffers => Set<RiderOffer>();
+    public DbSet<IgmTicket> IgmTickets => Set<IgmTicket>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -8,15 +8,20 @@ using RallyAPI.SharedKernel.Abstractions.Delivery;
 namespace RallyAPI.Integrations.ProRouting;
 
 /// <summary>
-/// ProRouting service for quotes and task management.
-/// Implements IThirdPartyDeliveryProvider.
+/// ProRouting service for quotes, task management, and IGM (issue/grievance) handling.
+/// Implements IThirdPartyDeliveryProvider AND IIgmProvider on the same HttpClient
+/// so both share auth, base URL, and timeouts.
 /// </summary>
-public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider
+public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmProvider
 {
     private const string QuotesEndpoint = "partner/quotes";
     private const string CreateEndpoint = "partner/order/createasync";
     private const string CancelEndpoint = "partner/order/cancel";
     private const string StatusEndpoint = "partner/order/status";
+    private const string UpdateEndpoint = "partner/order/update";
+    private const string IssueEndpoint = "partner/order/issue";
+    private const string IssueStatusEndpoint = "partner/order/issue_status";
+    private const string IssueCloseEndpoint = "partner/order/issue_close";
 
     private readonly HttpClient _httpClient;
     private readonly ProRoutingOptions _options;
@@ -285,6 +290,253 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider
         }
     }
 
+    public async Task<UpdateOrderResult> UpdateOrderAsync(
+        UpdateOrderRequest request,
+        CancellationToken ct = default)
+    {
+        if (!_options.Enabled)
+        {
+            return UpdateOrderResult.Failure("ProRouting is disabled", ProviderName);
+        }
+
+        try
+        {
+            var providerRequest = new ProRoutingUpdateRequest
+            {
+                Order = new ProRoutingUpdateOrder
+                {
+                    Id = request.ExternalTaskId,
+                    PickupCode = request.PickupCode,
+                    DropCode = request.DropCode,
+                    CustomerPromisedTime = request.CustomerPromisedTime,
+                    OrderReady = request.OrderReady
+                }
+            };
+
+            _logger.LogInformation(
+                "Updating ProRouting task {TaskId} with OTPs (orderReady={OrderReady})",
+                request.ExternalTaskId, request.OrderReady);
+
+            var response = await _httpClient.PostAsJsonAsync(
+                UpdateEndpoint, providerRequest, JsonOptions, ct);
+
+            var content = await response.Content.ReadAsStringAsync(ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "ProRouting update failed: {Status} - {Content}",
+                    response.StatusCode, content);
+                return UpdateOrderResult.Failure(
+                    $"API error: {response.StatusCode}", ProviderName);
+            }
+
+            var updateResponse = JsonSerializer.Deserialize<ProRoutingUpdateResponse>(content, JsonOptions);
+
+            if (updateResponse is null || !updateResponse.IsSuccess)
+            {
+                return UpdateOrderResult.Failure(
+                    updateResponse?.Message ?? "Update failed", ProviderName);
+            }
+
+            _logger.LogInformation(
+                "ProRouting task updated. State: {State}",
+                updateResponse.Order?.State);
+
+            return UpdateOrderResult.Success(
+                updateResponse.Order?.State ?? "Unknown",
+                ProviderName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating ProRouting task {TaskId}", request.ExternalTaskId);
+            return UpdateOrderResult.Failure(ex.Message, ProviderName);
+        }
+    }
+
+    #endregion
+
+    #region IIgmProvider
+
+    public async Task<RaiseIssueResult> RaiseIssueAsync(
+        RaiseIssueRequest request,
+        CancellationToken ct = default)
+    {
+        if (!_options.Enabled)
+        {
+            return RaiseIssueResult.Failure("ProRouting is disabled", ProviderName);
+        }
+
+        try
+        {
+            var providerRequest = new ProRoutingIssueRequest
+            {
+                Order = new ProRoutingIssueOrderRef { Id = request.ExternalTaskId },
+                Issue = new ProRoutingIssueCategory
+                {
+                    Category = request.Category,
+                    SubCategory = request.SubCategory
+                },
+                Description = new ProRoutingIssueDescription
+                {
+                    Line1 = request.DescriptionShort,
+                    Line2 = request.DescriptionLong
+                }
+            };
+
+            _logger.LogInformation(
+                "Raising ProRouting issue for task {TaskId} ({Category}/{SubCategory})",
+                request.ExternalTaskId, request.Category, request.SubCategory);
+
+            var response = await _httpClient.PostAsJsonAsync(
+                IssueEndpoint, providerRequest, JsonOptions, ct);
+
+            var content = await response.Content.ReadAsStringAsync(ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "ProRouting issue raise failed: {Status} - {Content}",
+                    response.StatusCode, content);
+                return RaiseIssueResult.Failure(
+                    $"API error: {response.StatusCode}", ProviderName);
+            }
+
+            var issueResponse = JsonSerializer.Deserialize<ProRoutingIssueResponse>(content, JsonOptions);
+
+            if (issueResponse is null || !issueResponse.IsSuccess)
+            {
+                return RaiseIssueResult.Failure(
+                    issueResponse?.Message ?? "Issue raise failed", ProviderName);
+            }
+
+            _logger.LogInformation(
+                "ProRouting issue raised: {IssueId} ({State})",
+                issueResponse.Issue!.Id, issueResponse.Issue.State);
+
+            return RaiseIssueResult.Success(
+                issueResponse.Issue.Id!,
+                issueResponse.Issue.State ?? "Processing",
+                ProviderName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error raising ProRouting issue for task {TaskId}", request.ExternalTaskId);
+            return RaiseIssueResult.Failure(ex.Message, ProviderName);
+        }
+    }
+
+    public async Task<IssueStatusResult> GetIssueStatusAsync(
+        string externalIssueId,
+        CancellationToken ct = default)
+    {
+        if (!_options.Enabled)
+        {
+            return IssueStatusResult.Failure("ProRouting is disabled", ProviderName);
+        }
+
+        try
+        {
+            var providerRequest = new ProRoutingIssueStatusRequest
+            {
+                Issue = new ProRoutingIssueOrderRef { Id = externalIssueId }
+            };
+
+            var response = await _httpClient.PostAsJsonAsync(
+                IssueStatusEndpoint, providerRequest, JsonOptions, ct);
+
+            var content = await response.Content.ReadAsStringAsync(ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "ProRouting issue_status failed: {Status} - {Content}",
+                    response.StatusCode, content);
+                return IssueStatusResult.Failure(
+                    $"API error: {response.StatusCode}", ProviderName);
+            }
+
+            var statusResponse = JsonSerializer.Deserialize<ProRoutingIssueResponse>(content, JsonOptions);
+
+            if (statusResponse is null || !statusResponse.IsSuccess)
+            {
+                return IssueStatusResult.Failure(
+                    statusResponse?.Message ?? "Issue status fetch failed", ProviderName);
+            }
+
+            return IssueStatusResult.Success(
+                statusResponse.Issue!.Id!,
+                statusResponse.Issue.State ?? "Unknown",
+                statusResponse.Issue.Resolution?.ShortDesc,
+                statusResponse.Issue.Resolution?.LongDesc,
+                statusResponse.Issue.Resolution?.ActionTriggered,
+                statusResponse.Issue.Resolution?.RefundAmount,
+                ProviderName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting ProRouting issue status {IssueId}", externalIssueId);
+            return IssueStatusResult.Failure(ex.Message, ProviderName);
+        }
+    }
+
+    public async Task<CloseIssueResult> CloseIssueAsync(
+        CloseIssueRequest request,
+        CancellationToken ct = default)
+    {
+        if (!_options.Enabled)
+        {
+            return CloseIssueResult.Failure("ProRouting is disabled", ProviderName);
+        }
+
+        try
+        {
+            var providerRequest = new ProRoutingIssueCloseRequest
+            {
+                Issue = new ProRoutingIssueCloseDetails
+                {
+                    Id = request.ExternalIssueId,
+                    Rating = request.Rating,
+                    RefundByLsp = request.RefundByLsp,
+                    RefundToClient = request.RefundToClient
+                }
+            };
+
+            _logger.LogInformation(
+                "Closing ProRouting issue {IssueId} (rating={Rating})",
+                request.ExternalIssueId, request.Rating);
+
+            var response = await _httpClient.PostAsJsonAsync(
+                IssueCloseEndpoint, providerRequest, JsonOptions, ct);
+
+            var content = await response.Content.ReadAsStringAsync(ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "ProRouting issue_close failed: {Status} - {Content}",
+                    response.StatusCode, content);
+                return CloseIssueResult.Failure(
+                    $"API error: {response.StatusCode}", ProviderName);
+            }
+
+            var closeResponse = JsonSerializer.Deserialize<ProRoutingIssueCloseResponse>(content, JsonOptions);
+
+            if (closeResponse is null || !closeResponse.IsSuccess)
+            {
+                return CloseIssueResult.Failure(
+                    closeResponse?.Message ?? "Issue close failed", ProviderName);
+            }
+
+            return CloseIssueResult.Success(ProviderName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error closing ProRouting issue {IssueId}", request.ExternalIssueId);
+            return CloseIssueResult.Failure(ex.Message, ProviderName);
+        }
+    }
+
     #endregion
 
     #region Private Methods
@@ -309,7 +561,8 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider
                     City = request.PickupCity,
                     State = request.PickupState
                 },
-                StoreId = request.StoreId
+                StoreId = request.StoreId,
+                Otp = request.PickupCode
             },
             Drop = new ProRoutingDropDetails
             {
@@ -324,9 +577,11 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider
                     Line2 = request.DropAddressLine2,
                     City = request.DropCity,
                     State = request.DropState
-                }
+                },
+                Otp = request.DropCode
             },
             CallbackUrl = request.CallbackUrl,
+            OrderCategory = request.OrderCategory,
             OrderAmount = request.OrderAmount,
             CodAmount = request.CodAmount,
             OrderWeight = request.OrderWeight,

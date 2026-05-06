@@ -68,6 +68,24 @@ public enum DeliveryRequestStatus
     Delivered = 70,
 
     /// <summary>
+    /// RTO (Return To Origin) initiated. Triggered by LSP when delivery fails
+    /// (customer unreachable / refused). Not callable from Hivago — only set via
+    /// the ProRouting status callback.
+    /// </summary>
+    RtoInitiated = 75,
+
+    /// <summary>
+    /// Order returned to the store and confirmed via RTO OTP.
+    /// </summary>
+    RtoDelivered = 76,
+
+    /// <summary>
+    /// Order disposed by the LSP. Only valid for FoodAndBeverage orders;
+    /// Grocery / Pharma must be returned (RtoDelivered) instead.
+    /// </summary>
+    RtoDisposed = 77,
+
+    /// <summary>
     /// Cancelled before pickup.
     /// </summary>
     Cancelled = 80,

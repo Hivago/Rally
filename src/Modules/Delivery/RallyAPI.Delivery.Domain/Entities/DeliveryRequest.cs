@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using MediatR;
 using RallyAPI.Delivery.Domain.Enums;
 using RallyAPI.Delivery.Domain.Events;
@@ -29,6 +30,13 @@ public sealed class DeliveryRequest : AggregateRoot
     // Status
     public DeliveryRequestStatus Status { get; private set; }
     public FleetType? FleetType { get; private set; }
+    public OrderCategory OrderCategory { get; private set; } = OrderCategory.FoodAndBeverage;
+
+    // OTPs handed to ProRouting via /update — cleartext required by LSP.
+    // PickupCode = 6 digits shown to rider at restaurant.
+    // DropCode   = 4 digits shared with customer for delivery confirmation.
+    public string? PickupCode { get; private set; }
+    public string? DropCode { get; private set; }
 
     // Pricing
     public decimal QuotedPrice { get; private set; }
@@ -46,6 +54,11 @@ public sealed class DeliveryRequest : AggregateRoot
     public string? ExternalRiderName { get; private set; }
     public string? ExternalRiderPhone { get; private set; }
     public string? ExternalLspName { get; private set; }
+
+    // Live Tracking (populated by ProRouting Track Callback)
+    public double? LastRiderLatitude { get; private set; }
+    public double? LastRiderLongitude { get; private set; }
+    public DateTime? LastLocationUpdatedAt { get; private set; }
 
     // Pickup Location
     public double PickupLatitude { get; private set; }
@@ -74,6 +87,9 @@ public sealed class DeliveryRequest : AggregateRoot
     public DateTime? DeliveredAt { get; private set; }
     public DateTime? FailedAt { get; private set; }
     public DateTime? CancelledAt { get; private set; }
+    public DateTime? RtoInitiatedAt { get; private set; }
+    public DateTime? RtoDeliveredAt { get; private set; }
+    public DateTime? RtoDisposedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
     // Failure Info
@@ -111,7 +127,8 @@ public sealed class DeliveryRequest : AggregateRoot
         string? deliveryInstructions = null,
         DateTime? dispatchAt = null,
         decimal? distanceKm = null,
-        int? estimatedMinutes = null)
+        int? estimatedMinutes = null,
+        OrderCategory orderCategory = OrderCategory.FoodAndBeverage)
     {
         var request = new DeliveryRequest
         {
@@ -123,6 +140,9 @@ public sealed class DeliveryRequest : AggregateRoot
             Status = dispatchAt.HasValue
                 ? DeliveryRequestStatus.PendingDispatch
                 : DeliveryRequestStatus.Created,
+            OrderCategory = orderCategory,
+            PickupCode = GenerateNumericCode(6),
+            DropCode = GenerateNumericCode(4),
             RestaurantId = restaurantId,
             CustomerId = customerId,
             ItemCount = itemCount,
@@ -236,6 +256,21 @@ public sealed class DeliveryRequest : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Updates the rider's last-known GPS position from a 3PL Track Callback.
+    /// Stale updates (older than the last one we recorded) are ignored.
+    /// </summary>
+    public void UpdateLiveLocation(double latitude, double longitude, DateTime updatedAt)
+    {
+        if (LastLocationUpdatedAt.HasValue && updatedAt < LastLocationUpdatedAt.Value)
+            return;
+
+        LastRiderLatitude = latitude;
+        LastRiderLongitude = longitude;
+        LastLocationUpdatedAt = updatedAt;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void MarkRiderEnRoutePickup()
     {
         EnsureStatus(DeliveryRequestStatus.RiderAssigned, DeliveryRequestStatus.Assigned3PL);
@@ -326,6 +361,50 @@ public sealed class DeliveryRequest : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// LSP-initiated when delivery fails (customer unreachable / refused).
+    /// Only callable from a state where the order has been picked up — RTO
+    /// before pickup would just be a Cancel.
+    /// </summary>
+    public void InitiateRto(string? reason = null)
+    {
+        EnsureStatus(
+            DeliveryRequestStatus.PickedUp,
+            DeliveryRequestStatus.RiderEnRouteDrop,
+            DeliveryRequestStatus.RiderArrivedDrop,
+            DeliveryRequestStatus.WaitingForCustomer);
+
+        Status = DeliveryRequestStatus.RtoInitiated;
+        RtoInitiatedAt = DateTime.UtcNow;
+        FailureNotes = reason;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void MarkRtoDelivered()
+    {
+        EnsureStatus(DeliveryRequestStatus.RtoInitiated);
+
+        Status = DeliveryRequestStatus.RtoDelivered;
+        RtoDeliveredAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Disposed by LSP. Per ProRouting policy this is only valid for FoodAndBeverage.
+    /// </summary>
+    public void MarkRtoDisposed()
+    {
+        EnsureStatus(DeliveryRequestStatus.RtoInitiated);
+
+        if (OrderCategory != OrderCategory.FoodAndBeverage)
+            throw new InvalidOperationException(
+                $"RTO disposal is only valid for FoodAndBeverage. Current: {OrderCategory}");
+
+        Status = DeliveryRequestStatus.RtoDisposed;
+        RtoDisposedAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void TransitionToOwnFleetSearch()
     {
         EnsureStatus(DeliveryRequestStatus.Searching3PL, DeliveryRequestStatus.Assigned3PL);
@@ -391,6 +470,13 @@ public sealed class DeliveryRequest : AggregateRoot
             throw new InvalidOperationException(
                 $"Invalid status transition. Current: {Status}, Allowed: {string.Join(", ", allowedStatuses)}");
         }
+    }
+
+    private static string GenerateNumericCode(int digits)
+    {
+        var max = (int)Math.Pow(10, digits);
+        var value = RandomNumberGenerator.GetInt32(0, max);
+        return value.ToString().PadLeft(digits, '0');
     }
 
     #endregion

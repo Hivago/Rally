@@ -58,6 +58,20 @@ public sealed class DeliveryRequestConfiguration : IEntityTypeConfiguration<Deli
             .HasColumnName("fleet_type")
             .HasConversion<int>();
 
+        builder.Property(r => r.OrderCategory)
+            .HasColumnName("order_category")
+            .HasConversion<int>()
+            .HasDefaultValue(OrderCategory.FoodAndBeverage)
+            .IsRequired();
+
+        builder.Property(r => r.PickupCode)
+            .HasColumnName("pickup_code")
+            .HasMaxLength(10);
+
+        builder.Property(r => r.DropCode)
+            .HasColumnName("drop_code")
+            .HasMaxLength(10);
+
         // Pricing
         builder.Property(r => r.QuotedPrice)
             .HasColumnName("quoted_price")
@@ -104,6 +118,16 @@ public sealed class DeliveryRequestConfiguration : IEntityTypeConfiguration<Deli
         builder.Property(r => r.ExternalLspName)
             .HasColumnName("external_lsp_name")
             .HasMaxLength(100);
+
+        // Live tracking
+        builder.Property(r => r.LastRiderLatitude)
+            .HasColumnName("last_rider_latitude");
+
+        builder.Property(r => r.LastRiderLongitude)
+            .HasColumnName("last_rider_longitude");
+
+        builder.Property(r => r.LastLocationUpdatedAt)
+            .HasColumnName("last_location_updated_at");
 
         // Pickup Location
         builder.Property(r => r.PickupLatitude)
@@ -194,6 +218,15 @@ public sealed class DeliveryRequestConfiguration : IEntityTypeConfiguration<Deli
 
         builder.Property(r => r.CancelledAt)
             .HasColumnName("cancelled_at");
+
+        builder.Property(r => r.RtoInitiatedAt)
+            .HasColumnName("rto_initiated_at");
+
+        builder.Property(r => r.RtoDeliveredAt)
+            .HasColumnName("rto_delivered_at");
+
+        builder.Property(r => r.RtoDisposedAt)
+            .HasColumnName("rto_disposed_at");
 
         builder.Property(r => r.UpdatedAt)
             .HasColumnName("updated_at")

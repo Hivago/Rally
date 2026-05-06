@@ -135,15 +135,17 @@ public static class DependencyInjection
             .AddPolicyHandler((sp, _) => GetRetryPolicy(sp, options.RetryCount))
             .AddPolicyHandler(GetTimeoutPolicy(options.TimeoutSeconds));
 
-        // In ProRouting DependencyInjection.cs, add:
-
         services.AddHttpClient<IThirdPartyDeliveryProvider, ProRoutingTaskService>(client =>
         {
             client.BaseAddress = new Uri(options.BaseUrl);
-            client.DefaultRequestHeaders.Add("api-key", options.ApiKey);
+            client.DefaultRequestHeaders.Add("x-pro-api-key", options.ApiKey);
             client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
         });
 
+        // ProRoutingTaskService also implements IIgmProvider — forward the
+        // resolution so both interfaces share the same HttpClient + auth.
+        services.AddScoped<IIgmProvider>(sp =>
+            (IIgmProvider)sp.GetRequiredService<IThirdPartyDeliveryProvider>());
 
         return services;
     }

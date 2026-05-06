@@ -34,6 +34,7 @@ public static class DependencyInjection
         // Repositories
         services.AddScoped<IDeliveryQuoteRepository, DeliveryQuoteRepository>();
         services.AddScoped<IDeliveryRequestRepository, DeliveryRequestRepository>();
+        services.AddScoped<IIgmTicketRepository, IgmTicketRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Services

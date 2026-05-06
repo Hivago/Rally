@@ -39,6 +39,10 @@ internal sealed class CreateAdminCommandHandler
         if (requestingAdmin.Role != AdminRole.SuperAdmin)
             return Result.Failure<Guid>(Error.Forbidden("Only SuperAdmin can create admins."));
 
+        if (request.Role == AdminRole.SuperAdmin)
+            return Result.Failure<Guid>(
+                Error.Forbidden("SuperAdmin accounts cannot be created via the admin panel."));
+
         // Validate email
         var emailResult = Email.Create(request.Email);
         if (emailResult.IsFailure)

@@ -23,4 +23,20 @@ public sealed record RiderOverviewResponse(
     decimal? CurrentLatitude,
     decimal? CurrentLongitude,
     DateTime? LastLocationUpdate,
-    DateTime JoinedAt);
+    DateTime JoinedAt,
+
+    // Delivery stats — sourced from Orders module via IRiderOrderStatsService
+    int TotalDeliveries,
+    int CompletedDeliveries,
+    int CancelledDeliveries,
+    int OngoingDeliveries,
+
+    // Earnings — sourced from RiderPayoutLedger
+    decimal TotalEarnings,
+    decimal PendingEarnings,
+    decimal EarningsThisWeek,
+    decimal EarningsThisMonth,
+
+    // Ratings — placeholder until rider ratings module ships
+    decimal AverageRating,
+    int TotalRatings);

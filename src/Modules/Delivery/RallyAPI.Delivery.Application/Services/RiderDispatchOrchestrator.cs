@@ -205,6 +205,9 @@ public sealed class RiderDispatchOrchestrator
                 DropContactPhone = deliveryRequest.DropContactPhone,
                 OrderAmount = deliveryRequest.QuotedPrice,
                 IsOrderReady = true,
+                PickupCode = deliveryRequest.PickupCode,
+                DropCode = deliveryRequest.DropCode,
+                OrderCategory = MapOrderCategory(deliveryRequest.OrderCategory),
                 CallbackUrl = _options.WebhookUrl,
                 SelectionMode = "fastest_agent"
             }, ct);
@@ -253,6 +256,14 @@ public sealed class RiderDispatchOrchestrator
         // Rider gets X% of delivery fee
         return Math.Round(deliveryFee * _options.RiderEarningsPercentage / 100, 2);
     }
+
+    private static string MapOrderCategory(OrderCategory category) => category switch
+    {
+        OrderCategory.FoodAndBeverage => "F&B",
+        OrderCategory.Grocery => "Grocery",
+        OrderCategory.Pharma => "Pharma",
+        _ => "F&B"
+    };
 }
 
 public sealed record DispatchResult

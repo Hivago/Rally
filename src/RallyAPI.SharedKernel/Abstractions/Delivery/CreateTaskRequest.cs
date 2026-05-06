@@ -56,6 +56,23 @@ public sealed record CreateTaskRequest
     public decimal OrderWeight { get; init; } = 2; // Default 2kg for F&B
 
     /// <summary>
+    /// 6-digit OTP shown to the rider at the restaurant. Provider stores
+    /// this and validates against rider input on pickup.
+    /// </summary>
+    public string? PickupCode { get; init; }
+
+    /// <summary>
+    /// 4-digit OTP shared with the customer for delivery confirmation.
+    /// </summary>
+    public string? DropCode { get; init; }
+
+    /// <summary>
+    /// Order category — "F&amp;B" / "Grocery" / "Pharma" — required by
+    /// some 3PL providers (e.g. ProRouting). Defaults to F&amp;B.
+    /// </summary>
+    public string OrderCategory { get; init; } = "F&B";
+
+    /// <summary>
     /// Order items for provider reference.
     /// </summary>
     public IReadOnlyList<TaskOrderItem> OrderItems { get; init; } = [];
