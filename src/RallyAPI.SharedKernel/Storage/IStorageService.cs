@@ -17,6 +17,17 @@ public interface IStorageService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Server-side upload — pushes the stream directly to storage.
+    /// Used by bulk-import paths where the server holds the bytes (e.g. unzipped Excel-import images).
+    /// Returns the public CDN URL for the uploaded object.
+    /// </summary>
+    Task<string> UploadAsync(
+        Stream content,
+        string key,
+        string contentType,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Builds the public CDN URL for an already-uploaded file key.
     /// </summary>
     string BuildPublicUrl(string key);
