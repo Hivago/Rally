@@ -32,6 +32,38 @@ public class RestaurantOwnerRepository : IRestaurantOwnerRepository
             .AnyAsync(o => o.Email == email, ct);
     }
 
+    public async Task<(IReadOnlyList<RestaurantOwner> Items, int TotalCount)> GetPagedAsync(
+        bool? isActive,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = _context.RestaurantOwners.AsNoTracking().AsQueryable();
+
+        if (isActive.HasValue)
+            query = query.Where(o => o.IsActive == isActive.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(o =>
+                o.Name.ToLower().Contains(term) ||
+                o.Email.Value.ToLower().Contains(term) ||
+                o.Phone.Value.Contains(term));
+        }
+
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderByDescending(o => o.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public async Task AddAsync(RestaurantOwner owner, CancellationToken ct = default)
     {
         await _context.RestaurantOwners.AddAsync(owner, ct);

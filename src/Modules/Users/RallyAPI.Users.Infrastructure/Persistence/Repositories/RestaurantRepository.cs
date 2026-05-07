@@ -48,6 +48,23 @@ public class RestaurantRepository : IRestaurantRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, int>> GetOutletCountsByOwnerIdsAsync(
+        IReadOnlyCollection<Guid> ownerIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (ownerIds.Count == 0)
+            return new Dictionary<Guid, int>();
+
+        var counts = await _context.Restaurants
+            .AsNoTracking()
+            .Where(r => r.OwnerId != null && ownerIds.Contains(r.OwnerId.Value))
+            .GroupBy(r => r.OwnerId!.Value)
+            .Select(g => new { OwnerId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return counts.ToDictionary(x => x.OwnerId, x => x.Count);
+    }
+
     public async Task AddAsync(Restaurant restaurant, CancellationToken cancellationToken = default)
     {
         await _context.Restaurants.AddAsync(restaurant, cancellationToken);
