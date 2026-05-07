@@ -88,6 +88,35 @@ public sealed class CloudflareR2StorageService : IStorageService
     }
 
     /// <inheritdoc />
+    public async Task<string> UploadAsync(
+        Stream content,
+        string key,
+        string contentType,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var request = new PutObjectRequest
+            {
+                BucketName = _options.BucketName,
+                Key = key,
+                InputStream = content,
+                ContentType = contentType,
+                AutoCloseStream = false,
+                DisablePayloadSigning = true
+            };
+
+            await _s3.PutObjectAsync(request, ct);
+            return BuildPublicUrl(key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload object {Key} to R2", key);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
     public string BuildPublicUrl(string key)
     {
         // Trims trailing slash from base URL defensively
