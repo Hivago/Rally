@@ -24,6 +24,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
     private readonly IOrderNumberGenerator _orderNumberGenerator;
     private readonly IOrderValidationService _validationService;
     private readonly ICartRepository _cartRepository;
+    private readonly ICartCacheService _cartCache;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<PlaceOrderCommandHandler> _logger;
 
@@ -34,6 +35,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         IOrderNumberGenerator orderNumberGenerator,
         IOrderValidationService validationService,
         ICartRepository cartRepository,
+        ICartCacheService cartCache,
         IUnitOfWork unitOfWork,
         ILogger<PlaceOrderCommandHandler> logger)
     {
@@ -41,6 +43,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         _orderNumberGenerator = orderNumberGenerator;
         _validationService = validationService;
         _cartRepository = cartRepository;
+        _cartCache = cartCache;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -200,11 +203,14 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
             await _orderRepository.AddAsync(order, cancellationToken);
 
             // Clear cart after successful order — fire-and-forget deletion (non-fatal if it fails)
+            // Must invalidate Redis cache too — GetCartQueryHandler reads cache first, so a stale
+            // entry would resurface the cart to the customer after checkout.
             if (cart is not null)
             {
                 try
                 {
                     await _cartRepository.DeleteByCustomerIdAsync(command.CustomerId, cancellationToken);
+                    await _cartCache.RemoveAsync(command.CustomerId, cancellationToken);
                 }
                 catch (Exception cartEx)
                 {
