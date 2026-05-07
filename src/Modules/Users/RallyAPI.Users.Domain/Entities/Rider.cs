@@ -90,15 +90,25 @@ public sealed class Rider : AggregateRoot
         if (KycStatus != KycStatus.Verified)
             return Result.Failure(Error.Validation("KYC must be verified to go online."));
 
+        var wasOnline = IsOnline;
         IsOnline = true;
         MarkAsUpdated();
+
+        if (!wasOnline)
+            AddDomainEvent(new RiderWentOnlineEvent(Id, Name));
+
         return Result.Success();
     }
 
     public Result GoOffline()
     {
+        var wasOnline = IsOnline;
         IsOnline = false;
         MarkAsUpdated();
+
+        if (wasOnline)
+            AddDomainEvent(new RiderWentOfflineEvent(Id, Name));
+
         return Result.Success();
     }
 
@@ -268,6 +278,8 @@ public sealed class Rider : AggregateRoot
         var document = RiderKycDocument.Create(Id, documentType, fileKey, publicUrl);
         _kycDocuments.Add(document);
         UpdatedAt = DateTime.UtcNow;
+
+        AddDomainEvent(new RiderKycSubmittedEvent(Id, Name, documentType));
 
         return document;
     }
