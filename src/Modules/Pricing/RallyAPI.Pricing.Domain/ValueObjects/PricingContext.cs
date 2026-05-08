@@ -37,8 +37,8 @@ public class PricingContext
     // 3PL Quote (set by rule)
     public DeliveryQuote? ThirdPartyQuote { get; private set; }
 
-    // Calculated
-    public double DistanceKm => CalculateDistance();
+    // Calculated by the query handler using IDistanceCalculator (Google Maps + Haversine fallback)
+    public double DistanceKm { get; init; }
 
     public void SetThirdPartyQuote(
         string quoteId,
@@ -53,22 +53,4 @@ public class PricingContext
             estimatedMinutes);
     }
 
-    private double CalculateDistance()
-    {
-        const double EarthRadiusKm = 6371;
-
-        var dLat = ToRadians(CustomerLatitude - RestaurantLatitude);
-        var dLon = ToRadians(CustomerLongitude - RestaurantLongitude);
-
-        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(ToRadians(RestaurantLatitude)) *
-                Math.Cos(ToRadians(CustomerLatitude)) *
-                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
-
-        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-
-        return EarthRadiusKm * c;
-    }
-
-    private static double ToRadians(double degrees) => degrees * Math.PI / 180;
 }

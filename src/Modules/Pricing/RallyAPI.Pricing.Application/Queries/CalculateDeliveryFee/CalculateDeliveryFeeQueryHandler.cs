@@ -4,7 +4,9 @@ using RallyAPI.Pricing.Application.Abstractions;
 using RallyAPI.Pricing.Application.DTOs;
 using RallyAPI.Pricing.Domain.Abstractions;
 using RallyAPI.Pricing.Domain.ValueObjects;
+using RallyAPI.SharedKernel.Abstractions.Distance;
 using RallyAPI.SharedKernel.Results;
+using RallyAPI.SharedKernel.Utilities;
 
 namespace RallyAPI.Pricing.Application.Queries.CalculateDeliveryFee;
 
@@ -14,21 +16,36 @@ public class CalculateDeliveryFeeQueryHandler
     private readonly IPricingEngine _pricingEngine;
     private readonly IWeatherProvider _weatherProvider;
     private readonly IDemandTracker _demandTracker;
+    private readonly IDistanceCalculator _distanceCalculator;
 
     public CalculateDeliveryFeeQueryHandler(
         IPricingEngine pricingEngine,
         IWeatherProvider weatherProvider,
-        IDemandTracker demandTracker)
+        IDemandTracker demandTracker,
+        IDistanceCalculator distanceCalculator)
     {
         _pricingEngine = pricingEngine;
         _weatherProvider = weatherProvider;
         _demandTracker = demandTracker;
+        _distanceCalculator = distanceCalculator;
     }
 
     public async Task<Result<DeliveryFeeResponse>> Handle(
         CalculateDeliveryFeeQuery request,
         CancellationToken cancellationToken)
     {
+        // Compute road distance via Google Maps (Haversine fallback built into the calculator)
+        var distanceResult = await _distanceCalculator.GetDistanceAsync(
+            request.RestaurantLatitude, request.RestaurantLongitude,
+            request.CustomerLatitude, request.CustomerLongitude,
+            cancellationToken);
+
+        var distanceKm = distanceResult.IsSuccess
+            ? (double)distanceResult.DistanceKm
+            : GeoCalculator.CalculateDistanceKm(
+                request.RestaurantLatitude, request.RestaurantLongitude,
+                request.CustomerLatitude, request.CustomerLongitude);
+
         // Get external data
         var weather = await _weatherProvider.GetCurrentWeatherAsync(
             request.CustomerLatitude,
@@ -58,7 +75,8 @@ public class CalculateDeliveryFeeQueryHandler
             CustomerId = request.CustomerId,
             Weather = weather,
             CurrentOrdersPerHour = ordersPerHour,
-            PromoCode = request.PromoCode
+            PromoCode = request.PromoCode,
+            DistanceKm = distanceKm
         };
 
         // Calculate
