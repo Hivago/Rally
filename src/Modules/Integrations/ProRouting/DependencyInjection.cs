@@ -96,6 +96,7 @@
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Extensions.Http;
@@ -107,7 +108,8 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddProRoutingIntegration(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         services.Configure<ProRoutingOptions>(
             configuration.GetSection(ProRoutingOptions.SectionName));
@@ -116,22 +118,26 @@ public static class DependencyInjection
             .GetSection(ProRoutingOptions.SectionName)
             .Get<ProRoutingOptions>() ?? new ProRoutingOptions();
 
-        services.AddHttpClient<IDeliveryQuoteProvider, ProRoutingClient>((sp, client) =>
+        var clientBuilder = services.AddHttpClient<IDeliveryQuoteProvider, ProRoutingClient>((sp, client) =>
         {
             client.BaseAddress = new Uri(options.BaseUrl);
             client.DefaultRequestHeaders.Add("x-pro-api-key", options.ApiKey);
             client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
             client.DefaultRequestHeaders.Add("Accept", "application/json");
-        })
-            .ConfigurePrimaryHttpMessageHandler(() =>
+        });
+
+        // Bypass SSL validation only in Development. In Production we use the default
+        // OS trust store so bad certs fail the request.
+        if (environment.IsDevelopment())
+        {
+            clientBuilder.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
             {
-                // ⚠️ DEVELOPMENT ONLY - bypasses SSL validation
-                return new HttpClientHandler
-                {
-                    ServerCertificateCustomValidationCallback =
-                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-                };
-            })
+                ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            });
+        }
+
+        clientBuilder
             .AddPolicyHandler((sp, _) => GetRetryPolicy(sp, options.RetryCount))
             .AddPolicyHandler(GetTimeoutPolicy(options.TimeoutSeconds));
 

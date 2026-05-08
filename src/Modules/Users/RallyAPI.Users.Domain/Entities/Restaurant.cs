@@ -248,6 +248,8 @@ public sealed class Restaurant : AggregateRoot
 
     public bool IsOpenNow()
     {
+        // Local time intentional: business hours are stored in IST and compared against
+        // server wall-clock time in the same zone. UtcNow would compare different zones.
         var now = TimeOnly.FromDateTime(DateTime.Now);
         return IsActive && IsAcceptingOrders && now >= OpeningTime && now <= ClosingTime;
     }

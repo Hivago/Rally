@@ -37,8 +37,9 @@ public static class DependencyInjection
         services.AddScoped<IIgmTicketRepository, IgmTicketRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
-        // Services
-        services.AddScoped<RallyAPI.SharedKernel.Abstractions.Notifications.IRiderNotificationService, Services.StubRiderNotificationService>();
+        // IRiderNotificationService is registered by the host (SignalRRiderNotificationService).
+        // Do not register the stub here — it would silently mask the real implementation
+        // if the host-level override were ever removed.
 
         return services;
     }
