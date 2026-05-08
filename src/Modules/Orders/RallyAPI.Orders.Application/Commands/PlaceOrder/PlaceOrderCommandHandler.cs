@@ -77,6 +77,25 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
                 return Result.Failure<OrderDto>(restaurantValidation.Error);
             }
 
+            // Step 3b: Validate delivery radius (delivery orders only)
+            if (command.Request.FulfillmentType == Domain.Enums.FulfillmentType.Delivery
+                && command.Request.DeliveryAddress is not null)
+            {
+                var addr = command.Request.DeliveryAddress;
+                var distanceValidation = await _validationService.ValidateDeliveryDistanceAsync(
+                    (double)command.Request.PickupLatitude,
+                    (double)command.Request.PickupLongitude,
+                    (double)addr.Latitude,
+                    (double)addr.Longitude,
+                    cancellationToken);
+
+                if (distanceValidation.IsFailure)
+                {
+                    _logger.LogWarning("Delivery distance validation failed: {Error}", distanceValidation.Error);
+                    return Result.Failure<OrderDto>(distanceValidation.Error);
+                }
+            }
+
             // Step 4: Resolve order items — prefer cart over request body
             var cart = await _cartRepository.GetByCustomerIdAsync(command.CustomerId, cancellationToken);
 

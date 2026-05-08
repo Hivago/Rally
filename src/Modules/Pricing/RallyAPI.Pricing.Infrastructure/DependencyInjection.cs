@@ -12,6 +12,8 @@ using RallyAPI.Pricing.Infrastructure.Providers;
 using RallyAPI.Pricing.Infrastructure.Repositories;
 using RallyAPI.SharedKernel.Abstractions.Pricing;
 using RallyAPI.SharedKernel.Infrastructure;
+using RallyAPI.Pricing.Infrastructure.Options;
+using RallyAPI.Pricing.Infrastructure.Rules;
 using RallyAPI.Pricing.Infrastructure.Services;
 
 namespace RallyAPI.Pricing.Infrastructure;
@@ -44,9 +46,14 @@ public static class DependencyInjection
         services.AddScoped<IPricingConfigRepository, PricingConfigRepository>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<PricingDbContext>());
 
+        // Per-km pricing config
+        services.Configure<PerKmPricingOptions>(
+            configuration.GetSection(PerKmPricingOptions.Section));
+
         // Rules (easy to add/remove)
         services.AddScoped<IPricingRule, BaseFeeRule>();
         services.AddScoped<IPricingRule, DistanceRule>();
+        services.AddScoped<IPricingRule, PerKmDistanceRule>();
         services.AddScoped<IPricingRule, TimeSurgeRule>();
         services.AddScoped<IPricingRule, WeatherSurgeRule>();
         services.AddScoped<IPricingRule, DemandSurgeRule>();

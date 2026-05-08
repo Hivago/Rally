@@ -1,7 +1,9 @@
 ﻿using Microsoft.Extensions.Logging;
 using RallyAPI.Orders.Domain.Abstractions;
 using RallyAPI.Orders.Domain.Errors;
+using RallyAPI.SharedKernel.Abstractions.Distance;
 using RallyAPI.SharedKernel.Results;
+using RallyAPI.SharedKernel.Utilities;
 
 namespace RallyAPI.Orders.Infrastructure.Services;
 
@@ -11,15 +13,18 @@ namespace RallyAPI.Orders.Infrastructure.Services;
 /// </summary>
 public sealed class OrderValidationService : IOrderValidationService
 {
+    private readonly IDistanceCalculator _distanceCalculator;
     private readonly ILogger<OrderValidationService> _logger;
 
-    // Configuration - can be moved to appsettings
-    private static readonly TimeSpan DefaultOpeningTime = TimeSpan.FromHours(8);  // 8 AM
-    private static readonly TimeSpan DefaultClosingTime = TimeSpan.FromHours(23); // 11 PM
+    private static readonly TimeSpan DefaultOpeningTime = TimeSpan.FromHours(8);
+    private static readonly TimeSpan DefaultClosingTime = TimeSpan.FromHours(23);
     private const double MaxDeliveryDistanceKm = 15.0;
 
-    public OrderValidationService(ILogger<OrderValidationService> logger)
+    public OrderValidationService(
+        IDistanceCalculator distanceCalculator,
+        ILogger<OrderValidationService> logger)
     {
+        _distanceCalculator = distanceCalculator;
         _logger = logger;
     }
 
@@ -122,5 +127,33 @@ public sealed class OrderValidationService : IOrderValidationService
 
         _logger.LogDebug("Delivery address validated (MVP - coordinate check only)");
         return Task.FromResult(Result.Success());
+    }
+
+    public async Task<Result> ValidateDeliveryDistanceAsync(
+        double restaurantLat,
+        double restaurantLon,
+        double deliveryLat,
+        double deliveryLon,
+        CancellationToken cancellationToken = default)
+    {
+        var googleResult = await _distanceCalculator.GetDistanceAsync(
+            restaurantLat, restaurantLon, deliveryLat, deliveryLon, cancellationToken);
+
+        // Fall back to Haversine if Google Maps call fails
+        var distanceKm = googleResult.IsSuccess
+            ? (double)googleResult.DistanceKm
+            : GeoCalculator.CalculateDistanceKm(restaurantLat, restaurantLon, deliveryLat, deliveryLon);
+
+        if (distanceKm > MaxDeliveryDistanceKm)
+        {
+            _logger.LogWarning(
+                "Delivery address is {Distance:F1} km from restaurant (max {Max} km, Google: {GoogleOk})",
+                distanceKm, MaxDeliveryDistanceKm, googleResult.IsSuccess);
+            return Result.Failure(OrderErrors.RestaurantOutsideDeliveryArea(distanceKm));
+        }
+
+        _logger.LogDebug("Delivery distance OK: {Distance:F1} km (Google: {GoogleOk})",
+            distanceKm, googleResult.IsSuccess);
+        return Result.Success();
     }
 }

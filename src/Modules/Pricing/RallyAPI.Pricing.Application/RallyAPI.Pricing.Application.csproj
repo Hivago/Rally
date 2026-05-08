@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RallyAPI.Pricing.Domain\RallyAPI.Pricing.Domain.csproj" />
+    <ProjectReference Include="..\..\..\RallyAPI.SharedKernel\RallyAPI.SharedKernel.csproj" />
   </ItemGroup>
 
 </Project>

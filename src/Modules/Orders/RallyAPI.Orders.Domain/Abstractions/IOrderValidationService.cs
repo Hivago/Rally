@@ -39,4 +39,14 @@ public interface IOrderValidationService
         double longitude,
         string pincode,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Validates delivery address is within the restaurant's delivery radius using road distance.
+    /// </summary>
+    Task<Result> ValidateDeliveryDistanceAsync(
+        double restaurantLat,
+        double restaurantLon,
+        double deliveryLat,
+        double deliveryLon,
+        CancellationToken cancellationToken = default);
 }
