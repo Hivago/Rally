@@ -139,11 +139,18 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmPro
                 })
                 .ToList();
 
-            // Parse validity
+            // Parse validity. ProRouting returns timestamps without a TZ suffix, so DateTime.TryParse
+            // produces Kind=Unspecified which Postgres rejects on `timestamp with time zone` columns.
+            // Force UTC: assume universal, then convert to UTC kind.
             DateTime validUntil = DateTime.UtcNow.AddMinutes(5);
-            if (!string.IsNullOrEmpty(quotesResponse.ValidUntil))
+            if (!string.IsNullOrEmpty(quotesResponse.ValidUntil)
+                && DateTime.TryParse(
+                    quotesResponse.ValidUntil,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                    out var parsed))
             {
-                DateTime.TryParse(quotesResponse.ValidUntil, out validUntil);
+                validUntil = parsed;
             }
 
             _logger.LogInformation(

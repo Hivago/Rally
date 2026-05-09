@@ -86,7 +86,7 @@ public sealed class DeliveryQuote : BaseEntity
             FleetType = FleetType.OwnFleet,
             ProviderName = "Rally",
             CreatedAt = DateTime.UtcNow,
-            ExpiresAt = expiresAt,
+            ExpiresAt = NormalizeToUtc(expiresAt),
             BreakdownJson = breakdownJson
         };
     }
@@ -124,9 +124,20 @@ public sealed class DeliveryQuote : BaseEntity
             ProviderName = providerName,
             ProviderQuoteId = providerQuoteId,
             CreatedAt = DateTime.UtcNow,
-            ExpiresAt = expiresAt
+            ExpiresAt = NormalizeToUtc(expiresAt)
         };
     }
+
+    /// <summary>
+    /// Postgres `timestamp with time zone` rejects DateTime.Kind=Unspecified or Local.
+    /// Coerce any caller's value to UTC so we never crash on save.
+    /// </summary>
+    private static DateTime NormalizeToUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
 
     public void MarkAsUsed(Guid orderId)
     {
