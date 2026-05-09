@@ -272,14 +272,27 @@ public sealed class Order : AggregateRoot
 
     /// <summary>
     /// Marks order as being prepared.
+    /// Accepts both Confirmed → Preparing (chain-restaurant 2-step path)
+    /// and Paid → Preparing (collapsed single-step accept flow).
+    /// When called directly from Paid, ConfirmedAt is set and OrderConfirmedEvent
+    /// is also emitted so downstream consumers (delivery dispatch, customer
+    /// "confirmed" push, admin feed) fire exactly as they did before the collapse.
     /// </summary>
     public void StartPreparing()
     {
         EnsureValidTransition(OrderStatus.Preparing);
 
+        var skippedConfirmed = Status == OrderStatus.Paid;
+
         Status = OrderStatus.Preparing;
         PreparingAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
+
+        if (skippedConfirmed)
+        {
+            ConfirmedAt = DateTime.UtcNow;
+            AddDomainEvent(new OrderConfirmedEvent(Id, OrderNumber.Value, RestaurantId, CustomerId));
+        }
 
         AddDomainEvent(new OrderPreparingEvent(Id, OrderNumber.Value));
     }
@@ -445,7 +458,10 @@ public sealed class Order : AggregateRoot
         return Status switch
         {
             OrderStatus.Pending => new[] { OrderStatus.Paid, OrderStatus.Cancelled },
-            OrderStatus.Paid => new[] { OrderStatus.Confirmed, OrderStatus.Rejected, OrderStatus.Cancelled },
+            // Paid → Preparing is the collapsed single-step accept flow used today.
+            // Paid → Confirmed is kept for future chain-restaurant 2-step flow that
+            // needs an explicit accept-then-prepare gate (e.g., Domino's-style queues).
+            OrderStatus.Paid => new[] { OrderStatus.Preparing, OrderStatus.Confirmed, OrderStatus.Rejected, OrderStatus.Cancelled },
             OrderStatus.Confirmed => new[] { OrderStatus.Preparing, OrderStatus.Cancelled },
             OrderStatus.Preparing => new[] { OrderStatus.ReadyForPickup },
             OrderStatus.ReadyForPickup => FulfillmentType == FulfillmentType.Pickup
