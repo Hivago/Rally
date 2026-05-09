@@ -68,7 +68,7 @@ builder.Services.AddCatalogModule(builder.Configuration);
 builder.Services.AddOrdersModule(builder.Configuration);
 
 // Add ProRouting Integration
-builder.Services.AddProRoutingIntegration(builder.Configuration);
+builder.Services.AddProRoutingIntegration(builder.Configuration, builder.Environment);
 
 // Add Delivery Module
 builder.Services.AddDeliveryModule(builder.Configuration);

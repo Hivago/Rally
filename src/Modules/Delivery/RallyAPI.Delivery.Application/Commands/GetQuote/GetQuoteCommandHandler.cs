@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using RallyAPI.Delivery.Application.DTOs;
@@ -6,6 +6,7 @@ using RallyAPI.Delivery.Domain.Abstractions;
 using RallyAPI.Delivery.Domain.Entities;
 using RallyAPI.Delivery.Domain.Enums;
 using RallyAPI.SharedKernel.Abstractions.Delivery;
+using RallyAPI.SharedKernel.Abstractions.Geocoding;
 using RallyAPI.SharedKernel.Abstractions.Pricing;
 using RallyAPI.SharedKernel.Abstractions.Riders;
 using RallyAPI.SharedKernel.Results;
@@ -18,6 +19,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
     private readonly IDeliveryPricingCalculator _pricingCalculator;
     private readonly IThirdPartyDeliveryProvider _thirdPartyProvider;
     private readonly IDeliveryQuoteRepository _quoteRepository;
+    private readonly IGeocodingService _geocodingService;
     private readonly ILogger<GetQuoteCommandHandler> _logger;
 
     private const double SearchRadiusKm = 5.0;
@@ -27,12 +29,14 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         IDeliveryPricingCalculator pricingCalculator,
         IThirdPartyDeliveryProvider thirdPartyProvider,
         IDeliveryQuoteRepository quoteRepository,
+        IGeocodingService geocodingService,
         ILogger<GetQuoteCommandHandler> logger)
     {
         _riderQueryService = riderQueryService;
         _pricingCalculator = pricingCalculator;
         _thirdPartyProvider = thirdPartyProvider;
         _quoteRepository = quoteRepository;
+        _geocodingService = geocodingService;
         _logger = logger;
     }
 
@@ -43,6 +47,9 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         _logger.LogInformation(
             "Getting delivery quote for restaurant {RestaurantId}, City: {City}",
             request.RestaurantId, request.City);
+
+        // Resolve missing pincode/city via reverse geocoding so the UI doesn't have to.
+        var (pickupPincode, dropPincode, city) = await ResolveLocationFieldsAsync(request, cancellationToken);
 
         // Check if own fleet is available
         var ownFleetAvailable = await _riderQueryService.IsOwnFleetAvailableAsync(
@@ -56,12 +63,12 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         if (ownFleetAvailable)
         {
             _logger.LogDebug("Own fleet available, calculating own fleet price");
-            quote = await CreateOwnFleetQuote(request, cancellationToken);
+            quote = await CreateOwnFleetQuote(request, pickupPincode, dropPincode, city, cancellationToken);
         }
         else
         {
             _logger.LogDebug("Own fleet not available, getting 3PL quote");
-            var thirdPartyQuote = await CreateThirdPartyQuote(request, cancellationToken);
+            var thirdPartyQuote = await CreateThirdPartyQuote(request, pickupPincode, dropPincode, city, cancellationToken);
 
             if (thirdPartyQuote is null)
             {
@@ -82,8 +89,60 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         return Result.Success(MapToDto(quote));
     }
 
+    private async Task<(string PickupPincode, string DropPincode, string City)> ResolveLocationFieldsAsync(
+        GetQuoteCommand request,
+        CancellationToken ct)
+    {
+        var pickupPincode = request.PickupPincode;
+        var dropPincode = request.DropPincode;
+        var city = request.City;
+
+        // Reverse geocode pickup if pickup pincode or city missing
+        if (string.IsNullOrWhiteSpace(pickupPincode) || string.IsNullOrWhiteSpace(city))
+        {
+            var pickup = await _geocodingService.ReverseGeocodeAsync(
+                request.PickupLatitude, request.PickupLongitude, ct);
+
+            if (pickup.IsSuccess)
+            {
+                pickupPincode ??= pickup.Pincode;
+                city ??= pickup.Locality;
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Pickup reverse-geocode failed at ({Lat},{Lng}): {Error}",
+                    request.PickupLatitude, request.PickupLongitude, pickup.Error);
+            }
+        }
+
+        // Reverse geocode drop if drop pincode missing
+        if (string.IsNullOrWhiteSpace(dropPincode))
+        {
+            var drop = await _geocodingService.ReverseGeocodeAsync(
+                request.DropLatitude, request.DropLongitude, ct);
+
+            if (drop.IsSuccess)
+            {
+                dropPincode ??= drop.Pincode;
+                city ??= drop.Locality;
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Drop reverse-geocode failed at ({Lat},{Lng}): {Error}",
+                    request.DropLatitude, request.DropLongitude, drop.Error);
+            }
+        }
+
+        return (pickupPincode ?? string.Empty, dropPincode ?? string.Empty, city ?? string.Empty);
+    }
+
     private async Task<DeliveryQuote> CreateOwnFleetQuote(
         GetQuoteCommand request,
+        string pickupPincode,
+        string dropPincode,
+        string city,
         CancellationToken ct)
     {
         var priceResult = await _pricingCalculator.CalculateAsync(
@@ -93,7 +152,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
                 PickupLongitude = request.PickupLongitude,
                 DropLatitude = request.DropLatitude,
                 DropLongitude = request.DropLongitude,
-                City = request.City,
+                City = city,
                 OrderAmount = request.OrderAmount,
                 RestaurantId = request.RestaurantId
             }, ct);
@@ -106,11 +165,11 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             id: Guid.NewGuid(),
             pickupLat: request.PickupLatitude,
             pickupLng: request.PickupLongitude,
-            pickupPincode: request.PickupPincode,
+            pickupPincode: pickupPincode,
             dropLat: request.DropLatitude,
             dropLng: request.DropLongitude,
-            dropPincode: request.DropPincode,
-            city: request.City,
+            dropPincode: dropPincode,
+            city: city,
             orderAmount: request.OrderAmount,
             restaurantId: request.RestaurantId,
             distanceKm: priceResult.DistanceKm,
@@ -125,6 +184,9 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
 
     private async Task<DeliveryQuote?> CreateThirdPartyQuote(
         GetQuoteCommand request,
+        string pickupPincode,
+        string dropPincode,
+        string city,
         CancellationToken ct)
     {
         var quotesResult = await _thirdPartyProvider.GetQuotesAsync(
@@ -132,11 +194,11 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             {
                 PickupLatitude = request.PickupLatitude,
                 PickupLongitude = request.PickupLongitude,
-                PickupPincode = request.PickupPincode,
+                PickupPincode = pickupPincode,
                 DropLatitude = request.DropLatitude,
                 DropLongitude = request.DropLongitude,
-                DropPincode = request.DropPincode,
-                City = request.City,
+                DropPincode = dropPincode,
+                City = city,
                 OrderAmount = request.OrderAmount
             }, ct);
 
@@ -153,11 +215,11 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             id: Guid.NewGuid(),
             pickupLat: request.PickupLatitude,
             pickupLng: request.PickupLongitude,
-            pickupPincode: request.PickupPincode,
+            pickupPincode: pickupPincode,
             dropLat: request.DropLatitude,
             dropLng: request.DropLongitude,
-            dropPincode: request.DropPincode,
-            city: request.City,
+            dropPincode: dropPincode,
+            city: city,
             orderAmount: request.OrderAmount,
             restaurantId: request.RestaurantId,
             price: bestQuote.PriceForward,
