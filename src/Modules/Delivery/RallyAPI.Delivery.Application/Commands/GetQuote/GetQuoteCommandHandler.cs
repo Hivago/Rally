@@ -58,25 +58,29 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             SearchRadiusKm,
             cancellationToken);
 
-        DeliveryQuote quote;
+        DeliveryQuote? quote = null;
 
         if (ownFleetAvailable)
         {
             _logger.LogDebug("Own fleet available, calculating own fleet price");
             quote = await CreateOwnFleetQuote(request, pickupPincode, dropPincode, city, cancellationToken);
-        }
-        else
-        {
-            _logger.LogDebug("Own fleet not available, getting 3PL quote");
-            var thirdPartyQuote = await CreateThirdPartyQuote(request, pickupPincode, dropPincode, city, cancellationToken);
 
-            if (thirdPartyQuote is null)
+            if (quote is null)
+            {
+                _logger.LogWarning("Own fleet price calculation failed, falling back to 3PL");
+            }
+        }
+
+        if (quote is null)
+        {
+            _logger.LogDebug("Getting 3PL quote");
+            quote = await CreateThirdPartyQuote(request, pickupPincode, dropPincode, city, cancellationToken);
+
+            if (quote is null)
             {
                 return Result.Failure<DeliveryQuoteDto>(
                     Error.Validation("No delivery options available for this location."));
             }
-
-            quote = thirdPartyQuote;
         }
 
         // Save quote
@@ -138,7 +142,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         return (pickupPincode ?? string.Empty, dropPincode ?? string.Empty, city ?? string.Empty);
     }
 
-    private async Task<DeliveryQuote> CreateOwnFleetQuote(
+    private async Task<DeliveryQuote?> CreateOwnFleetQuote(
         GetQuoteCommand request,
         string pickupPincode,
         string dropPincode,
@@ -156,6 +160,14 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
                 OrderAmount = request.OrderAmount,
                 RestaurantId = request.RestaurantId
             }, ct);
+
+        if (!priceResult.IsSuccess)
+        {
+            _logger.LogWarning(
+                "Own-fleet pricing failed: {Error}",
+                priceResult.ErrorMessage);
+            return null;
+        }
 
         var breakdownJson = priceResult.Breakdown.Any()
             ? JsonSerializer.Serialize(priceResult.Breakdown)
