@@ -125,6 +125,13 @@ public sealed class OrderStatusSignalRHandler :
 
     public async Task Handle(OrderRejectedEvent notification, CancellationToken ct)
     {
+        // Initial cancellation push — does NOT promise a specific refund timeline.
+        // OrderRefundOrchestrator pushes a follow-up `RefundInitiated` event with the
+        // 5–7 day promise once PayU has actually accepted the refund.
+        var detail = string.IsNullOrWhiteSpace(notification.Reason)
+            ? "The restaurant could not accept your order."
+            : $"The restaurant could not accept your order: {notification.Reason}.";
+
         await PushToCustomer(notification.CustomerId, new
         {
             orderId      = notification.OrderId,
@@ -133,24 +140,25 @@ public sealed class OrderStatusSignalRHandler :
             reason       = notification.Reason,
             initiator    = "Restaurant",
             isRefundable = true,
-            message      = string.IsNullOrWhiteSpace(notification.Reason)
-                ? "The restaurant could not accept your order. A refund will be issued."
-                : $"The restaurant could not accept your order: {notification.Reason}. A refund will be issued."
+            message      = $"{detail} We're processing your refund."
         }, ct);
     }
 
+    // Initial cancellation messages — describe what happened and (where applicable)
+    // that a refund is being processed. The firm "refund initiated, X business days"
+    // promise lives in OrderRefundOrchestrator and only fires after PayU confirms.
     private static string BuildCancelMessage(CancellationReason reason) => reason switch
     {
-        CancellationReason.CustomerRequested    => "Your order was cancelled at your request.",
-        CancellationReason.RestaurantUnavailable => "The restaurant could not confirm your order in time. A refund will be issued.",
-        CancellationReason.ItemsOutOfStock      => "Some items are out of stock. A refund will be issued.",
-        CancellationReason.RestaurantClosed     => "The restaurant is closed. A refund will be issued.",
-        CancellationReason.NoRidersAvailable    => "We could not find a delivery partner. A refund will be issued.",
+        CancellationReason.CustomerRequested    => "Your order was cancelled at your request. We're processing your refund.",
+        CancellationReason.RestaurantUnavailable => "The restaurant could not confirm your order in time. We're processing your refund.",
+        CancellationReason.ItemsOutOfStock      => "Some items are out of stock. We're processing your refund.",
+        CancellationReason.RestaurantClosed     => "The restaurant is closed. We're processing your refund.",
+        CancellationReason.NoRidersAvailable    => "We could not find a delivery partner. We're processing your refund.",
         CancellationReason.PaymentFailed        => "Your payment could not be processed.",
         CancellationReason.PaymentTimeout       => "Payment was not completed in time, so the order was cancelled.",
-        CancellationReason.DeliveryAddressIssue => "There was an issue with the delivery address. A refund will be issued.",
-        CancellationReason.Timeout              => "The order timed out before it could be fulfilled. A refund will be issued.",
-        CancellationReason.SystemError          => "A system error cancelled your order. A refund will be issued.",
+        CancellationReason.DeliveryAddressIssue => "There was an issue with the delivery address. We're processing your refund.",
+        CancellationReason.Timeout              => "The order timed out before it could be fulfilled. We're processing your refund.",
+        CancellationReason.SystemError          => "A system error cancelled your order. We're processing your refund.",
         CancellationReason.FraudSuspected       => "Your order was cancelled.",
         _                                        => "Your order was cancelled."
     };
