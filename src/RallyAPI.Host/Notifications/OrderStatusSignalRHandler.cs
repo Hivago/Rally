@@ -125,9 +125,15 @@ public sealed class OrderStatusSignalRHandler :
 
     public async Task Handle(OrderRejectedEvent notification, CancellationToken ct)
     {
-        // Initial cancellation push — does NOT promise a specific refund timeline.
-        // OrderRefundOrchestrator pushes a follow-up `RefundInitiated` event with the
-        // 5–7 day promise once PayU has actually accepted the refund.
+        // Customer-facing label: surface restaurant rejection as a Cancelled order
+        // (with restaurant as the initiator) so the customer UI has a single
+        // off-ramp shape — "Cancelled, reason: …" — regardless of whether the
+        // backend status is Rejected or Cancelled. Internal status stays Rejected
+        // for analytics; only the SignalR payload normalizes the label.
+        //
+        // This push does NOT promise a specific refund timeline. OrderRefundOrchestrator
+        // pushes a follow-up `RefundInitiated` event with the 5–7 day promise once
+        // PayU has actually accepted the refund.
         var detail = string.IsNullOrWhiteSpace(notification.Reason)
             ? "The restaurant could not accept your order."
             : $"The restaurant could not accept your order: {notification.Reason}.";
@@ -136,7 +142,7 @@ public sealed class OrderStatusSignalRHandler :
         {
             orderId      = notification.OrderId,
             orderNumber  = notification.OrderNumber,
-            status       = "Rejected",
+            status       = "Cancelled",
             reason       = notification.Reason,
             initiator    = "Restaurant",
             isRefundable = true,

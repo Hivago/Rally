@@ -110,11 +110,15 @@ public sealed class OrderEdgeCaseTests : IntegrationTestBase
         }
     }
 
-    // ─── 4. Reject already-confirmed order ───────────────────────────────────────
+    // ─── 4. Reject after order has auto-promoted to Preparing ────────────────────
 
     [Fact]
-    public async Task RejectOrder_AlreadyConfirmed_Returns400()
+    public async Task RejectOrder_AfterAutoPromoteToPreparing_Returns400()
     {
+        // After /confirm, OrderConfirmedAutoPrepareHandler synchronously promotes
+        // the order to Preparing within the same request. By the time the response
+        // returns, the order is in Preparing — which is no longer rejectable, so
+        // a follow-up /reject must return 400.
         var orderId = await PlaceOrderAsync();
 
         AuthenticateAsRestaurant();

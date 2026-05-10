@@ -458,11 +458,13 @@ public sealed class Order : AggregateRoot
         return Status switch
         {
             OrderStatus.Pending => new[] { OrderStatus.Paid, OrderStatus.Cancelled },
-            // Paid → Preparing is the collapsed single-step accept flow used today.
-            // Paid → Confirmed is kept for future chain-restaurant 2-step flow that
-            // needs an explicit accept-then-prepare gate (e.g., Domino's-style queues).
+            // Paid → Confirmed is the standard accept flow. OrderConfirmedAutoPrepareHandler
+            // then promotes Confirmed → Preparing, so the restaurant only presses one button
+            // ("Accept") and the order ends up in Preparing automatically.
+            // Paid → Preparing direct is kept as a safety/admin path (StartPreparing also
+            // raises OrderConfirmedEvent if it skips Confirmed, so dispatch still fires).
             OrderStatus.Paid => new[] { OrderStatus.Preparing, OrderStatus.Confirmed, OrderStatus.Rejected, OrderStatus.Cancelled },
-            OrderStatus.Confirmed => new[] { OrderStatus.Preparing, OrderStatus.Cancelled },
+            OrderStatus.Confirmed => new[] { OrderStatus.Preparing, OrderStatus.Rejected, OrderStatus.Cancelled },
             OrderStatus.Preparing => new[] { OrderStatus.ReadyForPickup },
             OrderStatus.ReadyForPickup => FulfillmentType == FulfillmentType.Pickup
                 ? new[] { OrderStatus.Delivered }

@@ -10,8 +10,9 @@ namespace RallyAPI.Orders.Application.EventHandlers;
 
 /// <summary>
 /// When an order is paid, check if the restaurant has auto-accept enabled.
-/// If so, immediately move the order into Preparing (collapsed single-step accept flow)
-/// without waiting for the restaurant to manually press Accept.
+/// If so, move the order into Confirmed without waiting for the restaurant
+/// to manually press Accept. OrderConfirmedAutoPrepareHandler then auto-
+/// promotes Confirmed → Preparing, so the end visible state is Preparing.
 /// </summary>
 public sealed class OrderPaidAutoAcceptHandler : INotificationHandler<OrderPaidEvent>
 {
@@ -47,14 +48,14 @@ public sealed class OrderPaidAutoAcceptHandler : INotificationHandler<OrderPaidE
 
         try
         {
-            // StartPreparing handles Paid → Preparing directly and also raises
-            // OrderConfirmedEvent so delivery dispatch + customer "confirmed" push fire.
-            order.StartPreparing();
+            // Move to Confirmed. OrderConfirmedAutoPrepareHandler picks this up
+            // via OrderConfirmedEvent and promotes Confirmed → Preparing.
+            order.Confirm();
             _orderRepository.Update(order);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Order {OrderNumber} auto-accepted (Paid → Preparing) for restaurant {RestaurantId}",
+                "Order {OrderNumber} auto-accepted (Paid → Confirmed) for restaurant {RestaurantId}",
                 notification.OrderNumber, notification.RestaurantId);
         }
         catch (Exception ex)
