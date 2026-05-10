@@ -214,12 +214,25 @@ public class OrderAggregateTests
     }
 
     [Fact]
-    public void Reject_WhenOrderIsConfirmed_ShouldThrow()
+    public void Reject_WhenOrderIsConfirmed_ShouldTransitionToRejected()
     {
         var order = CreatePaidOrder();
         order.Confirm();
 
-        var act = () => order.Reject("Item unavailable");
+        order.Reject("Item unavailable");
+
+        order.Status.Should().Be(OrderStatus.Rejected);
+        order.RejectionReason.Should().Be("Item unavailable");
+        order.RejectedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Reject_WhenOrderIsPreparing_ShouldThrow()
+    {
+        var order = CreatePaidOrder();
+        order.StartPreparing();
+
+        var act = () => order.Reject("Too late");
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -290,7 +303,7 @@ public class OrderAggregateTests
     }
 
     [Fact]
-    public void GetValidTransitions_WhenPaid_ShouldReturnConfirmedRejectedCancelled()
+    public void GetValidTransitions_WhenPaid_ShouldReturnPreparingConfirmedRejectedCancelled()
     {
         var order = CreatePaidOrder();
 
@@ -298,10 +311,22 @@ public class OrderAggregateTests
 
         transitions.Should().BeEquivalentTo(new[]
         {
+            OrderStatus.Preparing,
             OrderStatus.Confirmed,
             OrderStatus.Rejected,
             OrderStatus.Cancelled
         });
+    }
+
+    [Fact]
+    public void GetValidTransitions_WhenConfirmed_ShouldIncludeRejected()
+    {
+        var order = CreatePaidOrder();
+        order.Confirm();
+
+        var transitions = order.GetValidTransitions();
+
+        transitions.Should().Contain(OrderStatus.Rejected);
     }
 
     [Fact]

@@ -87,10 +87,16 @@ public static class OrderStatusExtensions
     };
 
     /// <summary>
-    /// Checks if order can be rejected by restaurant
+    /// Checks if order can be rejected by restaurant.
+    /// Allowed up to (but not including) Preparing — once the kitchen has
+    /// started cooking, the restaurant must use Cancel instead of Reject.
     /// </summary>
-    public static bool CanBeRejected(this OrderStatus status) =>
-        status == OrderStatus.Paid;
+    public static bool CanBeRejected(this OrderStatus status) => status switch
+    {
+        OrderStatus.Paid => true,       // Restaurant hasn't acted yet
+        OrderStatus.Confirmed => true,  // Accepted but not yet cooking
+        _ => false
+    };
 
     /// <summary>
     /// Checks if order requires refund on cancellation/rejection
