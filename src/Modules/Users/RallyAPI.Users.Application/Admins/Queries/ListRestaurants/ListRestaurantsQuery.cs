@@ -24,7 +24,7 @@ public sealed record RestaurantListItem(
     string Email,
     bool IsActive,
     bool IsAcceptingOrders,
-    decimal CommissionPercentage,
+    // decimal CommissionPercentage,   // Deprecated: percentage commission no longer surfaced. Only flat fee is used.
     decimal CommissionFlatFee,
     Guid? OwnerId,
     int TotalOrderCount,

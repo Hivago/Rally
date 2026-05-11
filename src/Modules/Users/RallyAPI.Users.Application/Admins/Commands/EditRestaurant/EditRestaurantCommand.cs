@@ -8,7 +8,7 @@ public sealed record EditRestaurantCommand(
     string? Name,
     string? Phone,
     string? AddressLine,
-    decimal? CommissionPercentage,
+    // decimal? CommissionPercentage,   // Deprecated: percentage commission no longer supported. Only flat fee is used.
     decimal? CommissionFlatFee,
     int? AvgPrepTimeMins,
     List<string>? CuisineTypes,

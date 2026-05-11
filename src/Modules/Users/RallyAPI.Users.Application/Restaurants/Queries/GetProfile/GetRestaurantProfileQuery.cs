@@ -19,5 +19,5 @@ public sealed record RestaurantProfileResponse(
     int AvgPrepTimeMins,
     TimeOnly OpeningTime,
     TimeOnly ClosingTime,
-    decimal CommissionPercentage,
+    // decimal CommissionPercentage,   // Deprecated: percentage commission no longer surfaced. Only flat fee is used.
     decimal CommissionFlatFee);

@@ -53,7 +53,7 @@ internal sealed class ListRestaurantsQueryHandler
                 r.Email.Value,
                 r.IsActive,
                 r.IsAcceptingOrders,
-                r.CommissionPercentage,
+                // r.CommissionPercentage,   // Deprecated: percentage commission no longer surfaced. Only flat fee is used.
                 r.CommissionFlatFee,
                 r.OwnerId,
                 orderCounts.TryGetValue(r.Id, out var count) ? count : 0,

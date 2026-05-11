@@ -22,7 +22,7 @@ public sealed record RestaurantDetailResponse(
     TimeOnly OpeningTime,
     TimeOnly ClosingTime,
     bool UseCustomSchedule,
-    decimal CommissionPercentage,
+    // decimal CommissionPercentage,   // Deprecated: percentage commission no longer surfaced. Only flat fee is used.
     decimal CommissionFlatFee,
     decimal MinOrderAmount,
     string? FssaiNumber,

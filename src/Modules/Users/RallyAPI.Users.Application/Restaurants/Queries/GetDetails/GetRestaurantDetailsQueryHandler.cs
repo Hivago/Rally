@@ -63,7 +63,7 @@ internal sealed class GetRestaurantDetailsQueryHandler
                 restaurant.AutoAcceptOrders,
                 restaurant.AvgPrepTimeMins,
                 restaurant.MinOrderAmount,
-                restaurant.CommissionPercentage,
+                // restaurant.CommissionPercentage,   // Deprecated: percentage commission no longer surfaced. Only flat fee is used.
                 restaurant.CommissionFlatFee),
             new RestaurantHoursSection(
                 restaurant.UseCustomSchedule,

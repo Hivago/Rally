@@ -57,7 +57,7 @@ internal sealed class GetRestaurantDetailQueryHandler
             r.OpeningTime,
             r.ClosingTime,
             r.UseCustomSchedule,
-            r.CommissionPercentage,
+            // r.CommissionPercentage,   // Deprecated: percentage commission no longer surfaced. Only flat fee is used.
             r.CommissionFlatFee,
             r.MinOrderAmount,
             r.FssaiNumber,

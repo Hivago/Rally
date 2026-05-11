@@ -45,12 +45,13 @@ internal sealed class EditRestaurantCommandHandler
                 phone);
         }
 
-        if (request.CommissionPercentage.HasValue)
-        {
-            var commissionResult = restaurant.SetCommissionPercentage(request.CommissionPercentage.Value);
-            if (commissionResult.IsFailure)
-                return commissionResult;
-        }
+        // Deprecated: percentage commission no longer supported. Only flat fee is used.
+        // if (request.CommissionPercentage.HasValue)
+        // {
+        //     var commissionResult = restaurant.SetCommissionPercentage(request.CommissionPercentage.Value);
+        //     if (commissionResult.IsFailure)
+        //         return commissionResult;
+        // }
 
         if (request.CommissionFlatFee.HasValue)
         {
