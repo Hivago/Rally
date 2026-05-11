@@ -24,6 +24,8 @@
     <ProjectReference Include="..\RallyAPI.Infrastructure\RallyAPI.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Users\RallyAPI.Users.Infrastructure\RallyAPI.Users.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Users\RallyAPI.Users.Endpoints\RallyAPI.Users.Endpoints.csproj" />
+    <ProjectReference Include="..\Modules\Marketing\RallyAPI.Marketing.Endpoints\RallyAPI.Marketing.Endpoints.csproj" />
+    <ProjectReference Include="..\Modules\Marketing\RallyAPI.Marketing.Infrastructure\RallyAPI.Marketing.Infrastructure.csproj" />
   </ItemGroup>
 
 	<ItemGroup>
