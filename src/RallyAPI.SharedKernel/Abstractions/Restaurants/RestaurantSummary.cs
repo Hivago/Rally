@@ -33,4 +33,7 @@ public sealed record RestaurantSummary
     /// Distance from the queried location in km. Null if no location was provided.
     /// </summary>
     public double? DistanceKm { get; init; }
+
+    /// <summary>When the restaurant was created. Used for "newest" sort.</summary>
+    public DateTime CreatedAt { get; init; }
 }
