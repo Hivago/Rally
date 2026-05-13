@@ -17,9 +17,10 @@ public sealed class EditRestaurantCommandValidator : AbstractValidator<EditResta
             .Matches(@"^\d{10}$").WithMessage("Phone must be a 10-digit number.")
             .When(x => x.Phone is not null);
 
-        RuleFor(x => x.CommissionPercentage)
-            .InclusiveBetween(0, 100).WithMessage("Commission percentage must be between 0 and 100.")
-            .When(x => x.CommissionPercentage.HasValue);
+        // Deprecated: percentage commission no longer supported. Only flat fee is used.
+        // RuleFor(x => x.CommissionPercentage)
+        //     .InclusiveBetween(0, 100).WithMessage("Commission percentage must be between 0 and 100.")
+        //     .When(x => x.CommissionPercentage.HasValue);
 
         RuleFor(x => x.CommissionFlatFee)
             .GreaterThanOrEqualTo(0).WithMessage("Commission flat fee must not be negative.")

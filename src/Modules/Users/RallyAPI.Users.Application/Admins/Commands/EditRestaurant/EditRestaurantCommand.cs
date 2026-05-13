@@ -8,7 +8,7 @@ public sealed record EditRestaurantCommand(
     string? Name,
     string? Phone,
     string? AddressLine,
-    decimal? CommissionPercentage,
+    // decimal? CommissionPercentage,   // Deprecated: percentage commission no longer supported. Only flat fee is used.
     decimal? CommissionFlatFee,
     int? AvgPrepTimeMins,
     List<string>? CuisineTypes,
@@ -16,4 +16,5 @@ public sealed record EditRestaurantCommand(
     bool? IsVeganFriendly,
     bool? HasJainOptions,
     decimal? MinOrderAmount,
-    string? FssaiNumber) : IRequest<Result>;
+    string? FssaiNumber,
+    bool? AcceptsPickup) : IRequest<Result>;

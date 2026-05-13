@@ -29,7 +29,7 @@ public class EditRestaurant : IEndpoint
             request.Name,
             request.Phone,
             request.AddressLine,
-            request.CommissionPercentage,
+            // request.CommissionPercentage,   // Deprecated: percentage commission no longer supported. Only flat fee is used.
             request.CommissionFlatFee,
             request.AvgPrepTimeMins,
             request.CuisineTypes,
@@ -37,7 +37,8 @@ public class EditRestaurant : IEndpoint
             request.IsVeganFriendly,
             request.HasJainOptions,
             request.MinOrderAmount,
-            request.FssaiNumber);
+            request.FssaiNumber,
+            request.AcceptsPickup);
 
         var result = await sender.Send(command, cancellationToken);
 
@@ -51,7 +52,7 @@ public record EditRestaurantRequest(
     string? Name,
     string? Phone,
     string? AddressLine,
-    decimal? CommissionPercentage,
+    // decimal? CommissionPercentage,   // Deprecated: percentage commission no longer supported. Only flat fee is used.
     decimal? CommissionFlatFee,
     int? AvgPrepTimeMins,
     List<string>? CuisineTypes,
@@ -59,4 +60,5 @@ public record EditRestaurantRequest(
     bool? IsVeganFriendly,
     bool? HasJainOptions,
     decimal? MinOrderAmount,
-    string? FssaiNumber);
+    string? FssaiNumber,
+    bool? AcceptsPickup);

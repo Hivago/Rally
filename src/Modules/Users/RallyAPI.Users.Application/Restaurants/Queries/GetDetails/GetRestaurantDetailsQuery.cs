@@ -40,7 +40,7 @@ public sealed record RestaurantOperationsSection(
     bool AutoAcceptOrders,
     int AvgPrepTimeMins,
     decimal MinOrderAmount,
-    decimal CommissionPercentage,
+    // decimal CommissionPercentage,   // Deprecated: percentage commission no longer surfaced. Only flat fee is used.
     decimal CommissionFlatFee);
 
 public sealed record RestaurantHoursSection(
@@ -58,7 +58,8 @@ public sealed record RestaurantScheduleSlotDto(
     TimeOnly ClosesAt);
 
 public sealed record RestaurantDeliverySection(
-    DeliveryMode DeliveryMode);
+    DeliveryMode DeliveryMode,
+    bool AcceptsPickup);
 
 public sealed record RestaurantNotificationsSection(
     bool EmailAlerts,

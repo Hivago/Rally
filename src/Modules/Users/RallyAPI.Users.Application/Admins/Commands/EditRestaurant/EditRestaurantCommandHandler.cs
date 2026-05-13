@@ -45,12 +45,13 @@ internal sealed class EditRestaurantCommandHandler
                 phone);
         }
 
-        if (request.CommissionPercentage.HasValue)
-        {
-            var commissionResult = restaurant.SetCommissionPercentage(request.CommissionPercentage.Value);
-            if (commissionResult.IsFailure)
-                return commissionResult;
-        }
+        // Deprecated: percentage commission no longer supported. Only flat fee is used.
+        // if (request.CommissionPercentage.HasValue)
+        // {
+        //     var commissionResult = restaurant.SetCommissionPercentage(request.CommissionPercentage.Value);
+        //     if (commissionResult.IsFailure)
+        //         return commissionResult;
+        // }
 
         if (request.CommissionFlatFee.HasValue)
         {
@@ -78,6 +79,9 @@ internal sealed class EditRestaurantCommandHandler
 
         if (request.FssaiNumber is not null)
             restaurant.SetFssaiNumber(request.FssaiNumber);
+
+        if (request.AcceptsPickup.HasValue)
+            restaurant.SetAcceptsPickup(request.AcceptsPickup.Value);
 
         _restaurantRepository.Update(restaurant, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

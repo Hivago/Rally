@@ -235,6 +235,12 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<bool>("AcceptsPickup")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("accepts_pickup");
+
                     b.Property<string>("AddressLine")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -680,106 +686,6 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                     b.ToTable("riders", "users");
                 });
 
-            modelBuilder.Entity("RallyAPI.Users.Domain.Entities.RiderPayoutLedger", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<decimal>("BaseFare")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasDefaultValue(0m)
-                        .HasColumnName("base_fare");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime>("CycleEndUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("cycle_end");
-
-                    b.Property<DateTime>("CycleStartUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("cycle_start");
-
-                    b.Property<int>("DeliveryCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0)
-                        .HasColumnName("delivery_count");
-
-                    b.Property<string>("FailureReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("failure_reason");
-
-                    b.Property<decimal>("NetPayable")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("net_payable");
-
-                    b.Property<DateTime?>("PaidAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("paid_at");
-
-                    b.Property<Guid>("RiderId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("rider_id");
-
-                    b.Property<string>("Status")
-                        .ValueGeneratedOnAdd()
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("Pending")
-                        .HasColumnName("status");
-
-                    b.Property<string>("StatusNote")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("status_note");
-
-                    b.Property<decimal>("SurgeFare")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasDefaultValue(0m)
-                        .HasColumnName("surge_fare");
-
-                    b.Property<decimal>("Tips")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasDefaultValue(0m)
-                        .HasColumnName("tips");
-
-                    b.Property<string>("TransactionReference")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("transaction_reference");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RiderId")
-                        .HasDatabaseName("idx_rider_payout_ledger_rider_id");
-
-                    b.HasIndex("CycleStartUtc", "CycleEndUtc", "Status")
-                        .HasDatabaseName("idx_rider_payout_ledger_cycle");
-
-                    b.HasIndex("RiderId", "CycleStartUtc", "CycleEndUtc")
-                        .IsUnique()
-                        .HasDatabaseName("idx_rider_payout_ledger_rider_cycle");
-
-                    b.ToTable("rider_payout_ledger", "users");
-                });
-
             modelBuilder.Entity("RallyAPI.Users.Domain.Entities.RiderKycDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -844,6 +750,106 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_rider_kyc_documents_rider_type");
 
                     b.ToTable("rider_kyc_documents", "users");
+                });
+
+            modelBuilder.Entity("RallyAPI.Users.Domain.Entities.RiderPayoutLedger", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("BaseFare")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("base_fare");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("CycleEndUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cycle_end");
+
+                    b.Property<DateTime>("CycleStartUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cycle_start");
+
+                    b.Property<int>("DeliveryCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("delivery_count");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<decimal>("NetPayable")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("net_payable");
+
+                    b.Property<DateTime?>("PaidAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<Guid>("RiderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("rider_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Pending")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StatusNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("status_note");
+
+                    b.Property<decimal>("SurgeFare")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("surge_fare");
+
+                    b.Property<decimal>("Tips")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("tips");
+
+                    b.Property<string>("TransactionReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("transaction_reference");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RiderId")
+                        .HasDatabaseName("idx_rider_payout_ledger_rider_id");
+
+                    b.HasIndex("CycleStartUtc", "CycleEndUtc", "Status")
+                        .HasDatabaseName("idx_rider_payout_ledger_cycle");
+
+                    b.HasIndex("RiderId", "CycleStartUtc", "CycleEndUtc")
+                        .IsUnique()
+                        .HasDatabaseName("idx_rider_payout_ledger_rider_cycle");
+
+                    b.ToTable("rider_payout_ledger", "users");
                 });
 
             modelBuilder.Entity("RallyAPI.Users.Domain.Entities.CustomerAddress", b =>

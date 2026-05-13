@@ -72,6 +72,7 @@ internal sealed class GetRestaurantsQueryHandler
             r.Latitude,
             r.Longitude,
             r.IsAcceptingOrders,
+            r.AcceptsPickup,
             r.AvgPrepTimeMins,
             r.OpeningTime.ToString("HH:mm"),
             r.ClosingTime.ToString("HH:mm"),

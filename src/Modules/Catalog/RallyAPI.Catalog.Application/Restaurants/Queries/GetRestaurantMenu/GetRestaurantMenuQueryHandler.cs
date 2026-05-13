@@ -101,6 +101,7 @@ internal sealed class GetRestaurantMenuQueryHandler
             restaurant.Id,
             restaurant.Name,
             restaurant.IsAcceptingOrders,
+            restaurant.AcceptsPickup,
             restaurant.AvgPrepTimeMins,
             menuResponses);
     }

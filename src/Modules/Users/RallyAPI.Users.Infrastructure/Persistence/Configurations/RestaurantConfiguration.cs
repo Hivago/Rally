@@ -238,6 +238,13 @@ public class RestaurantConfiguration : IEntityTypeConfiguration<Restaurant>
             .HasDefaultValue(Domain.Enums.DeliveryMode.Hivago)
             .IsRequired();
 
+        // Whether the restaurant accepts pickup orders. Defaults false so existing rows
+        // remain delivery-only — admin must opt each restaurant in.
+        builder.Property(r => r.AcceptsPickup)
+            .HasColumnName("accepts_pickup")
+            .HasDefaultValue(false)
+            .IsRequired();
+
         // Use custom weekly schedule flag
         builder.Property(r => r.UseCustomSchedule)
             .HasColumnName("use_custom_schedule")

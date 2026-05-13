@@ -26,10 +26,13 @@ public sealed class Restaurant : AggregateRoot
     public int AvgPrepTimeMins { get; private set; }
     public TimeOnly OpeningTime { get; private set; }
     public TimeOnly ClosingTime { get; private set; }
+    // Deprecated: percentage commission is no longer used by the payout pipeline or surfaced
+    // via any API. Kept on the entity + DB column so historical rows still deserialize and
+    // we retain a rollback path. Do not expose in new endpoints. Use CommissionFlatFee instead.
     public decimal CommissionPercentage { get; private set; }
 
-    // Phase 2 payouts: flat-fee commission (₹ per order) replacing percentage going forward.
-    // CommissionPercentage is kept for one release as a rollback safety net.
+    // Active commission model: flat fee (₹ per order). Set only by admin via EditRestaurant.
+    // Restaurants cannot change their own fee — no restaurant-facing endpoint writes this.
     public decimal CommissionFlatFee { get; private set; }
 
     public bool AutoAcceptOrders { get; private set; }
@@ -57,6 +60,10 @@ public sealed class Restaurant : AggregateRoot
 
     // Delivery fulfilment preference
     public DeliveryMode DeliveryMode { get; private set; } = DeliveryMode.Hivago;
+
+    // Whether this restaurant accepts customer pickup orders.
+    // Default false — existing rows stay delivery-only until admin opts them in.
+    public bool AcceptsPickup { get; private set; }
 
     // Use custom weekly schedule (slots) instead of legacy single OpeningTime/ClosingTime
     public bool UseCustomSchedule { get; private set; }
@@ -312,6 +319,8 @@ public sealed class Restaurant : AggregateRoot
         return Result.Success();
     }
 
+    // Deprecated: percentage commission is no longer applied. Kept on the entity for rollback only.
+    // No caller invokes this anymore — EditRestaurant ignores any inbound CommissionPercentage value.
     public Result SetCommissionPercentage(decimal percentage)
     {
         if (percentage < 0 || percentage > 100)
@@ -363,6 +372,13 @@ public sealed class Restaurant : AggregateRoot
     public Result SetDeliveryMode(DeliveryMode mode)
     {
         DeliveryMode = mode;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetAcceptsPickup(bool acceptsPickup)
+    {
+        AcceptsPickup = acceptsPickup;
         MarkAsUpdated();
         return Result.Success();
     }

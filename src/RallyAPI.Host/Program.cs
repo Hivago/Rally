@@ -11,6 +11,7 @@ using RallyAPI.Host.Hubs;
 using RallyAPI.Host.Services;
 using RallyAPI.Infrastructure;
 using RallyAPI.Integrations.ProRouting;
+using RallyAPI.Marketing.Endpoints;
 using RallyAPI.Orders.Endpoints;
 using RallyAPI.Pricing.Infrastructure;
 using RallyAPI.SharedKernel.Abstractions.Notifications;
@@ -72,6 +73,9 @@ builder.Services.AddProRoutingIntegration(builder.Configuration, builder.Environ
 
 // Add Delivery Module
 builder.Services.AddDeliveryModule(builder.Configuration);
+
+// Add Marketing Module (waitlist + restaurant leads)
+builder.Services.AddMarketingModule(builder.Configuration);
 
 
 // Add Authentication
@@ -253,6 +257,18 @@ builder.Services.AddRateLimiter(options =>
                 SegmentsPerWindow = 2
             }));
 
+    // Public marketing lead capture: 10 requests/minute per IP in prod.
+    // Used by /api/waitlist and /api/restaurant-leads (anonymous landing-page endpoints).
+    options.AddPolicy("lead-capture", context =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = isDev ? 100 : 10,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 2
+            }));
+
     // Admin CSV export: 5 requests/minute per admin (by JWT sub claim).
     // Falls back to remote IP if unauthenticated, but the endpoint also requires auth.
     options.AddPolicy("admin-export", context =>
@@ -283,7 +299,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:4173",
                 "https://hivago-admin.vercel.app",
                 "https://admin.hivago.in",
-                "https://restaurant.hivago.in")
+                "https://restaurant.hivago.in",
+                "https://about-hivago.vercel.app")
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
@@ -328,6 +345,7 @@ app.MapCartEndpoints();
 app.MapPaymentEndpoints();
 app.MapPayoutEndpoints();
 app.MapDeliveryModuleEndpoints();
+app.MapMarketingEndpoints();
 if (app.Environment.IsDevelopment())
 {
     app.MapPurgeOrdersByRestaurant();
@@ -366,6 +384,10 @@ using (var scope = app.Services.CreateScope())
         var pricingDb = scope.ServiceProvider.GetRequiredService<RallyAPI.Pricing.Infrastructure.Persistence.PricingDbContext>();
         logger.LogInformation("Migrating Pricing database...");
         pricingDb.Database.Migrate();
+
+        var marketingDb = scope.ServiceProvider.GetRequiredService<RallyAPI.Marketing.Infrastructure.Persistence.MarketingDbContext>();
+        logger.LogInformation("Migrating Marketing database...");
+        marketingDb.Database.Migrate();
 
         var auditDb = scope.ServiceProvider.GetRequiredService<RallyAPI.Infrastructure.Persistence.AuditDbContext>();
         logger.LogInformation("Migrating Audit database...");
