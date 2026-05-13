@@ -36,6 +36,7 @@ internal sealed class GetRestaurantProfileQueryHandler
             restaurant.Longitude,
             restaurant.IsActive,
             restaurant.IsAcceptingOrders,
+            restaurant.AcceptsPickup,
             restaurant.AvgPrepTimeMins,
             restaurant.OpeningTime,
             restaurant.ClosingTime,

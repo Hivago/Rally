@@ -37,7 +37,8 @@ public class EditRestaurant : IEndpoint
             request.IsVeganFriendly,
             request.HasJainOptions,
             request.MinOrderAmount,
-            request.FssaiNumber);
+            request.FssaiNumber,
+            request.AcceptsPickup);
 
         var result = await sender.Send(command, cancellationToken);
 
@@ -59,4 +60,5 @@ public record EditRestaurantRequest(
     bool? IsVeganFriendly,
     bool? HasJainOptions,
     decimal? MinOrderAmount,
-    string? FssaiNumber);
+    string? FssaiNumber,
+    bool? AcceptsPickup);

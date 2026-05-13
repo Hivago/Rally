@@ -8,6 +8,7 @@ using RallyAPI.Orders.Domain.Abstractions;
 using RallyAPI.Orders.Domain.Entities;
 using RallyAPI.Orders.Domain.Errors;
 using RallyAPI.Orders.Domain.ValueObjects;
+using RallyAPI.SharedKernel.Abstractions.Restaurants;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Orders.Application.Commands.PlaceOrder;
@@ -23,6 +24,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
     private readonly IOrderRepository _orderRepository;
     private readonly IOrderNumberGenerator _orderNumberGenerator;
     private readonly IOrderValidationService _validationService;
+    private readonly IRestaurantQueryService _restaurantQueryService;
     private readonly ICartRepository _cartRepository;
     private readonly ICartCacheService _cartCache;
     private readonly IUnitOfWork _unitOfWork;
@@ -34,6 +36,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         IOrderRepository orderRepository,
         IOrderNumberGenerator orderNumberGenerator,
         IOrderValidationService validationService,
+        IRestaurantQueryService restaurantQueryService,
         ICartRepository cartRepository,
         ICartCacheService cartCache,
         IUnitOfWork unitOfWork,
@@ -42,6 +45,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         _orderRepository = orderRepository;
         _orderNumberGenerator = orderNumberGenerator;
         _validationService = validationService;
+        _restaurantQueryService = restaurantQueryService;
         _cartRepository = cartRepository;
         _cartCache = cartCache;
         _unitOfWork = unitOfWork;
@@ -75,6 +79,22 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
             {
                 _logger.LogWarning("Restaurant validation failed: {Error}", restaurantValidation.Error);
                 return Result.Failure<OrderDto>(restaurantValidation.Error);
+            }
+
+            // Step 3a: Block pickup orders against restaurants that don't accept pickup.
+            // Authoritative server-side check — UI hint alone is not enough.
+            if (command.Request.FulfillmentType == Domain.Enums.FulfillmentType.Pickup)
+            {
+                var restaurantDetails = await _restaurantQueryService.GetByIdAsync(
+                    command.Request.RestaurantId, cancellationToken);
+
+                if (restaurantDetails is null || !restaurantDetails.AcceptsPickup)
+                {
+                    _logger.LogWarning(
+                        "Pickup order rejected — Restaurant {RestaurantId} does not accept pickup",
+                        command.Request.RestaurantId);
+                    return Result.Failure<OrderDto>(OrderErrors.RestaurantDoesNotAcceptPickup);
+                }
             }
 
             // Step 3b: Validate delivery radius (delivery orders only)

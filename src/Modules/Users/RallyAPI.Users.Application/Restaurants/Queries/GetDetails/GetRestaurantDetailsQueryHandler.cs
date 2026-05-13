@@ -70,7 +70,7 @@ internal sealed class GetRestaurantDetailsQueryHandler
                 restaurant.OpeningTime,
                 restaurant.ClosingTime,
                 weeklySchedule),
-            new RestaurantDeliverySection(restaurant.DeliveryMode),
+            new RestaurantDeliverySection(restaurant.DeliveryMode, restaurant.AcceptsPickup),
             new RestaurantNotificationsSection(
                 restaurant.Notifications.EmailAlerts,
                 restaurant.Notifications.BrowserNotifications,

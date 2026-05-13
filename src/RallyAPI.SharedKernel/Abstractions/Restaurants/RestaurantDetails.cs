@@ -22,4 +22,10 @@ public sealed record RestaurantDetails
     public required decimal CommissionPercentage { get; init; }
     public required decimal CommissionFlatFee { get; init; }
     public Guid? OwnerId { get; init; }
+
+    /// <summary>
+    /// True when the restaurant accepts customer pickup orders. Default false.
+    /// Consumed by Orders.PlaceOrder to reject pickup orders against delivery-only restaurants.
+    /// </summary>
+    public bool AcceptsPickup { get; init; }
 }

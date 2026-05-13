@@ -24,6 +24,12 @@ public sealed record RestaurantSummary
     public string? LogoUrl { get; init; }
 
     /// <summary>
+    /// True when the restaurant accepts customer pickup orders. Default false.
+    /// Customer UI uses this to hide/disable the Pickup tab per restaurant.
+    /// </summary>
+    public bool AcceptsPickup { get; init; }
+
+    /// <summary>
     /// Distance from the queried location in km. Null if no location was provided.
     /// </summary>
     public double? DistanceKm { get; init; }

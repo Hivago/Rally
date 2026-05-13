@@ -16,6 +16,7 @@ public sealed record RestaurantProfileResponse(
     decimal Longitude,
     bool IsActive,
     bool IsAcceptingOrders,
+    bool AcceptsPickup,
     int AvgPrepTimeMins,
     TimeOnly OpeningTime,
     TimeOnly ClosingTime,

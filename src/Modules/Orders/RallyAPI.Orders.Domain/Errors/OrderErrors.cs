@@ -76,6 +76,10 @@ public static class OrderErrors
         "Order.RestaurantNotAcceptingOrders",
         "Restaurant is not accepting orders at this time");
 
+    public static readonly Error RestaurantDoesNotAcceptPickup = Error.Create(
+        "Order.RestaurantDoesNotAcceptPickup",
+        "This restaurant does not offer pickup.");
+
     public static Error RestaurantOutsideDeliveryArea(double distance) => Error.Create(
         "Order.OutsideDeliveryArea",
         $"Delivery address is outside restaurant's delivery area ({distance:F1} km)");

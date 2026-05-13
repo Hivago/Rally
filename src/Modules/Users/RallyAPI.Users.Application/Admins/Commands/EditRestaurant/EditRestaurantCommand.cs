@@ -16,4 +16,5 @@ public sealed record EditRestaurantCommand(
     bool? IsVeganFriendly,
     bool? HasJainOptions,
     decimal? MinOrderAmount,
-    string? FssaiNumber) : IRequest<Result>;
+    string? FssaiNumber,
+    bool? AcceptsPickup) : IRequest<Result>;

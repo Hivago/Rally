@@ -58,7 +58,8 @@ public sealed record RestaurantScheduleSlotDto(
     TimeOnly ClosesAt);
 
 public sealed record RestaurantDeliverySection(
-    DeliveryMode DeliveryMode);
+    DeliveryMode DeliveryMode,
+    bool AcceptsPickup);
 
 public sealed record RestaurantNotificationsSection(
     bool EmailAlerts,

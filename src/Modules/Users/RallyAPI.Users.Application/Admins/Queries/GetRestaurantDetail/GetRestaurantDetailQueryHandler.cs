@@ -65,6 +65,7 @@ internal sealed class GetRestaurantDetailQueryHandler
             r.LogoUrl,
             r.DietaryType.ToString(),
             r.DeliveryMode.ToString(),
+            r.AcceptsPickup,
             r.IsPureVeg,
             r.IsVeganFriendly,
             r.HasJainOptions,

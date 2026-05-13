@@ -12,6 +12,7 @@ public sealed record RestaurantMenuResponse(
     Guid RestaurantId,
     string RestaurantName,
     bool IsAcceptingOrders,
+    bool AcceptsPickup,
     int AvgPrepTimeMins,
     List<MenuWithItemsResponse> Menus);
 

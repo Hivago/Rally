@@ -57,6 +57,7 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
                 HasJainOptions = r.HasJainOptions,
                 MinOrderAmount = r.MinOrderAmount,
                 LogoUrl = r.LogoUrl,
+                AcceptsPickup = r.AcceptsPickup,
                 DistanceKm = distanceKm.HasValue ? Math.Round(distanceKm.Value, 2) : null
             };
         }).ToList();
@@ -103,7 +104,8 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
             ClosingTime = r.ClosingTime,
             CommissionPercentage = r.CommissionPercentage,
             CommissionFlatFee = r.CommissionFlatFee,
-            OwnerId = r.OwnerId
+            OwnerId = r.OwnerId,
+            AcceptsPickup = r.AcceptsPickup
         };
     }
 

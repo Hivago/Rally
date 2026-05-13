@@ -30,6 +30,7 @@ public sealed record RestaurantDetailResponse(
     string? LogoUrl,
     string DietaryType,
     string DeliveryMode,
+    bool AcceptsPickup,
     bool IsPureVeg,
     bool IsVeganFriendly,
     bool HasJainOptions,

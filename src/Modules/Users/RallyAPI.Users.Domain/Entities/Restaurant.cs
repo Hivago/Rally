@@ -61,6 +61,10 @@ public sealed class Restaurant : AggregateRoot
     // Delivery fulfilment preference
     public DeliveryMode DeliveryMode { get; private set; } = DeliveryMode.Hivago;
 
+    // Whether this restaurant accepts customer pickup orders.
+    // Default false — existing rows stay delivery-only until admin opts them in.
+    public bool AcceptsPickup { get; private set; }
+
     // Use custom weekly schedule (slots) instead of legacy single OpeningTime/ClosingTime
     public bool UseCustomSchedule { get; private set; }
 
@@ -368,6 +372,13 @@ public sealed class Restaurant : AggregateRoot
     public Result SetDeliveryMode(DeliveryMode mode)
     {
         DeliveryMode = mode;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetAcceptsPickup(bool acceptsPickup)
+    {
+        AcceptsPickup = acceptsPickup;
         MarkAsUpdated();
         return Result.Success();
     }

@@ -24,6 +24,7 @@ public sealed record RestaurantListResponse(
     double Latitude,
     double Longitude,
     bool IsAcceptingOrders,
+    bool AcceptsPickup,
     int AvgPrepTimeMins,
     string OpeningTime,
     string ClosingTime,
