@@ -1,4 +1,4 @@
-﻿// File: src/Modules/Catalog/RallyAPI.Catalog.Application/Restaurants/Queries/GetRestaurants/GetRestaurantsQuery.cs
+// File: src/Modules/Catalog/RallyAPI.Catalog.Application/Restaurants/Queries/GetRestaurants/GetRestaurantsQuery.cs
 
 using MediatR;
 using RallyAPI.SharedKernel.Results;
@@ -9,13 +9,26 @@ public sealed record GetRestaurantsQuery(
     double? Latitude = null,
     double? Longitude = null,
     double? RadiusKm = null,
+    string? Search = null,
     string? Cuisines = null,
     bool? PureVeg = null,
     bool? VeganFriendly = null,
     bool? JainOptions = null,
     bool? OpenNow = null,
-    string? Sort = null
-) : IRequest<Result<List<RestaurantListResponse>>>;
+    int? MaxPrepTimeMins = null,
+    decimal? MinPrice = null,
+    decimal? MaxPrice = null,
+    bool? SupportsPickup = null,
+    string? Sort = null,
+    int Page = 1,
+    int PageSize = 20
+) : IRequest<Result<PagedRestaurantsResponse>>;
+
+public sealed record PagedRestaurantsResponse(
+    IReadOnlyList<RestaurantListResponse> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);
 
 public sealed record RestaurantListResponse(
     Guid Id,

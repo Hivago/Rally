@@ -17,6 +17,14 @@ public interface IRestaurantQueryService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Customer browse endpoint with the full filter / sort / paginate set.
+    /// Cheap filters are pushed into SQL; distance / cuisine-list / radius are applied in-memory.
+    /// </summary>
+    Task<PagedRestaurantList> BrowseAsync(
+        RestaurantListFilter filter,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Gets a single restaurant's details by ID.
     /// </summary>
     Task<RestaurantDetails?> GetByIdAsync(

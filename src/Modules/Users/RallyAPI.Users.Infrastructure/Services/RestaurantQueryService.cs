@@ -29,38 +29,7 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
 
         var restaurants = await query.ToListAsync(ct);
 
-        var summaries = restaurants.Select(r =>
-        {
-            double? distanceKm = null;
-
-            if (latitude.HasValue && longitude.HasValue)
-            {
-                distanceKm = HaversineDistance(
-                    latitude.Value, longitude.Value,
-                    (double)r.Latitude, (double)r.Longitude);
-            }
-
-            return new RestaurantSummary
-            {
-                Id = r.Id,
-                Name = r.Name,
-                AddressLine = r.AddressLine,
-                Latitude = (double)r.Latitude,
-                Longitude = (double)r.Longitude,
-                IsAcceptingOrders = r.IsAcceptingOrders,
-                AvgPrepTimeMins = r.AvgPrepTimeMins,
-                OpeningTime = r.OpeningTime,
-                ClosingTime = r.ClosingTime,
-                CuisineTypes = r.CuisineTypes,
-                IsPureVeg = r.IsPureVeg,
-                IsVeganFriendly = r.IsVeganFriendly,
-                HasJainOptions = r.HasJainOptions,
-                MinOrderAmount = r.MinOrderAmount,
-                LogoUrl = r.LogoUrl,
-                AcceptsPickup = r.AcceptsPickup,
-                DistanceKm = distanceKm.HasValue ? Math.Round(distanceKm.Value, 2) : null
-            };
-        }).ToList();
+        var summaries = restaurants.Select(r => ToSummary(r, latitude, longitude)).ToList();
 
         // Filter by radius if location provided
         if (latitude.HasValue && longitude.HasValue && radiusKm.HasValue)
@@ -76,6 +45,157 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
             : summaries.OrderBy(r => r.Name).ToList();
 
         return summaries;
+    }
+
+    public async Task<PagedRestaurantList> BrowseAsync(
+        RestaurantListFilter filter,
+        CancellationToken ct = default)
+    {
+        // Defend the service even if endpoint layer forgets to clamp.
+        var page = filter.Page < 1 ? 1 : filter.Page;
+        var pageSize = filter.PageSize switch
+        {
+            < 1 => 20,
+            > 100 => 100,
+            _ => filter.PageSize
+        };
+
+        var query = _context.Restaurants
+            .AsNoTracking()
+            .Where(r => r.IsActive && r.DeletedAt == null);
+
+        // SQL-side filters (cheap scalar comparisons)
+        if (filter.PureVeg == true)
+            query = query.Where(r => r.IsPureVeg);
+
+        if (filter.VeganFriendly == true)
+            query = query.Where(r => r.IsVeganFriendly);
+
+        if (filter.JainOptions == true)
+            query = query.Where(r => r.HasJainOptions);
+
+        if (filter.OpenNow == true)
+            query = query.Where(r => r.IsAcceptingOrders);
+
+        if (filter.SupportsPickup.HasValue)
+            query = query.Where(r => r.AcceptsPickup == filter.SupportsPickup.Value);
+
+        if (filter.MaxPrepTimeMins.HasValue)
+            query = query.Where(r => r.AvgPrepTimeMins <= filter.MaxPrepTimeMins.Value);
+
+        if (filter.MinPrice.HasValue)
+            query = query.Where(r => r.MinOrderAmount >= filter.MinPrice.Value);
+
+        if (filter.MaxPrice.HasValue)
+            query = query.Where(r => r.MinOrderAmount <= filter.MaxPrice.Value);
+
+        // Name keyword — ILIKE is the Npgsql case-insensitive operator. Cuisine keyword
+        // would need to touch the jsonb column, which doesn't translate cleanly, so we
+        // handle it in-memory after materialization.
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var pattern = $"%{filter.Search.Trim()}%";
+            query = query.Where(r => EF.Functions.ILike(r.Name, pattern));
+        }
+
+        var rows = await query.ToListAsync(ct);
+
+        IEnumerable<RestaurantSummary> result = rows.Select(r => ToSummary(r, filter.Latitude, filter.Longitude));
+
+        // In-memory filters: cuisine list (jsonb) + Haversine radius
+        if (filter.Cuisines is { Count: > 0 })
+        {
+            var wanted = filter.Cuisines;
+            result = result.Where(r =>
+                r.CuisineTypes.Any(c => wanted.Contains(c, StringComparer.OrdinalIgnoreCase)));
+        }
+
+        if (filter.Latitude.HasValue && filter.Longitude.HasValue && filter.RadiusKm.HasValue)
+        {
+            var radius = filter.RadiusKm.Value;
+            result = result.Where(r => r.DistanceKm.HasValue && r.DistanceKm.Value <= radius);
+        }
+
+        // Sort
+        result = (filter.Sort?.ToLowerInvariant()) switch
+        {
+            "distance" => result.OrderBy(r => r.DistanceKm ?? double.MaxValue),
+            "cost_asc" => result.OrderBy(r => r.MinOrderAmount),
+            "cost_desc" => result.OrderByDescending(r => r.MinOrderAmount),
+            "prep_time" => result.OrderBy(r => r.AvgPrepTimeMins),
+            "newest" => result.OrderByDescending(r => r.CreatedAt),
+            "relevance" => SortByRelevance(result, filter.Search),
+            _ => filter.Latitude.HasValue
+                ? result.OrderBy(r => r.DistanceKm ?? double.MaxValue)
+                : result.OrderBy(r => r.Name)
+        };
+
+        var materialized = result.ToList();
+        var total = materialized.Count;
+
+        var paged = materialized
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        return new PagedRestaurantList(paged, total, page, pageSize);
+    }
+
+    private static IOrderedEnumerable<RestaurantSummary> SortByRelevance(
+        IEnumerable<RestaurantSummary> items,
+        string? search)
+    {
+        if (string.IsNullOrWhiteSpace(search))
+            return items.OrderBy(r => r.Name);
+
+        var term = search.Trim();
+        return items
+            .OrderByDescending(r => Score(r, term))
+            .ThenBy(r => r.Name);
+
+        static int Score(RestaurantSummary r, string term)
+        {
+            if (r.Name.StartsWith(term, StringComparison.OrdinalIgnoreCase)) return 3;
+            if (r.Name.Contains(term, StringComparison.OrdinalIgnoreCase)) return 2;
+            if (r.CuisineTypes.Any(c => c.Contains(term, StringComparison.OrdinalIgnoreCase))) return 1;
+            return 0;
+        }
+    }
+
+    private static RestaurantSummary ToSummary(
+        Users.Domain.Entities.Restaurant r,
+        double? lat,
+        double? lng)
+    {
+        double? distanceKm = null;
+        if (lat.HasValue && lng.HasValue)
+        {
+            distanceKm = HaversineDistance(
+                lat.Value, lng.Value,
+                (double)r.Latitude, (double)r.Longitude);
+        }
+
+        return new RestaurantSummary
+        {
+            Id = r.Id,
+            Name = r.Name,
+            AddressLine = r.AddressLine,
+            Latitude = (double)r.Latitude,
+            Longitude = (double)r.Longitude,
+            IsAcceptingOrders = r.IsAcceptingOrders,
+            AvgPrepTimeMins = r.AvgPrepTimeMins,
+            OpeningTime = r.OpeningTime,
+            ClosingTime = r.ClosingTime,
+            CuisineTypes = r.CuisineTypes,
+            IsPureVeg = r.IsPureVeg,
+            IsVeganFriendly = r.IsVeganFriendly,
+            HasJainOptions = r.HasJainOptions,
+            MinOrderAmount = r.MinOrderAmount,
+            LogoUrl = r.LogoUrl,
+            AcceptsPickup = r.AcceptsPickup,
+            CreatedAt = r.CreatedAt,
+            DistanceKm = distanceKm.HasValue ? Math.Round(distanceKm.Value, 2) : null
+        };
     }
 
     public async Task<RestaurantDetails?> GetByIdAsync(

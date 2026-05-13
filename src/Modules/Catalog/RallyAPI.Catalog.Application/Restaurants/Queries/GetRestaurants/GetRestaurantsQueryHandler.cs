@@ -1,4 +1,4 @@
-﻿// File: src/Modules/Catalog/RallyAPI.Catalog.Application/Restaurants/Queries/GetRestaurants/GetRestaurantsQueryHandler.cs
+// File: src/Modules/Catalog/RallyAPI.Catalog.Application/Restaurants/Queries/GetRestaurants/GetRestaurantsQueryHandler.cs
 
 using MediatR;
 using RallyAPI.SharedKernel.Abstractions.Restaurants;
@@ -7,7 +7,7 @@ using RallyAPI.SharedKernel.Results;
 namespace RallyAPI.Catalog.Application.Restaurants.Queries.GetRestaurants;
 
 internal sealed class GetRestaurantsQueryHandler
-    : IRequestHandler<GetRestaurantsQuery, Result<List<RestaurantListResponse>>>
+    : IRequestHandler<GetRestaurantsQuery, Result<PagedRestaurantsResponse>>
 {
     private readonly IRestaurantQueryService _restaurantQueryService;
 
@@ -16,75 +16,59 @@ internal sealed class GetRestaurantsQueryHandler
         _restaurantQueryService = restaurantQueryService;
     }
 
-    public async Task<Result<List<RestaurantListResponse>>> Handle(
+    public async Task<Result<PagedRestaurantsResponse>> Handle(
         GetRestaurantsQuery request,
         CancellationToken cancellationToken)
     {
-        var restaurants = await _restaurantQueryService.GetActiveRestaurantsAsync(
-            request.Latitude,
-            request.Longitude,
-            request.RadiusKm,
-            cancellationToken);
-
-        IEnumerable<RestaurantSummary> filtered = restaurants;
-
-        // Dietary filters
-        if (request.PureVeg == true)
-            filtered = filtered.Where(r => r.IsPureVeg);
-
-        if (request.VeganFriendly == true)
-            filtered = filtered.Where(r => r.IsVeganFriendly);
-
-        if (request.JainOptions == true)
-            filtered = filtered.Where(r => r.HasJainOptions);
-
-        // Cuisine filter (comma-separated, match any)
-        if (!string.IsNullOrWhiteSpace(request.Cuisines))
-        {
-            var cuisineList = request.Cuisines
+        var cuisines = string.IsNullOrWhiteSpace(request.Cuisines)
+            ? null
+            : request.Cuisines
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
 
-            filtered = filtered.Where(r =>
-                r.CuisineTypes.Any(c => cuisineList.Contains(c, StringComparer.OrdinalIgnoreCase)));
-        }
-
-        // Open now filter
-        if (request.OpenNow == true)
-            filtered = filtered.Where(r => r.IsAcceptingOrders);
-
-        // Sorting
-        var sorted = request.Sort?.ToLowerInvariant() switch
+        var filter = new RestaurantListFilter
         {
-            "distance" => filtered.OrderBy(r => r.DistanceKm ?? double.MaxValue),
-            "cost_asc" => filtered.OrderBy(r => r.MinOrderAmount),
-            "cost_desc" => filtered.OrderByDescending(r => r.MinOrderAmount),
-            "prep_time" => filtered.OrderBy(r => r.AvgPrepTimeMins),
-            _ => request.Latitude.HasValue
-                ? filtered.OrderBy(r => r.DistanceKm ?? double.MaxValue)
-                : filtered.OrderBy(r => r.Name)
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
+            RadiusKm = request.RadiusKm,
+            Search = request.Search,
+            Cuisines = cuisines,
+            PureVeg = request.PureVeg,
+            VeganFriendly = request.VeganFriendly,
+            JainOptions = request.JainOptions,
+            OpenNow = request.OpenNow,
+            MaxPrepTimeMins = request.MaxPrepTimeMins,
+            MinPrice = request.MinPrice,
+            MaxPrice = request.MaxPrice,
+            SupportsPickup = request.SupportsPickup,
+            Sort = request.Sort,
+            Page = request.Page,
+            PageSize = request.PageSize
         };
 
-        var response = sorted.Select(r => new RestaurantListResponse(
-            r.Id,
-            r.Name,
-            r.AddressLine,
-            r.Latitude,
-            r.Longitude,
-            r.IsAcceptingOrders,
-            r.AcceptsPickup,
-            r.AvgPrepTimeMins,
-            r.OpeningTime.ToString("HH:mm"),
-            r.ClosingTime.ToString("HH:mm"),
-            r.CuisineTypes,
-            r.IsPureVeg,
-            r.IsVeganFriendly,
-            r.HasJainOptions,
-            r.MinOrderAmount,
-            r.LogoUrl,
-            r.DistanceKm
-        )).ToList();
+        var paged = await _restaurantQueryService.BrowseAsync(filter, cancellationToken);
 
-        return response;
+        var items = paged.Items
+            .Select(r => new RestaurantListResponse(
+                r.Id,
+                r.Name,
+                r.AddressLine,
+                r.Latitude,
+                r.Longitude,
+                r.IsAcceptingOrders,
+                r.AcceptsPickup,
+                r.AvgPrepTimeMins,
+                r.OpeningTime.ToString("HH:mm"),
+                r.ClosingTime.ToString("HH:mm"),
+                r.CuisineTypes,
+                r.IsPureVeg,
+                r.IsVeganFriendly,
+                r.HasJainOptions,
+                r.MinOrderAmount,
+                r.LogoUrl,
+                r.DistanceKm))
+            .ToList();
+
+        return new PagedRestaurantsResponse(items, paged.TotalCount, paged.Page, paged.PageSize);
     }
 }
