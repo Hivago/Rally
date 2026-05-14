@@ -23,6 +23,7 @@ using RallyAPI.Orders.Application.Queries.GetOrderByNumber;
 using RallyAPI.Orders.Application.Queries.GetOrderNotes;
 using RallyAPI.Orders.Application.Queries.GetOrdersByCustomer;
 using RallyAPI.Orders.Application.Queries.GetOrdersByRestaurant;
+using RallyAPI.Orders.Application.Queries.GetRestaurantStats;
 using RallyAPI.Orders.Domain.Enums;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -86,6 +87,16 @@ public static class OrderEndpoints
             .WithSummary("Get orders for a restaurant")
             .RequireAuthorization("Restaurant")
             .Produces<PagedResult<OrderSummaryDto>>();
+
+        // Restaurant Dashboard Stats — outside the /api/orders group so it sits at /api/restaurants/me/stats
+        app.MapGet("/api/restaurants/me/stats", GetRestaurantStats)
+            .WithName("GetRestaurantDashboardStats")
+            .WithSummary("Snapshot stats for the logged-in restaurant outlet")
+            .WithTags("Restaurants")
+            .RequireAuthorization("Restaurant")
+            .Produces<RestaurantStatsResponse>()
+            .Produces<ProblemDetails>(StatusCodes.Status400BadRequest)
+            .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized);
 
         // Get Active Orders (Admin)
         group.MapGet("/active", GetActiveOrders)
@@ -350,6 +361,36 @@ public static class OrderEndpoints
         };
 
         var result = await mediator.Send(query, cancellationToken);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : result.Error.ToErrorResult();
+    }
+
+    private static async Task<IResult> GetRestaurantStats(
+        HttpContext httpContext,
+        IMediator mediator,
+        [FromQuery] string? range,
+        CancellationToken cancellationToken)
+    {
+        var restaurantIdClaim = httpContext.User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(restaurantIdClaim, out var restaurantId))
+            return Results.Unauthorized();
+
+        var parsedRange = range?.ToLowerInvariant() switch
+        {
+            "today" or null or "" => StatsRange.Today,
+            "7d" or "last7days" or "week" => StatsRange.Last7Days,
+            "30d" or "last30days" or "month" => StatsRange.Last30Days,
+            _ => (StatsRange?)null
+        };
+
+        if (parsedRange is null)
+            return Results.BadRequest(new { error = "range must be one of: today, 7d, 30d" });
+
+        var result = await mediator.Send(
+            new GetRestaurantStatsQuery(restaurantId, parsedRange.Value),
+            cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
