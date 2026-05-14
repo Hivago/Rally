@@ -6,10 +6,12 @@ using RallyAPI.Delivery.Domain.Abstractions;
 using RallyAPI.Delivery.Domain.Entities;
 using RallyAPI.Delivery.Domain.Enums;
 using RallyAPI.SharedKernel.Abstractions.Delivery;
+using RallyAPI.SharedKernel.Abstractions.Distance;
 using RallyAPI.SharedKernel.Abstractions.Geocoding;
 using RallyAPI.SharedKernel.Abstractions.Pricing;
 using RallyAPI.SharedKernel.Abstractions.Riders;
 using RallyAPI.SharedKernel.Results;
+using RallyAPI.SharedKernel.Utilities;
 
 namespace RallyAPI.Delivery.Application.Commands.GetQuote;
 
@@ -20,9 +22,11 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
     private readonly IThirdPartyDeliveryProvider _thirdPartyProvider;
     private readonly IDeliveryQuoteRepository _quoteRepository;
     private readonly IGeocodingService _geocodingService;
+    private readonly IDistanceCalculator _distanceCalculator;
     private readonly ILogger<GetQuoteCommandHandler> _logger;
 
     private const double SearchRadiusKm = 5.0;
+    private const double MaxDeliveryDistanceKm = 5.0;
 
     public GetQuoteCommandHandler(
         IRiderQueryService riderQueryService,
@@ -30,6 +34,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         IThirdPartyDeliveryProvider thirdPartyProvider,
         IDeliveryQuoteRepository quoteRepository,
         IGeocodingService geocodingService,
+        IDistanceCalculator distanceCalculator,
         ILogger<GetQuoteCommandHandler> logger)
     {
         _riderQueryService = riderQueryService;
@@ -37,6 +42,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         _thirdPartyProvider = thirdPartyProvider;
         _quoteRepository = quoteRepository;
         _geocodingService = geocodingService;
+        _distanceCalculator = distanceCalculator;
         _logger = logger;
     }
 
@@ -47,6 +53,29 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         _logger.LogInformation(
             "Getting delivery quote for restaurant {RestaurantId}, City: {City}",
             request.RestaurantId, request.City);
+
+        // Fail fast when the drop is outside our service area. Without this guard,
+        // a 12km drop hits ProRouting and waits up to 30s for a guaranteed rejection.
+        var distanceResult = await _distanceCalculator.GetDistanceAsync(
+            request.PickupLatitude, request.PickupLongitude,
+            request.DropLatitude, request.DropLongitude,
+            cancellationToken);
+
+        var distanceKm = distanceResult.IsSuccess
+            ? (double)distanceResult.DistanceKm
+            : GeoCalculator.CalculateDistanceKm(
+                request.PickupLatitude, request.PickupLongitude,
+                request.DropLatitude, request.DropLongitude);
+
+        if (distanceKm > MaxDeliveryDistanceKm)
+        {
+            _logger.LogInformation(
+                "Quote rejected: drop is {Distance:F1}km from restaurant (max {Max}km)",
+                distanceKm, MaxDeliveryDistanceKm);
+            return Result.Failure<DeliveryQuoteDto>(
+                Error.Validation(
+                    $"Delivery is only available within {MaxDeliveryDistanceKm:F0} km of the restaurant. This address is {distanceKm:F1} km away."));
+        }
 
         // Resolve missing pincode/city via reverse geocoding so the UI doesn't have to.
         var (pickupPincode, dropPincode, city) = await ResolveLocationFieldsAsync(request, cancellationToken);
