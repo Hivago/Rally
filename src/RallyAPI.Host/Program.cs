@@ -350,6 +350,7 @@ if (app.Environment.IsDevelopment())
 {
     app.MapPurgeOrdersByRestaurant();
     app.MapSeedRestaurantOwner();
+    app.MapProRoutingDiagnosticEndpoints();
 }
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapGet("/", () => "Rally API is running!");

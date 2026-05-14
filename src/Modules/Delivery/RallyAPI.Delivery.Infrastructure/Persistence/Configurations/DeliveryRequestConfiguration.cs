@@ -86,6 +86,27 @@ public sealed class DeliveryRequestConfiguration : IEntityTypeConfiguration<Deli
             .HasColumnName("price_difference")
             .HasPrecision(10, 2);
 
+        // 3PL cost breakdown (from provider callback)
+        builder.Property(r => r.ProviderLspFee)
+            .HasColumnName("provider_lsp_fee")
+            .HasPrecision(10, 2);
+
+        builder.Property(r => r.ProviderPlatformFee)
+            .HasColumnName("provider_platform_fee")
+            .HasPrecision(10, 2);
+
+        builder.Property(r => r.ProviderTotalWithTax)
+            .HasColumnName("provider_total_with_tax")
+            .HasPrecision(10, 2);
+
+        builder.Property(r => r.ProviderDistanceKm)
+            .HasColumnName("provider_distance_km")
+            .HasPrecision(8, 2);
+
+        builder.Property(r => r.ProviderNetworkOrderId)
+            .HasColumnName("provider_network_order_id")
+            .HasMaxLength(100);
+
         // Own Fleet Assignment
         builder.Property(r => r.RiderId)
             .HasColumnName("rider_id");

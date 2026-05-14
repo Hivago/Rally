@@ -142,10 +142,17 @@ public static class WebhookEndpoints
             {
                 case "agent-assigned":
                 case "agent_assigned":
+                    var trackingUrl = order.TrackingUrlAlt ?? order.TrackingUrl;
+                    delivery.RecordProviderCost(
+                        lspFee: order.Fees?.Lsp,
+                        platformFee: order.Fees?.Platform,
+                        totalWithTax: order.Fees?.TotalWithTax,
+                        distanceKm: order.Distance,
+                        networkOrderId: order.NetworkOrderId);
                     delivery.Update3PLRiderInfo(
                         order.Rider?.Name,
                         order.Rider?.Phone,
-                        order.TrackingUrl);
+                        trackingUrl);
                     if (delivery.Status == DeliveryRequestStatus.Searching3PL)
                     {
                         delivery.Assign3PLRider(
@@ -153,8 +160,8 @@ public static class WebhookEndpoints
                             order.LogisticsSeller ?? "ProRouting",
                             order.Rider?.Name,
                             order.Rider?.Phone,
-                            order.TrackingUrl,
-                            delivery.QuotedPrice);
+                            trackingUrl,
+                            order.Price ?? delivery.QuotedPrice);
                     }
                     break;
 
@@ -388,7 +395,18 @@ public static class WebhookEndpoints
                          ?? string.Empty;
 
         if (string.IsNullOrEmpty(expectedKey) || string.IsNullOrEmpty(providedKey))
+        {
+            // ProRouting preprod sends callbacks unsigned. Allow in Development so the round-trip
+            // can be tested locally via ngrok. Production envs still reject unsigned callbacks.
+            var envName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            if (string.Equals(envName, "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                var devEventId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawBody)))[..32];
+                return (true, "accepted_dev_unsigned", devEventId);
+            }
+
             return (false, "rejected_missing_api_key", string.Empty);
+        }
 
         if (!CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(providedKey),

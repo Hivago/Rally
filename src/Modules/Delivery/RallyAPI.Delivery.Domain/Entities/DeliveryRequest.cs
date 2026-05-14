@@ -43,6 +43,14 @@ public sealed class DeliveryRequest : AggregateRoot
     public decimal? ActualPrice { get; private set; }
     public decimal? PriceDifference { get; private set; }
 
+    // 3PL cost breakdown — populated from provider callback on Agent-assigned.
+    // Used for monthly invoice reconciliation against the LSP statement.
+    public decimal? ProviderLspFee { get; private set; }
+    public decimal? ProviderPlatformFee { get; private set; }
+    public decimal? ProviderTotalWithTax { get; private set; }
+    public decimal? ProviderDistanceKm { get; private set; }
+    public string? ProviderNetworkOrderId { get; private set; }
+
     // Own Fleet Assignment
     public Guid? RiderId { get; private set; }
     public string? RiderName { get; private set; }
@@ -253,6 +261,27 @@ public sealed class DeliveryRequest : AggregateRoot
         ExternalRiderName = riderName ?? ExternalRiderName;
         ExternalRiderPhone = riderPhone ?? ExternalRiderPhone;
         ExternalTrackingUrl = trackingUrl ?? ExternalTrackingUrl;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Persist the cost breakdown reported by the 3PL provider. Called once
+    /// when the provider tells us what this delivery will cost (typically on
+    /// the Agent-assigned callback). Existing values are preserved if the
+    /// provider omits them on a later callback.
+    /// </summary>
+    public void RecordProviderCost(
+        decimal? lspFee,
+        decimal? platformFee,
+        decimal? totalWithTax,
+        decimal? distanceKm,
+        string? networkOrderId)
+    {
+        ProviderLspFee = lspFee ?? ProviderLspFee;
+        ProviderPlatformFee = platformFee ?? ProviderPlatformFee;
+        ProviderTotalWithTax = totalWithTax ?? ProviderTotalWithTax;
+        ProviderDistanceKm = distanceKm ?? ProviderDistanceKm;
+        ProviderNetworkOrderId = networkOrderId ?? ProviderNetworkOrderId;
         UpdatedAt = DateTime.UtcNow;
     }
 
