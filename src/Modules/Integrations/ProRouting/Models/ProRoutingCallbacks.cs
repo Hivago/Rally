@@ -42,14 +42,45 @@ public sealed class ProRoutingStatusCallbackOrder
     [JsonPropertyName("logistics_seller")]
     public string? LogisticsSeller { get; set; }
 
+    /// <summary>
+    /// Provider's primary forward-leg price (LSP delivery charge before
+    /// platform fee). May be missing on early-state callbacks.
+    /// </summary>
+    [JsonPropertyName("price")]
+    public decimal? Price { get; set; }
+
+    [JsonPropertyName("fees")]
+    public ProRoutingCallbackFees? Fees { get; set; }
+
+    /// <summary>
+    /// Quoted route distance in km, reported back on the assignment callback.
+    /// </summary>
+    [JsonPropertyName("distance")]
+    public decimal? Distance { get; set; }
+
     [JsonPropertyName("rider")]
     public ProRoutingCallbackRider? Rider { get; set; }
 
     [JsonPropertyName("url")]
     public string? TrackingUrl { get; set; }
 
+    [JsonPropertyName("tracking_url")]
+    public string? TrackingUrlAlt { get; set; }
+
     [JsonPropertyName("cancel_reason")]
     public string? CancelReason { get; set; }
+}
+
+public sealed class ProRoutingCallbackFees
+{
+    [JsonPropertyName("lsp")]
+    public decimal? Lsp { get; set; }
+
+    [JsonPropertyName("platform")]
+    public decimal? Platform { get; set; }
+
+    [JsonPropertyName("total_with_tax")]
+    public decimal? TotalWithTax { get; set; }
 }
 
 /// <summary>

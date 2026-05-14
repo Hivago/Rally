@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using RallyAPI.Delivery.Application.Commands.GetQuote;
 using RallyAPI.Delivery.Application.DTOs;
+using RallyAPI.Delivery.Application.Queries.GetDeliveryCodes;
 using RallyAPI.Delivery.Endpoints.Requests;
+using RallyAPI.SharedKernel.Abstractions;
 using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.SharedKernel.Results;
 
@@ -25,6 +27,16 @@ public static class DeliveryEndpoints
             .WithSummary("Get delivery quote at checkout")
             .Produces<DeliveryQuoteDto>(StatusCodes.Status200OK)
             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest);
+
+        // Get OTP codes for an order (role-filtered: customer sees DropCode,
+        // restaurant sees PickupCode, admin sees both)
+        group.MapGet("/orders/{orderId:guid}/codes", GetDeliveryCodes)
+            .WithName("GetDeliveryCodes")
+            .WithSummary("Get pickup/drop OTP codes for an order")
+            .RequireAuthorization()
+            .Produces<DeliveryCodesDto>(StatusCodes.Status200OK)
+            .Produces<ProblemDetails>(StatusCodes.Status404NotFound)
+            .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized);
 
         return app;
     }
@@ -48,6 +60,29 @@ public static class DeliveryEndpoints
         };
 
         var result = await mediator.Send(command, ct);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : result.Error.ToErrorResult();
+    }
+
+    private static async Task<IResult> GetDeliveryCodes(
+        Guid orderId,
+        IMediator mediator,
+        ICurrentUserService currentUser,
+        CancellationToken ct)
+    {
+        if (!currentUser.UserId.HasValue)
+            return Results.Unauthorized();
+
+        var role = currentUser.IsAdmin ? "Admin"
+            : currentUser.IsRestaurant ? "Restaurant"
+            : currentUser.IsRider ? "Rider"
+            : currentUser.IsCustomer ? "Customer"
+            : string.Empty;
+
+        var result = await mediator.Send(
+            new GetDeliveryCodesQuery(orderId, currentUser.UserId.Value, role), ct);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
