@@ -18,7 +18,7 @@ public sealed class OrderValidationService : IOrderValidationService
 
     private static readonly TimeSpan DefaultOpeningTime = TimeSpan.FromHours(8);
     private static readonly TimeSpan DefaultClosingTime = TimeSpan.FromHours(23);
-    private const double MaxDeliveryDistanceKm = 15.0;
+    private const double MaxDeliveryDistanceKm = 5.0;
 
     public OrderValidationService(
         IDistanceCalculator distanceCalculator,

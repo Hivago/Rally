@@ -9,7 +9,7 @@ namespace RallyAPI.Catalog.Application.Restaurants.Queries.CheckDelivery;
 internal sealed class CheckDeliveryQueryHandler
     : IRequestHandler<CheckDeliveryQuery, Result<DeliveryCheckResponse>>
 {
-    private const double MaxDeliveryDistanceKm = 15.0;
+    private const double MaxDeliveryDistanceKm = 5.0;
 
     private readonly IRestaurantQueryService _restaurantQueryService;
     private readonly IDistanceCalculator _distanceCalculator;
