@@ -25,6 +25,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
     private readonly IOrderNumberGenerator _orderNumberGenerator;
     private readonly IOrderValidationService _validationService;
     private readonly IRestaurantQueryService _restaurantQueryService;
+    private readonly IRestaurantAvailabilityChecker _availabilityChecker;
     private readonly ICartRepository _cartRepository;
     private readonly ICartCacheService _cartCache;
     private readonly IUnitOfWork _unitOfWork;
@@ -37,6 +38,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         IOrderNumberGenerator orderNumberGenerator,
         IOrderValidationService validationService,
         IRestaurantQueryService restaurantQueryService,
+        IRestaurantAvailabilityChecker availabilityChecker,
         ICartRepository cartRepository,
         ICartCacheService cartCache,
         IUnitOfWork unitOfWork,
@@ -46,6 +48,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         _orderNumberGenerator = orderNumberGenerator;
         _validationService = validationService;
         _restaurantQueryService = restaurantQueryService;
+        _availabilityChecker = availabilityChecker;
         _cartRepository = cartRepository;
         _cartCache = cartCache;
         _unitOfWork = unitOfWork;
@@ -79,6 +82,19 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
             {
                 _logger.LogWarning("Restaurant validation failed: {Error}", restaurantValidation.Error);
                 return Result.Failure<OrderDto>(restaurantValidation.Error);
+            }
+
+            // Step 3.5: Block orders if the restaurant is in a scheduled time-off window.
+            // Closure overrides IsAcceptingOrders — the owner explicitly scheduled this.
+            var isClosed = await _availabilityChecker.IsClosedForScheduledTimeOffAsync(
+                command.Request.RestaurantId, momentUtc: null, cancellationToken);
+
+            if (isClosed)
+            {
+                _logger.LogWarning(
+                    "Order rejected — Restaurant {RestaurantId} is on scheduled time off",
+                    command.Request.RestaurantId);
+                return Result.Failure<OrderDto>(OrderErrors.RestaurantClosed);
             }
 
             // Step 3a: Block pickup orders against restaurants that don't accept pickup.
