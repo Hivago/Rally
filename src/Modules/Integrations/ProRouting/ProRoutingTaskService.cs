@@ -559,7 +559,7 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmPro
                 Lat = request.PickupLatitude,
                 Lng = request.PickupLongitude,
                 Pincode = request.PickupPincode,
-                Phone = request.PickupContactPhone,
+                Phone = NormalizeIndianPhone(request.PickupContactPhone),
                 Address = new ProRoutingAddress
                 {
                     Name = request.PickupContactName,
@@ -576,7 +576,7 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmPro
                 Lat = request.DropLatitude,
                 Lng = request.DropLongitude,
                 Pincode = request.DropPincode,
-                Phone = request.DropContactPhone,
+                Phone = NormalizeIndianPhone(request.DropContactPhone),
                 Address = new ProRoutingAddress
                 {
                     Name = request.DropContactName,
@@ -611,6 +611,15 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmPro
             },
             Note1 = request.Notes
         };
+    }
+
+    // ProRouting rejects E.164 (+91xxxxxxxxxx) and country-coded variants. Strip non-digits
+    // and keep the last 10 — that's what their schema accepts for Indian numbers.
+    private static string NormalizeIndianPhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return string.Empty;
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        return digits.Length > 10 ? digits[^10..] : digits;
     }
 
     private ThirdPartyLspQuote SelectBestQuote(IReadOnlyList<ThirdPartyLspQuote> quotes)
