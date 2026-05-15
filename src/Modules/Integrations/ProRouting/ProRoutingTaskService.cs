@@ -273,21 +273,34 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmPro
 
         try
         {
-            var url = $"{StatusEndpoint}?order_id={taskId}";
+            var request = new { order_id = taskId };
 
-            var response = await _httpClient.GetFromJsonAsync<ProRoutingWebhookPayload>(url, ct);
+            var response = await _httpClient.PostAsJsonAsync(
+                StatusEndpoint, request, JsonOptions, ct);
 
-            if (response is null)
+            var content = await response.Content.ReadAsStringAsync(ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "ProRouting status failed: {Status} - {Content}",
+                    response.StatusCode, content);
+                return TaskStatusResult.Failure($"API error: {response.StatusCode}", ProviderName);
+            }
+
+            var payload = JsonSerializer.Deserialize<ProRoutingWebhookPayload>(content, JsonOptions);
+
+            if (payload is null)
             {
                 return TaskStatusResult.Failure("Empty response", ProviderName);
             }
 
             return TaskStatusResult.Success(
-                taskId: response.OrderId,
-                state: response.State,
-                riderName: response.Agent?.Name,
-                riderPhone: response.Agent?.Phone,
-                trackingUrl: response.TrackingUrl,
+                taskId: payload.OrderId,
+                state: payload.State,
+                riderName: payload.Agent?.Name,
+                riderPhone: payload.Agent?.Phone,
+                trackingUrl: payload.TrackingUrl,
                 providerName: ProviderName);
         }
         catch (Exception ex)
