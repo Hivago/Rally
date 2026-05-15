@@ -1,0 +1,29 @@
+name: Lint PR Title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  lint-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            chore
+            docs
+            refactor
+            test
+            perf
+            ci
+          # Scope is optional but encouraged
+          requireScope: false
+          # Example valid titles:
+          #   feat(orders): add auto-refund on cancel
+          #   fix(auth): prevent OTP reuse after lockout
+          #   chore: bump dependencies

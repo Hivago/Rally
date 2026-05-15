@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: latest_tag
+        run: |
+          TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          echo "tag=${TAG:-v0.0.0}" >> $GITHUB_OUTPUT
+
+      - name: Determine next version
+        id: next_version
+        run: |
+          LATEST=${{ steps.latest_tag.outputs.tag }}
+          MAJOR=$(echo $LATEST | cut -d. -f1 | tr -d v)
+          MINOR=$(echo $LATEST | cut -d. -f2)
+          PATCH=$(echo $LATEST | cut -d. -f3)
+
+          # Read all commit messages since last tag
+          COMMITS=$(git log $LATEST..HEAD --pretty=format:"%s")
+
+          # Check for breaking change → bump MAJOR
+          if echo "$COMMITS" | grep -qE "BREAKING CHANGE|^feat!|^fix!"; then
+            MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
+          # Check for feat → bump MINOR
+          elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+            MINOR=$((MINOR + 1)); PATCH=0
+          # Everything else (fix, chore, docs, etc.) → bump PATCH
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          echo "version=v${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          LATEST=${{ steps.latest_tag.outputs.tag }}
+          
+          FEATURES=$(git log $LATEST..HEAD --pretty=format:"- %s" | grep -E "^- feat" || true)
+          FIXES=$(git log $LATEST..HEAD --pretty=format:"- %s" | grep -E "^- fix" || true)
+          OTHERS=$(git log $LATEST..HEAD --pretty=format:"- %s" | grep -vE "^- feat|^- fix" || true)
+
+          NOTES=""
+          [ -n "$FEATURES" ] && NOTES="$NOTES### Features\n$FEATURES\n\n"
+          [ -n "$FIXES" ]    && NOTES="$NOTES### Bug Fixes\n$FIXES\n\n"
+          [ -n "$OTHERS" ]   && NOTES="$NOTES### Other Changes\n$OTHERS\n"
+
+          # Write to file to preserve newlines
+          printf "$NOTES" > release_notes.txt
+
+      - name: Create tag and GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.next_version.outputs.version }}
+          name: ${{ steps.next_version.outputs.version }}
+          body_path: release_notes.txt
+          draft: false
+          prerelease: false

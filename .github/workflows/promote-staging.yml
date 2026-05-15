@@ -1,0 +1,41 @@
+name: Promote Staging to Master
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "promote" to confirm promotion to master'
+        required: true
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'promote' }}
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create PR from staging to master
+        uses: repo-sync/pull-request@v2
+        with:
+          source_branch: staging
+          destination_branch: master
+          pr_title: "chore(release): promote staging to master"
+          pr_body: |
+            ## Staging → Master Promotion
+
+            This PR was created automatically via the **Promote Staging to Master** workflow.
+
+            ### Pre-merge checklist
+            - [ ] All staging tests passed
+            - [ ] QA sign-off complete
+            - [ ] No open P0/P1 issues
+            - [ ] Investor/external blockers resolved (if any)
+          pr_label: "release"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
