@@ -20,11 +20,13 @@ public class AdminConfiguration : IEntityTypeConfiguration<Admin>
             .HasColumnName("id")
             .ValueGeneratedNever();
 
-        // Email - Value Object conversion
+        // Email - Value Object conversion.
+        // Use FromTrusted on read so a legacy row with a non-conforming email
+        // cannot crash the materialiser (which is what blew up GET /api/admin/users).
         builder.Property(a => a.Email)
             .HasConversion(
                 email => email.Value,
-                value => Email.Create(value).Value
+                value => Email.FromTrusted(value)
             )
             .HasColumnName("email")
             .HasMaxLength(255)
@@ -42,9 +44,13 @@ public class AdminConfiguration : IEntityTypeConfiguration<Admin>
             .HasMaxLength(100)
             .IsRequired();
 
-        // Role - Enum stored as string
+        // Role - Enum stored as string, case-insensitive on read with a Support
+        // fallback so a row with an unexpected role string cannot crash a list query.
         builder.Property(a => a.Role)
-            .HasConversion<string>()
+            .HasConversion(
+                role => role.ToString(),
+                value => ParseRoleSafely(value)
+            )
             .HasColumnName("role")
             .HasMaxLength(20)
             .HasDefaultValue(AdminRole.Support)
@@ -85,4 +91,9 @@ public class AdminConfiguration : IEntityTypeConfiguration<Admin>
         // Ignore domain events
         builder.Ignore(a => a.DomainEvents);
     }
+
+    private static AdminRole ParseRoleSafely(string value)
+        => Enum.TryParse<AdminRole>(value, ignoreCase: true, out var parsed)
+            ? parsed
+            : AdminRole.Support;
 }
