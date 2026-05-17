@@ -28,7 +28,9 @@ public class ListAdmins : IEndpoint
         int page = 1,
         int pageSize = 20)
     {
-        var adminId = Guid.Parse(user.FindFirstValue("sub")!);
+        if (!Guid.TryParse(user.FindFirstValue("sub"), out var adminId))
+            return Results.Unauthorized();
+
         var result = await sender.Send(
             new ListAdminsQuery(adminId, role, isActive, page, pageSize),
             cancellationToken);

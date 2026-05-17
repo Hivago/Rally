@@ -31,6 +31,10 @@ public sealed class Email : ValueObject
         return new Email(trimmed);
     }
 
+    // For DB read-back only. Skips regex validation so a legacy/seed row with a
+    // non-conforming email can still be materialised instead of crashing the query.
+    public static Email FromTrusted(string? value) => new(value ?? string.Empty);
+
     protected override IEnumerable<object> GetEqualityComponents()
     {
         yield return Value;
