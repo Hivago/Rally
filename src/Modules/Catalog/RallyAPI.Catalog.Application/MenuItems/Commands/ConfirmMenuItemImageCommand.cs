@@ -37,13 +37,16 @@ public sealed class ConfirmMenuItemImageCommandHandler
 {
     private readonly IMenuItemRepository _menuItemRepository;
     private readonly IStorageService _storage;
+    private readonly IUnitOfWork _unitOfWork;
 
     public ConfirmMenuItemImageCommandHandler(
         IMenuItemRepository menuItemRepository,
-        IStorageService storage)
+        IStorageService storage,
+        IUnitOfWork unitOfWork)
     {
         _menuItemRepository = menuItemRepository;
         _storage = storage;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<Result<ConfirmMenuItemImageResponse>> Handle(
@@ -84,6 +87,7 @@ public sealed class ConfirmMenuItemImageCommandHandler
 
         // 6. Persist
         _menuItemRepository.Update(menuItem, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new ConfirmMenuItemImageResponse(
             menuItem.Id,

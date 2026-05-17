@@ -31,13 +31,16 @@ public sealed class ConfirmRestaurantLogoCommandHandler
 {
     private readonly IRestaurantRepository _restaurantRepository;
     private readonly IStorageService _storage;
+    private readonly IUnitOfWork _unitOfWork;
 
     public ConfirmRestaurantLogoCommandHandler(
         IRestaurantRepository restaurantRepository,
-        IStorageService storage)
+        IStorageService storage,
+        IUnitOfWork unitOfWork)
     {
         _restaurantRepository = restaurantRepository;
         _storage = storage;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<Result<ConfirmRestaurantLogoResponse>> Handle(
@@ -71,6 +74,7 @@ public sealed class ConfirmRestaurantLogoCommandHandler
 
         // 6. Persist
         _restaurantRepository.Update(restaurant, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new ConfirmRestaurantLogoResponse(
             restaurant.Id,
