@@ -303,7 +303,9 @@ builder.Services.AddCors(options =>
                 "https://about-hivago.vercel.app",
                 "https://hivago-restaurant.vercel.app",
                 "https://hivago.in",
-                "https://www.hivago.in")
+                "https://www.hivago.in",
+                "https://api.hivago.in",
+                "https://staging.api.hivago.in")
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
