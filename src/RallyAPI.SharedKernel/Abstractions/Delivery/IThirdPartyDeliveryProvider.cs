@@ -71,7 +71,7 @@ public sealed record UpdateOrderRequest
 {
     public required string ExternalTaskId { get; init; }
 
-    /// <summary>6-digit OTP shown to the rider at the restaurant.</summary>
+    /// <summary>4-digit OTP shown to the rider at the restaurant.</summary>
     public required string PickupCode { get; init; }
 
     /// <summary>4-digit OTP shared with the customer for delivery confirmation.</summary>

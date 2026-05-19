@@ -33,7 +33,7 @@ public sealed class DeliveryRequest : AggregateRoot
     public OrderCategory OrderCategory { get; private set; } = OrderCategory.FoodAndBeverage;
 
     // OTPs handed to ProRouting via /update — cleartext required by LSP.
-    // PickupCode = 6 digits shown to rider at restaurant.
+    // PickupCode = 4 digits shown to rider at restaurant.
     // DropCode   = 4 digits shared with customer for delivery confirmation.
     public string? PickupCode { get; private set; }
     public string? DropCode { get; private set; }
@@ -149,7 +149,7 @@ public sealed class DeliveryRequest : AggregateRoot
                 ? DeliveryRequestStatus.PendingDispatch
                 : DeliveryRequestStatus.Created,
             OrderCategory = orderCategory,
-            PickupCode = GenerateNumericCode(6),
+            PickupCode = GenerateNumericCode(4),
             DropCode = GenerateNumericCode(4),
             RestaurantId = restaurantId,
             CustomerId = customerId,

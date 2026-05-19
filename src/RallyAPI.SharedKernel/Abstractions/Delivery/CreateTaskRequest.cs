@@ -56,7 +56,7 @@ public sealed record CreateTaskRequest
     public decimal OrderWeight { get; init; } = 2; // Default 2kg for F&B
 
     /// <summary>
-    /// 6-digit OTP shown to the rider at the restaurant. Provider stores
+    /// 4-digit OTP shown to the rider at the restaurant. Provider stores
     /// this and validates against rider input on pickup.
     /// </summary>
     public string? PickupCode { get; init; }

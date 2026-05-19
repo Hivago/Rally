@@ -8,7 +8,7 @@ namespace RallyAPI.Delivery.Application.DTOs;
 public sealed record DeliveryCodesDto
 {
     /// <summary>
-    /// 6-digit code shown to the restaurant. Restaurant reads it out to the
+    /// 4-digit code shown to the restaurant. Restaurant reads it out to the
     /// rider at pickup; the rider enters it in ProRouting to prove identity.
     /// </summary>
     public string? PickupCode { get; init; }
