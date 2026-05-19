@@ -38,7 +38,9 @@ public class EditRestaurant : IEndpoint
             request.HasJainOptions,
             request.MinOrderAmount,
             request.FssaiNumber,
-            request.AcceptsPickup);
+            request.AcceptsPickup,
+            request.Latitude,
+            request.Longitude);
 
         var result = await sender.Send(command, cancellationToken);
 
@@ -61,4 +63,6 @@ public record EditRestaurantRequest(
     bool? HasJainOptions,
     decimal? MinOrderAmount,
     string? FssaiNumber,
-    bool? AcceptsPickup);
+    bool? AcceptsPickup,
+    decimal? Latitude,
+    decimal? Longitude);
