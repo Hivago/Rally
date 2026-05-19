@@ -222,8 +222,39 @@ public sealed class RiderDispatchOrchestrator
         }
 
         _logger.LogInformation(
-            "3PL task created for delivery {DeliveryId}: {TaskId}. Waiting {Timeout}s for assignment.",
-            deliveryRequest.Id, createResult.TaskId, _options.AcceptanceTimeoutSeconds);
+            "3PL task created for delivery {DeliveryId}: {TaskId}. Pushing OTPs via update...",
+            deliveryRequest.Id, createResult.TaskId);
+
+        // ProRouting requires partner/order/update to push the OTPs AND transition the
+        // task from UnFulfilled -> Searching-for-Agent. Without this call the task stalls
+        // at UnFulfilled and the rider gets ProRouting's auto-generated OTPs instead of
+        // ours, causing a pickup-code mismatch at the restaurant.
+        var updateResult = await _thirdPartyProvider.UpdateOrderAsync(
+            new UpdateOrderRequest
+            {
+                ExternalTaskId = createResult.TaskId!,
+                PickupCode = deliveryRequest.PickupCode ?? string.Empty,
+                DropCode = deliveryRequest.DropCode,
+                OrderReady = true
+            }, ct);
+
+        if (!updateResult.IsSuccess)
+        {
+            _logger.LogError(
+                "ProRouting update (OTP push) failed for delivery {DeliveryId}, task {TaskId}: {Error}. Cancelling task.",
+                deliveryRequest.Id, createResult.TaskId, updateResult.ErrorMessage);
+
+            await _thirdPartyProvider.CancelTaskAsync(
+                createResult.TaskId!,
+                "Update/OTP push failed: " + updateResult.ErrorMessage,
+                ct);
+
+            return DispatchResult.Failed(updateResult.ErrorMessage ?? "3PL OTP update failed");
+        }
+
+        _logger.LogInformation(
+            "ProRouting task {TaskId} updated. Waiting {Timeout}s for agent assignment.",
+            createResult.TaskId, _options.AcceptanceTimeoutSeconds);
 
         // Wait for webhook assignment
         await Task.Delay(TimeSpan.FromSeconds(_options.AcceptanceTimeoutSeconds), ct);
