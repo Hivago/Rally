@@ -97,13 +97,17 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
                 return Result.Failure<OrderDto>(OrderErrors.RestaurantClosed);
             }
 
+            // Look up authoritative restaurant data once — used for pickup-acceptance check
+            // and to populate Order.RestaurantPhone server-side. The customer request body
+            // cannot be trusted to carry the restaurant's phone; admin/delivery downstream
+            // consumers need it set correctly here.
+            var restaurantDetails = await _restaurantQueryService.GetByIdAsync(
+                command.Request.RestaurantId, cancellationToken);
+
             // Step 3a: Block pickup orders against restaurants that don't accept pickup.
             // Authoritative server-side check — UI hint alone is not enough.
             if (command.Request.FulfillmentType == Domain.Enums.FulfillmentType.Pickup)
             {
-                var restaurantDetails = await _restaurantQueryService.GetByIdAsync(
-                    command.Request.RestaurantId, cancellationToken);
-
                 if (restaurantDetails is null || !restaurantDetails.AcceptsPickup)
                 {
                     _logger.LogWarning(
@@ -240,7 +244,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
                 deliveryQuoteId: command.DeliveryQuoteId,
                 customerPhone: command.CustomerPhone,
                 customerEmail: command.CustomerEmail,
-                restaurantPhone: command.Request.RestaurantPhone,
+                restaurantPhone: restaurantDetails?.Phone ?? command.Request.RestaurantPhone,
                 specialInstructions: command.Request.SpecialInstructions);
 
             // Step 10: Add items
