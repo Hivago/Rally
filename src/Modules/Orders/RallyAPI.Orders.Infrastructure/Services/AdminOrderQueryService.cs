@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using RallyAPI.Orders.Domain.Enums;
 using RallyAPI.SharedKernel.Abstractions.Orders;
+using RallyAPI.SharedKernel.Abstractions.Restaurants;
 
 namespace RallyAPI.Orders.Infrastructure.Services;
 
@@ -26,10 +27,14 @@ public sealed class AdminOrderQueryService : IAdminOrderQueryService
     ];
 
     private readonly OrdersDbContext _context;
+    private readonly IRestaurantQueryService _restaurantQueryService;
 
-    public AdminOrderQueryService(OrdersDbContext context)
+    public AdminOrderQueryService(
+        OrdersDbContext context,
+        IRestaurantQueryService restaurantQueryService)
     {
         _context = context;
+        _restaurantQueryService = restaurantQueryService;
     }
 
     public async Task<AdminOrdersPagedResult> SearchAsync(
@@ -83,6 +88,16 @@ public sealed class AdminOrderQueryService : IAdminOrderQueryService
         if (order is null)
             return null;
 
+        // Backfill the restaurant phone from the Users module if the order row is missing it.
+        // Legacy orders were created without server-side phone population, so this read-time
+        // lookup keeps the admin detail accurate without requiring a data migration.
+        var restaurantPhone = order.RestaurantPhone;
+        if (string.IsNullOrWhiteSpace(restaurantPhone))
+        {
+            var restaurant = await _restaurantQueryService.GetByIdAsync(order.RestaurantId, cancellationToken);
+            restaurantPhone = restaurant?.Phone;
+        }
+
         // Delay = how long the order has been in its current non-terminal state.
         // For the escalation modal, the most useful "delay" is age since payment for orders
         // still awaiting restaurant action.
@@ -112,7 +127,7 @@ public sealed class AdminOrderQueryService : IAdminOrderQueryService
             order.CustomerEmail,
             order.RestaurantId,
             order.RestaurantName,
-            order.RestaurantPhone,
+            restaurantPhone,
             order.DeliveryInfo?.RiderId,
             order.DeliveryInfo?.RiderName,
             order.DeliveryInfo?.RiderPhone,
