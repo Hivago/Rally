@@ -17,4 +17,6 @@ public sealed record EditRestaurantCommand(
     bool? HasJainOptions,
     decimal? MinOrderAmount,
     string? FssaiNumber,
-    bool? AcceptsPickup) : IRequest<Result>;
+    bool? AcceptsPickup,
+    decimal? Latitude,
+    decimal? Longitude) : IRequest<Result>;

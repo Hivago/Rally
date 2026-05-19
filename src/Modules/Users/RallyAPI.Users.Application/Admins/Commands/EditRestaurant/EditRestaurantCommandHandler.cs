@@ -83,6 +83,15 @@ internal sealed class EditRestaurantCommandHandler
         if (request.AcceptsPickup.HasValue)
             restaurant.SetAcceptsPickup(request.AcceptsPickup.Value);
 
+        if (request.Latitude.HasValue && request.Longitude.HasValue)
+        {
+            var locationResult = restaurant.UpdateLocation(
+                request.Latitude.Value,
+                request.Longitude.Value);
+            if (locationResult.IsFailure)
+                return locationResult;
+        }
+
         _restaurantRepository.Update(restaurant, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

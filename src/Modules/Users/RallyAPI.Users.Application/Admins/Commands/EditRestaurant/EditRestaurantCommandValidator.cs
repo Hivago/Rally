@@ -37,5 +37,13 @@ public sealed class EditRestaurantCommandValidator : AbstractValidator<EditResta
         RuleFor(x => x.FssaiNumber)
             .MaximumLength(50).WithMessage("FSSAI number must not exceed 50 characters.")
             .When(x => x.FssaiNumber is not null);
+
+        RuleFor(x => x.Longitude)
+            .NotNull().WithMessage("Longitude is required when Latitude is provided.")
+            .When(x => x.Latitude.HasValue);
+
+        RuleFor(x => x.Latitude)
+            .NotNull().WithMessage("Latitude is required when Longitude is provided.")
+            .When(x => x.Longitude.HasValue);
     }
 }
