@@ -25,6 +25,7 @@ public static class DependencyInjection
         app.MapRiderDeliveryEndpoints();
         app.MapTrackingEndpoints();
         app.MapWebhookEndpoints();
+        app.MapAdminDeliveryEndpoints();
 
         return app;
     }
