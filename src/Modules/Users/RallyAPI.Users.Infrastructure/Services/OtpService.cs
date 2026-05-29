@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using RallyAPI.Users.Application.Abstractions;
 using StackExchange.Redis;
 using System.Security.Cryptography;
@@ -11,7 +10,6 @@ public class OtpService : IOtpService
     private readonly IDatabase _redis;
     private readonly ILogger<OtpService> _logger;
     private readonly ISmsService _smsService;
-    private readonly bool _useFixedOtp;
 
     // Configuration
     private const int OtpExpiryMinutes = 5;
@@ -23,14 +21,11 @@ public class OtpService : IOtpService
     public OtpService(
         IConnectionMultiplexer redis,
         ISmsService smsService,
-        ILogger<OtpService> logger,
-        IHostEnvironment environment)
+        ILogger<OtpService> logger)
     {
         _redis = redis.GetDatabase();
         _smsService = smsService;
         _logger = logger;
-        _useFixedOtp = environment.IsDevelopment()
-            || environment.EnvironmentName == "Testing";
     }
 
     public async Task<string> GenerateAndSendOtpAsync(
@@ -157,13 +152,9 @@ public class OtpService : IOtpService
         await _redis.KeyDeleteAsync($"otp:attempts:{phoneKey}");
     }
 
-    private string GenerateOtp()
+    private static string GenerateOtp()
     {
-        // TODO: switch to random OTP once MSG91 WhatsApp is approved by Meta
-        // if (_useFixedOtp)
-        //     return "123456";
-        // return RandomNumberGenerator.GetInt32(100000, 999999).ToString();
-        return "123456";
+        return RandomNumberGenerator.GetInt32(100000, 999999).ToString();
     }
 
     private static string HashOtp(string otp)
