@@ -42,6 +42,7 @@ public static class EndpointExtensions
         var c when c.Contains("Unauthorized") => StatusCodes.Status401Unauthorized,
         var c when c.Contains("Forbidden")    => StatusCodes.Status403Forbidden,
         var c when c.Contains("Conflict")     => StatusCodes.Status409Conflict,
+        var c when c.Contains("TooManyRequests") => StatusCodes.Status429TooManyRequests,
         var c when c.Contains("Validation")   => StatusCodes.Status400BadRequest,
         _                                     => StatusCodes.Status400BadRequest
     };

@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using RallyAPI.SharedKernel.Results;
 using RallyAPI.Users.Application.Abstractions;
 using StackExchange.Redis;
 using System.Security.Cryptography;
@@ -28,7 +29,7 @@ public class OtpService : IOtpService
         _logger = logger;
     }
 
-    public async Task<string> GenerateAndSendOtpAsync(
+    public async Task<Result<string>> GenerateAndSendOtpAsync(
         string phoneNumber,
         CancellationToken cancellationToken = default)
     {
@@ -37,8 +38,8 @@ public class OtpService : IOtpService
         // Check if phone is locked out (too many failed attempts)
         if (await _redis.KeyExistsAsync($"otp:lock:{phoneKey}"))
         {
-            throw new InvalidOperationException(
-                "Too many failed attempts. Try again in 15 minutes.");
+            return Result.Failure<string>(Error.TooManyRequests(
+                "Too many failed attempts. Try again in 15 minutes."));
         }
 
         // Rate limit: max 3 OTP requests per 10 minutes per phone
@@ -46,8 +47,8 @@ public class OtpService : IOtpService
         var currentRate = await _redis.StringGetAsync(rateKey);
         if (currentRate.HasValue && (int)currentRate >= RateLimitPerPhone)
         {
-            throw new InvalidOperationException(
-                "Too many OTP requests. Please wait before trying again.");
+            return Result.Failure<string>(Error.TooManyRequests(
+                "Too many OTP requests. Please wait before trying again."));
         }
 
         // Generate OTP
@@ -94,7 +95,7 @@ public class OtpService : IOtpService
             _logger.LogError("Failed to send OTP SMS to {Phone}", phoneNumber);
         }
 
-        return otp;
+        return Result.Success(otp);
     }
 
     public async Task<bool> VerifyOtpAsync(

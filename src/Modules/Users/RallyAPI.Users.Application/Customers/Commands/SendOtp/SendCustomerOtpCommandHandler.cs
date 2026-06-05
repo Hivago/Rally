@@ -21,8 +21,10 @@ internal sealed class SendCustomerOtpCommandHandler : IRequestHandler<SendCustom
         if (phoneResult.IsFailure)
             return Result.Failure(phoneResult.Error);
 
-        // Generate and send OTP
-        await _otpService.GenerateAndSendOtpAsync(phoneResult.Value.Value, cancellationToken);
+        // Generate and send OTP — fails with 429 if rate-limited or locked out
+        var otpResult = await _otpService.GenerateAndSendOtpAsync(phoneResult.Value.Value, cancellationToken);
+        if (otpResult.IsFailure)
+            return Result.Failure(otpResult.Error);
 
         return Result.Success();
     }
