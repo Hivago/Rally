@@ -33,29 +33,31 @@ public sealed class OtpServiceTests
     // --- GenerateAndSendOtpAsync ---
 
     [Fact]
-    public async Task GenerateAndSendOtp_WhenPhoneIsLockedOut_ShouldThrowInvalidOperationException()
+    public async Task GenerateAndSendOtp_WhenPhoneIsLockedOut_ShouldReturnTooManyRequestsFailure()
     {
         _db.KeyExistsAsync(Arg.Any<RedisKey>(), Arg.Any<CommandFlags>())
             .Returns(Task.FromResult(true));
 
-        var act = async () => await _service.GenerateAndSendOtpAsync(Phone);
+        var result = await _service.GenerateAndSendOtpAsync(Phone);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*Too many failed*");
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("RateLimit.TooManyRequests");
+        result.Error.Message.Should().Contain("Too many failed");
     }
 
     [Fact]
-    public async Task GenerateAndSendOtp_WhenRateLimitExceeded_ShouldThrowInvalidOperationException()
+    public async Task GenerateAndSendOtp_WhenRateLimitExceeded_ShouldReturnTooManyRequestsFailure()
     {
         _db.KeyExistsAsync(Arg.Any<RedisKey>(), Arg.Any<CommandFlags>())
             .Returns(Task.FromResult(false));
         _db.StringGetAsync(Arg.Any<RedisKey>(), Arg.Any<CommandFlags>())
             .Returns(Task.FromResult((RedisValue)3)); // at the 3-per-10min limit
 
-        var act = async () => await _service.GenerateAndSendOtpAsync(Phone);
+        var result = await _service.GenerateAndSendOtpAsync(Phone);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*Too many OTP requests*");
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("RateLimit.TooManyRequests");
+        result.Error.Message.Should().Contain("Too many OTP requests");
     }
 
     [Fact]
@@ -65,12 +67,13 @@ public sealed class OtpServiceTests
         _smsService.SendAsync(Phone, Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(true));
 
-        var otp = await _service.GenerateAndSendOtpAsync(Phone);
+        var result = await _service.GenerateAndSendOtpAsync(Phone);
 
-        otp.Should().MatchRegex(@"^\d{6}$"); // cryptographically random 6-digit OTP
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().MatchRegex(@"^\d{6}$"); // cryptographically random 6-digit OTP
         await _smsService.Received(1).SendAsync(
             Phone,
-            Arg.Is<string>(m => m.Contains(otp)),
+            Arg.Is<string>(m => m.Contains(result.Value)),
             Arg.Any<CancellationToken>());
     }
 
@@ -97,10 +100,11 @@ public sealed class OtpServiceTests
         _smsService.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(false)); // SMS provider failure
 
-        var otp = await _service.GenerateAndSendOtpAsync(Phone);
+        var result = await _service.GenerateAndSendOtpAsync(Phone);
 
         // OTP is still stored in Redis; operation should not fail
-        otp.Should().MatchRegex(@"^\d{6}$");
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().MatchRegex(@"^\d{6}$");
     }
 
     // --- VerifyOtpAsync ---

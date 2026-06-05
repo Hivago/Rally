@@ -54,6 +54,12 @@ public sealed class Error
     public static Error Conflict(string message) =>
         new("Conflict.Error", message);
 
+    /// <summary>
+    /// Rate-limit / lockout errors. Maps to HTTP 429 in <c>EndpointExtensions.GetStatusCode</c>.
+    /// </summary>
+    public static Error TooManyRequests(string message) =>
+        new("RateLimit.TooManyRequests", message);
+
     public static Error Unauthorized(string message = "Unauthorized access.") =>
         new("Unauthorized.Error", message);
 
