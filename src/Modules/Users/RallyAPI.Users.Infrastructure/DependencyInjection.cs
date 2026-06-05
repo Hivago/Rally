@@ -99,20 +99,46 @@ public static class DependencyInjection
             ConnectionMultiplexer.Connect(redisConnection));
 
 
-        // MSG91 WhatsApp OTP delivery — or Console fallback for dev
-        if (configuration.GetSection(Msg91WhatsAppOptions.SectionName).Exists())
-        {
-            services.Configure<Msg91WhatsAppOptions>(
-                configuration.GetSection(Msg91WhatsAppOptions.SectionName));
+        // OTP delivery provider — chosen via "OtpProvider" config key.
+        // Supported values: "AuthKey", "Msg91WhatsApp", "Console" (default for dev).
+        // Falls back to whichever provider section exists if OtpProvider is absent.
+        var otpProvider = (configuration["OtpProvider"] ?? string.Empty).Trim();
 
-            services.AddHttpClient<ISmsService, Msg91WhatsAppService>(client =>
-            {
-                client.Timeout = TimeSpan.FromSeconds(30);
-            });
-        }
-        else
+        if (string.IsNullOrWhiteSpace(otpProvider))
         {
-            services.AddSingleton<ISmsService, ConsoleSmsService>();
+            if (configuration.GetSection(AuthKeyOptions.SectionName).Exists())
+                otpProvider = "AuthKey";
+            else if (configuration.GetSection(Msg91WhatsAppOptions.SectionName).Exists())
+                otpProvider = "Msg91WhatsApp";
+            else
+                otpProvider = "Console";
+        }
+
+        switch (otpProvider)
+        {
+            case "AuthKey":
+                services.Configure<AuthKeyOptions>(
+                    configuration.GetSection(AuthKeyOptions.SectionName));
+
+                services.AddHttpClient<ISmsService, AuthKeyOtpService>(client =>
+                {
+                    client.Timeout = TimeSpan.FromSeconds(30);
+                });
+                break;
+
+            case "Msg91WhatsApp":
+                services.Configure<Msg91WhatsAppOptions>(
+                    configuration.GetSection(Msg91WhatsAppOptions.SectionName));
+
+                services.AddHttpClient<ISmsService, Msg91WhatsAppService>(client =>
+                {
+                    client.Timeout = TimeSpan.FromSeconds(30);
+                });
+                break;
+
+            default:
+                services.AddSingleton<ISmsService, ConsoleSmsService>();
+                break;
         }
 
         services.AddScoped<IOtpService, OtpService>();

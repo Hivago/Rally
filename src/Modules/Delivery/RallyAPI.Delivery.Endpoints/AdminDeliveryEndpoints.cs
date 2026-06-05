@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using RallyAPI.Delivery.Application.Commands.PushOtpsToProvider;
 using RallyAPI.Delivery.Application.Commands.RefreshDeliveryStatus;
 using RallyAPI.SharedKernel.Extensions;
 
@@ -22,6 +23,15 @@ public static class AdminDeliveryEndpoints
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapPost("/orders/{orderId:guid}/push-otps", PushOtps)
+            .WithName("PushDeliveryOtps")
+            .WithSummary("Push pickup/drop OTPs to ProRouting and mark task ready (unsticks UnFulfilled tasks)")
+            .RequireAuthorization("RestaurantOrAdmin")
+            .Produces<PushOtpsToProviderResult>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound);
+
         return app;
     }
 
@@ -31,12 +41,8 @@ public static class AdminDeliveryEndpoints
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var userType = httpContext.User.FindFirst("user_type")?.Value ?? string.Empty;
-        var isAdmin = userType.Equals("admin", StringComparison.OrdinalIgnoreCase);
-
-        var subClaim = httpContext.User.FindFirst("sub")?.Value ?? string.Empty;
-        if (!Guid.TryParse(subClaim, out var callerId))
-            return Results.Unauthorized();
+        var (callerId, isAdmin, unauthorized) = ExtractCaller(httpContext);
+        if (unauthorized) return Results.Unauthorized();
 
         var command = new RefreshDeliveryStatusCommand(orderId, callerId, isAdmin);
         var result = await sender.Send(command, ct);
@@ -44,5 +50,34 @@ public static class AdminDeliveryEndpoints
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : result.Error.ToErrorResult();
+    }
+
+    private static async Task<IResult> PushOtps(
+        Guid orderId,
+        ISender sender,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var (callerId, isAdmin, unauthorized) = ExtractCaller(httpContext);
+        if (unauthorized) return Results.Unauthorized();
+
+        var command = new PushOtpsToProviderCommand(orderId, callerId, isAdmin);
+        var result = await sender.Send(command, ct);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : result.Error.ToErrorResult();
+    }
+
+    private static (Guid callerId, bool isAdmin, bool unauthorized) ExtractCaller(HttpContext httpContext)
+    {
+        var userType = httpContext.User.FindFirst("user_type")?.Value ?? string.Empty;
+        var isAdmin = userType.Equals("admin", StringComparison.OrdinalIgnoreCase);
+
+        var subClaim = httpContext.User.FindFirst("sub")?.Value ?? string.Empty;
+        if (!Guid.TryParse(subClaim, out var callerId))
+            return (Guid.Empty, false, true);
+
+        return (callerId, isAdmin, false);
     }
 }
