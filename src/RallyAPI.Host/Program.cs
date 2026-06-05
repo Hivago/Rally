@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
@@ -285,6 +286,19 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = 429;
 });
 
+// Forwarded headers — Railway terminates TLS at its edge proxy and forwards the
+// client IP in X-Forwarded-For. Without this, Connection.RemoteIpAddress is the
+// proxy's IP for EVERY request, so the per-IP rate limiters above would share one
+// bucket across all users (e.g. 3 OTP sends per 10 min for the whole platform).
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Railway's proxy IPs are dynamic and unknown ahead of time; clear the
+    // defaults (loopback-only) so the forwarded headers are honored.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // CORS
 builder.Services.AddCors(options =>
 {
@@ -316,6 +330,10 @@ builder.Services.AddCors(options =>
 
 
 var app = builder.Build();
+
+// Must run FIRST so everything downstream (rate limiter partitions, request
+// logging, auth) sees the real client IP and scheme instead of the proxy's.
+app.UseForwardedHeaders();
 
 // Add Global Exception Handler (early in pipeline!)
 app.UseGlobalExceptionHandler();
