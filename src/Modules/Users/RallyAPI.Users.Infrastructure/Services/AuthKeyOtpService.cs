@@ -117,8 +117,13 @@ public class AuthKeyOtpService : ISmsService
             case "sid":
                 // AuthKey SID — DLT entity/template are bound to the SID dashboard-side,
                 // so no sender/pe_id/template_id params are needed in the URL.
+                // Send the OTP under BOTH param names: AuthKey's variable mapping for
+                // SID 42317 ({#var#} template) silently switched from `otp` to `var`
+                // on 2026-06-05, delivering SMS with an EMPTY code. Supplying both
+                // keeps delivery working whichever name the template is mapped to.
                 query["sid"] = _options.Sid;
                 query["otp"] = otp;
+                query["var"] = otp;
                 break;
 
             case "dlt-template":
