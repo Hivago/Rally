@@ -91,12 +91,15 @@ public class AuthKeyOtpService : ISmsService
     }
 
     /// <summary>
-    /// Priority: pre-provisioned SID (test/dev) → DLT template (prod) → raw SMS (fallback).
+    /// Priority: AuthKey SID → DLT template → raw SMS (fallback).
+    /// SID mode is AuthKey's documented production path: the DLT entity ID and
+    /// content-template (chain) ID are mapped to the SID on the AuthKey dashboard
+    /// and resolved server-side, so they do not appear in the request URL.
     /// </summary>
     private string ResolveMode()
     {
         if (!string.IsNullOrWhiteSpace(_options.Sid))
-            return "sid-test";
+            return "sid";
         if (!string.IsNullOrWhiteSpace(_options.TemplateId))
             return "dlt-template";
         return "raw-sms";
@@ -111,8 +114,9 @@ public class AuthKeyOtpService : ISmsService
 
         switch (mode)
         {
-            case "sid-test":
-                // AuthKey-provisioned test SID — bypasses DLT. No sender/pe_id needed.
+            case "sid":
+                // AuthKey SID — DLT entity/template are bound to the SID dashboard-side,
+                // so no sender/pe_id/template_id params are needed in the URL.
                 query["sid"] = _options.Sid;
                 query["otp"] = otp;
                 break;

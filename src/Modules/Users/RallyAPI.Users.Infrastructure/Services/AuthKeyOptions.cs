@@ -39,11 +39,11 @@ public class AuthKeyOptions
     public string TemplateId { get; set; } = string.Empty;
 
     /// <summary>
-    /// AuthKey-provisioned SID for the 2FA test endpoint — bypasses DLT.
-    /// Used ONLY for development/testing before your DLT entity is approved.
-    /// When set, takes precedence over TemplateId and raw-SMS modes.
-    /// The pre-provisioned template at AuthKey expects an {#otp#} variable.
-    /// Remove this once your production DLT TemplateId is configured.
+    /// AuthKey 2FA SID — the production send path. The DLT Principal Entity ID
+    /// (PeId) and content-template/chain ID (TemplateId) are mapped to this SID on
+    /// the AuthKey dashboard and resolved server-side, so they are not sent in the URL.
+    /// When set, takes precedence over the explicit TemplateId and raw-SMS modes.
+    /// The template at AuthKey expects an {#otp#} variable.
     /// </summary>
     public string Sid { get; set; } = string.Empty;
 
