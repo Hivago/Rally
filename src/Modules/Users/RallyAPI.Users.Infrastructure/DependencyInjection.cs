@@ -136,9 +136,21 @@ public static class DependencyInjection
                 });
                 break;
 
-            default:
+            case "Console":
+                // Dev-only stub: logs the OTP instead of sending an SMS.
                 services.AddSingleton<ISmsService, ConsoleSmsService>();
                 break;
+
+            default:
+                // An explicit but unrecognized OtpProvider value must NEVER silently
+                // fall back to the console stub — that drops every OTP while the API
+                // still reports success. Incident (2026-06-08): staging had
+                // OtpProvider accidentally set to the AuthKey API key, so it routed
+                // to ConsoleSmsService and no SMS ever sent. Fail fast at startup.
+                throw new InvalidOperationException(
+                    $"Unrecognized OtpProvider value '{otpProvider}'. " +
+                    "Valid values are 'AuthKey', 'Msg91WhatsApp', or 'Console'. " +
+                    "Check the OtpProvider environment variable / appsettings.");
         }
 
         services.AddScoped<IOtpService, OtpService>();
