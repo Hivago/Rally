@@ -52,6 +52,12 @@ public class RiderDispatchOrchestratorTests
         _notificationService
             .SendDeliveryOfferAsync(Arg.Any<Guid>(), Arg.Any<DeliveryOfferNotification>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success());
+
+        // ProRouting requires a follow-up update call to push our OTPs and move the task
+        // from UnFulfilled -> Searching-for-Agent. The orchestrator NREs without this stub.
+        _thirdPartyProvider
+            .UpdateOrderAsync(Arg.Any<UpdateOrderRequest>(), Arg.Any<CancellationToken>())
+            .Returns(UpdateOrderResult.Success("searching", "ProRouting"));
     }
 
     [Fact]
