@@ -74,12 +74,13 @@ public class DeliveryRequestPhase1Tests
     }
 
     [Fact]
-    public void Create_GeneratesPickupCode_SixDigitsNumeric()
+    public void Create_GeneratesPickupCode_FourDigitsNumeric()
     {
+        // 4 digits, cleartext — required by the ProRouting LSP /update contract.
         var req = NewRequest();
         req.PickupCode.Should().NotBeNull();
-        req.PickupCode!.Length.Should().Be(6);
-        req.PickupCode.Should().MatchRegex("^[0-9]{6}$");
+        req.PickupCode!.Length.Should().Be(4);
+        req.PickupCode.Should().MatchRegex("^[0-9]{4}$");
     }
 
     [Fact]
@@ -96,7 +97,7 @@ public class DeliveryRequestPhase1Tests
     {
         // Cryptographic random — collisions are statistically negligible.
         var codes = Enumerable.Range(0, 50).Select(_ => NewRequest().PickupCode).ToHashSet();
-        codes.Count.Should().BeGreaterThan(45, "6-digit codes should rarely collide across 50 samples");
+        codes.Count.Should().BeGreaterThan(45, "4-digit codes should rarely collide across 50 samples");
     }
 
     // ─── RTO state machine ─────────────────────────────────────────────

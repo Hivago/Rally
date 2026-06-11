@@ -42,4 +42,10 @@ public static class DeliveryErrors
 
     public static readonly Error CannotCancelAfterPickup =
         Error.Validation("Cannot cancel delivery after pickup.");
+
+    public static readonly Error InvalidPickupCode =
+        Error.Validation("Invalid pickup code. Ask the restaurant to confirm the 4-digit code.");
+
+    public static readonly Error InvalidDropCode =
+        Error.Validation("Invalid delivery code. Ask the customer to confirm the 4-digit code.");
 }
