@@ -30,6 +30,14 @@ public sealed class MarkPickedUpCommandHandler : IRequestHandler<MarkPickedUpCom
         if (deliveryRequest.RiderId != request.RiderId)
             return Result.Failure(Error.Validation("You are not assigned to this delivery."));
 
+        if (!CodeMatches(deliveryRequest.PickupCode, request.PickupCode))
+        {
+            _logger.LogWarning(
+                "Rider {RiderId} submitted an invalid pickup code for delivery {DeliveryId}",
+                request.RiderId, request.DeliveryRequestId);
+            return Result.Failure(DeliveryErrors.InvalidPickupCode);
+        }
+
         try
         {
             deliveryRequest.MarkPickedUp();
@@ -46,4 +54,8 @@ public sealed class MarkPickedUpCommandHandler : IRequestHandler<MarkPickedUpCom
             return Result.Failure(Error.Validation(ex.Message));
         }
     }
+
+    private static bool CodeMatches(string? expected, string submitted) =>
+        !string.IsNullOrWhiteSpace(expected) &&
+        string.Equals(expected.Trim(), submitted.Trim(), StringComparison.Ordinal);
 }

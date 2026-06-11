@@ -228,6 +228,7 @@ public static class RiderDeliveryEndpoints
 
     private static async Task<IResult> MarkPickedUp(
         Guid deliveryId,
+        [FromBody] MarkPickedUpRequest request,
         ICurrentUserService currentUser,
         IMediator mediator,
         CancellationToken ct)
@@ -238,7 +239,8 @@ public static class RiderDeliveryEndpoints
         var command = new MarkPickedUpCommand
         {
             DeliveryRequestId = deliveryId,
-            RiderId = currentUser.UserId.Value
+            RiderId = currentUser.UserId.Value,
+            PickupCode = request.PickupCode
         };
 
         var result = await mediator.Send(command, ct);
@@ -281,6 +283,7 @@ public static class RiderDeliveryEndpoints
 
     private static async Task<IResult> MarkDelivered(
         Guid deliveryId,
+        [FromBody] MarkDeliveredRequest request,
         ICurrentUserService currentUser,
         IMediator mediator,
         CancellationToken ct)
@@ -291,7 +294,8 @@ public static class RiderDeliveryEndpoints
         var command = new MarkDeliveredCommand
         {
             DeliveryRequestId = deliveryId,
-            RiderId = currentUser.UserId.Value
+            RiderId = currentUser.UserId.Value,
+            DropCode = request.DropCode
         };
 
         var result = await mediator.Send(command, ct);
