@@ -89,6 +89,12 @@ public static class RiderDeliveryEndpoints
             .Produces<DeliveryRequestDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status204NoContent);
 
+        // Get Delivery History (paginated)
+        group.MapGet("/history", GetDeliveryHistory)
+            .WithName("GetRiderDeliveryHistory")
+            .WithSummary("Get rider's completed delivery history (paginated)")
+            .Produces<RiderDeliveryHistoryResponse>(StatusCodes.Status200OK);
+
         return app;
     }
 
@@ -370,6 +376,84 @@ public static class RiderDeliveryEndpoints
         };
 
         return Results.Ok(dto);
+    }
+
+    private static async Task<IResult> GetDeliveryHistory(
+        int? page,
+        int? pageSize,
+        ICurrentUserService currentUser,
+        DeliveryDbContext dbContext,
+        CancellationToken ct)
+    {
+        if (!currentUser.UserId.HasValue)
+            return Results.Unauthorized();
+
+        var riderId = currentUser.UserId.Value;
+
+        var pageNum = page is > 0 ? page.Value : 1;
+        var size = pageSize switch
+        {
+            null or <= 0 => 20,
+            > 100 => 100,
+            _ => pageSize.Value
+        };
+
+        var baseQuery = dbContext.DeliveryRequests
+            .AsNoTracking()
+            .Where(r => r.RiderId == riderId && r.Status == DeliveryRequestStatus.Delivered);
+
+        var totalCount = await baseQuery.CountAsync(ct);
+
+        var pageRows = await baseQuery
+            .OrderByDescending(r => r.DeliveredAt)
+            .Skip((pageNum - 1) * size)
+            .Take(size)
+            .Select(r => new
+            {
+                r.Id,
+                r.OrderNumber,
+                r.PickupContactName,
+                r.DropAddress,
+                r.DropPincode,
+                r.DistanceKm,
+                r.DeliveredAt
+            })
+            .ToListAsync(ct);
+
+        // Per-delivery rider earnings live on the accepted offer. Fetch them for
+        // this page in one query rather than a correlated subquery per row.
+        var ids = pageRows.Select(r => r.Id).ToList();
+        var earningsLookup = (await dbContext.RiderOffers
+                .AsNoTracking()
+                .Where(o => ids.Contains(o.DeliveryRequestId)
+                    && o.RiderId == riderId
+                    && o.Status == RiderOfferStatus.Accepted)
+                .Select(o => new { o.DeliveryRequestId, o.Earnings })
+                .ToListAsync(ct))
+            .GroupBy(x => x.DeliveryRequestId)
+            .ToDictionary(g => g.Key, g => g.First().Earnings);
+
+        var items = pageRows
+            .Select(r => new RiderDeliveryHistoryItemDto
+            {
+                DeliveryRequestId = r.Id,
+                OrderNumber = r.OrderNumber,
+                RestaurantName = r.PickupContactName,
+                DropAddress = r.DropAddress,
+                DropPincode = r.DropPincode,
+                Earnings = earningsLookup.TryGetValue(r.Id, out var e) ? e : 0m,
+                DistanceKm = r.DistanceKm,
+                CompletedAt = r.DeliveredAt
+            })
+            .ToList();
+
+        return Results.Ok(new RiderDeliveryHistoryResponse
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = pageNum,
+            PageSize = size
+        });
     }
 
     private static ProblemDetails CreateProblemDetails(Error error) => new()
