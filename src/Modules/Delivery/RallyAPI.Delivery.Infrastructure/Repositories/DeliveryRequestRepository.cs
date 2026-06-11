@@ -34,6 +34,18 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
             .FirstOrDefaultAsync(r => r.OrderId == orderId, ct);
     }
 
+    public async Task<DeliveryRequest?> GetActiveByRiderAsync(Guid riderId, CancellationToken ct = default)
+    {
+        // RiderId is only ever set for own-fleet deliveries, so this implicitly
+        // excludes 3PL. Active = assigned through in-transit, before Delivered.
+        return await _dbContext.DeliveryRequests
+            .Where(r => r.RiderId == riderId)
+            .Where(r => r.Status >= DeliveryRequestStatus.RiderAssigned)
+            .Where(r => r.Status < DeliveryRequestStatus.Delivered)
+            .OrderByDescending(r => r.AssignedAt)
+            .FirstOrDefaultAsync(ct);
+    }
+
     public async Task<IReadOnlyList<DeliveryRequest>> GetByStatusAsync(
         DeliveryRequestStatus status,
         CancellationToken ct = default)
