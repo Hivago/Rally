@@ -25,7 +25,7 @@ using System.Text.Json;
 using System.Threading.RateLimiting;
 
 // Bootstrap logger — captures startup errors before the host is built
-Log.Logger = new LoggerConfiguration()
+        Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .CreateBootstrapLogger();
 
@@ -185,6 +185,9 @@ builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Progr
 
 // Override StubRiderNotificationService with real SignalR implementation
 builder.Services.AddScoped<IRiderNotificationService, SignalRRiderNotificationService>();
+
+// Real-time rider location push to the customer tracking the order
+builder.Services.AddScoped<ICustomerNotificationService, SignalRCustomerNotificationService>();
 
 
 // Add Swagger
