@@ -12,7 +12,7 @@ public class GoOnline : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/riders/status/online", HandleAsync)
+        app.MapPost("/api/v1/riders/status/online", HandleAsync)
             .WithTags("Riders")
             .WithSummary("Set rider status to online")
             .RequireAuthorization("Rider");
