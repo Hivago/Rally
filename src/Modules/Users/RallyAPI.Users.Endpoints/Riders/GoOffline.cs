@@ -12,7 +12,7 @@ public class GoOffline : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/riders/status/offline", HandleAsync)
+        app.MapPost("/api/v1/riders/status/offline", HandleAsync)
             .WithTags("Riders")
             .WithSummary("Set rider status to offline")
             .RequireAuthorization("Rider");

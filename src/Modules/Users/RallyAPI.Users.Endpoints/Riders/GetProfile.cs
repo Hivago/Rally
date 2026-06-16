@@ -12,7 +12,7 @@ public class GetProfile : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/riders/profile", HandleAsync)
+        app.MapGet("/api/v1/riders/profile", HandleAsync)
             .WithTags("Riders")
             .WithSummary("Get rider profile")
             .RequireAuthorization("Rider");

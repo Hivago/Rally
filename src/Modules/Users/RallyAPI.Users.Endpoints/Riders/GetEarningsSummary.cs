@@ -12,7 +12,7 @@ public class GetEarningsSummary : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/riders/earnings", HandleAsync)
+        app.MapGet("/api/v1/riders/earnings", HandleAsync)
             .WithTags("Riders")
             .WithSummary("Get rider earnings summary (total/week/month + pending payout)")
             .RequireAuthorization("Rider");

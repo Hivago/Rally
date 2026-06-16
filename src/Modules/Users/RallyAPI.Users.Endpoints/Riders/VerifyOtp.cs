@@ -11,7 +11,7 @@ public class VerifyOtp : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/riders/otp/verify", HandleAsync)
+        app.MapPost("/api/v1/riders/otp/verify", HandleAsync)
             .WithTags("Riders")
             .WithSummary("Verify OTP and get token")
             .AllowAnonymous()
