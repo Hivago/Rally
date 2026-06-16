@@ -12,7 +12,7 @@ public class GetKycStatus : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/riders/kyc-status", HandleAsync)
+        app.MapGet("/api/v1/riders/kyc-status", HandleAsync)
             .WithTags("Riders")
             .WithSummary("Get the rider's own KYC status and uploaded documents")
             .RequireAuthorization("Rider");

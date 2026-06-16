@@ -12,7 +12,7 @@ public class UpdateLocation : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/riders/location", HandleAsync)
+        app.MapPost("/api/v1/riders/location", HandleAsync)
             .WithTags("Riders")
             .WithSummary("Update rider current location")
             .RequireAuthorization("Rider");

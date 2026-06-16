@@ -26,7 +26,7 @@ public class UpdateProfile : IEndpoint
 
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapPut("/api/riders/profile", HandleAsync)
+        app.MapPut("/api/v1/riders/profile", HandleAsync)
             .WithTags("Riders")
             .WithSummary("Update rider profile")
             .RequireAuthorization("Rider");

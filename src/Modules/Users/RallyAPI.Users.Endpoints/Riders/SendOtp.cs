@@ -11,7 +11,7 @@ public class SendOtp : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/riders/otp/send", HandleAsync)
+        app.MapPost("/api/v1/riders/otp/send", HandleAsync)
             .WithTags("Riders")
             .WithSummary("Send OTP to rider phone")
             .AllowAnonymous()
