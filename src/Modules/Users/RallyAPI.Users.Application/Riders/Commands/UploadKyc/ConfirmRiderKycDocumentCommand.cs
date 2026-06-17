@@ -69,25 +69,31 @@ public sealed class ConfirmRiderKycDocumentCommandHandler
             return Result.Failure<ConfirmRiderKycDocumentResponse>(
                 StorageErrors.InvalidFileKey);
 
-        // 4. Delete old file from R2 if rider is replacing an existing document
+        // 4. If replacing an existing document of the same type, delete its file
+        //    and remove its row.
         var existingDoc = rider.KycDocuments
             .FirstOrDefault(d => d.DocumentType == command.DocumentType);
         if (existingDoc is not null)
+        {
             await _storage.DeleteAsync(existingDoc.FileKey, ct);
+            _riderRepository.RemoveKycDocument(existingDoc);
+        }
 
-        // 5. Build public URL and update Rider aggregate
+        // 5. Insert the new document directly as its own row. We deliberately do
+        //    NOT mutate or save the Rider aggregate here: Rider carries a `Version`
+        //    optimistic-concurrency token, and persisting the graph made EF emit a
+        //    concurrency-checked UPDATE on the rider row that affected 0 rows
+        //    (DbUpdateConcurrencyException -> HTTP 500). Writing only the child
+        //    table via an explicit INSERT sidesteps the concurrency check entirely.
         var publicUrl = _storage.BuildPublicUrl(command.FileKey);
-        var document = rider.AddOrReplaceKycDocument(
+        var document = RiderKycDocument.Create(
+            command.RiderId,
             command.DocumentType,
             command.FileKey,
             publicUrl);
+        _riderRepository.AddKycDocument(document);
 
-        // 6. Save. The rider was loaded tracked, so EF already knows the new
-        //    document is Added (and any replaced one is Deleted) plus the scalar
-        //    UpdatedAt change. Do NOT call repository.Update(rider): DbSet.Update
-        //    marks the whole graph Modified, which makes EF emit an UPDATE for the
-        //    brand-new document (it already has a non-default Guid key) instead of
-        //    an INSERT -> 0 rows affected -> DbUpdateConcurrencyException (the 500).
+        // 6. Save — INSERT (+ optional DELETE) only; no UPDATE on the rider row.
         await _unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new ConfirmRiderKycDocumentResponse(
