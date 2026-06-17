@@ -54,8 +54,10 @@ public sealed class ConfirmRiderKycDocumentCommandHandler
             return Result.Failure<ConfirmRiderKycDocumentResponse>(
                 Error.Forbidden("You can only upload your own KYC documents."));
 
-        // 2. Load rider aggregate
-        var rider = await _riderRepository.GetByIdAsync(command.RiderId, ct);
+        // 2. Load rider aggregate WITH its KYC documents. We need the collection
+        //    tracked so the replace path below finds an existing doc of the same
+        //    type (and so the new doc is tracked as Added, not Modified).
+        var rider = await _riderRepository.GetByIdWithKycAsync(command.RiderId, ct);
         if (rider is null)
             return Result.Failure<ConfirmRiderKycDocumentResponse>(
                 Error.NotFound("Rider", command.RiderId));
@@ -80,8 +82,12 @@ public sealed class ConfirmRiderKycDocumentCommandHandler
             command.FileKey,
             publicUrl);
 
-        // 6. Save rider — EF Core cascade saves the KycDocuments collection
-        _riderRepository.Update(rider, ct);
+        // 6. Save. The rider was loaded tracked, so EF already knows the new
+        //    document is Added (and any replaced one is Deleted) plus the scalar
+        //    UpdatedAt change. Do NOT call repository.Update(rider): DbSet.Update
+        //    marks the whole graph Modified, which makes EF emit an UPDATE for the
+        //    brand-new document (it already has a non-default Guid key) instead of
+        //    an INSERT -> 0 rows affected -> DbUpdateConcurrencyException (the 500).
         await _unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new ConfirmRiderKycDocumentResponse(
