@@ -322,7 +322,9 @@ builder.Services.AddCors(options =>
                 "https://hivago.in",
                 "https://www.hivago.in",
                 "https://api.hivago.in",
-                "https://staging.api.hivago.in")
+                "https://staging.api.hivago.in",
+        "http://localhost:8081/")
+
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
