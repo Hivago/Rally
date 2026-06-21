@@ -19,7 +19,10 @@ using RallyAPI.SharedKernel.Abstractions.Notifications;
 using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.SharedKernel.Infrastructure;
 using RallyAPI.Users.Endpoints;
+using RedisRateLimiting;
 using Serilog;
+using Serilog.Events;
+using StackExchange.Redis;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.RateLimiting;
@@ -34,12 +37,26 @@ try
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Sentry error tracking. DSN is read from config "Sentry:Dsn" / env SENTRY_DSN.
+// When the DSN is empty (local dev, CI) the SDK no-ops, so this is safe everywhere.
+builder.WebHost.UseSentry();
+
 builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)
     .ReadFrom.Services(services)
     .Enrich.FromLogContext()
     .Enrich.WithEnvironmentName()
-    .Enrich.WithThreadId());
+    .Enrich.WithThreadId()
+    // Route Serilog Error+ events (incl. those logged by ExceptionHandlingMiddleware,
+    // which catches exceptions so they never reach Sentry's ASP.NET middleware) into
+    // the Sentry SDK already initialized by UseSentry(). InitializeSdk=false avoids a
+    // second init; when no DSN is configured the SDK is disabled and this is a no-op.
+    .WriteTo.Sentry(o =>
+    {
+        o.InitializeSdk = false;
+        o.MinimumEventLevel = LogEventLevel.Error;
+        o.MinimumBreadcrumbLevel = LogEventLevel.Information;
+    }));
 
 // Serialize enums as strings in all HTTP responses (minimal API + TypedResults)
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -53,8 +70,16 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
 
 builder.Services.AddHttpContextAccessor();
 
-// SignalR
-builder.Services.AddSignalR();
+// SignalR with a Redis backplane so real-time messages fan out across every
+// instance. Without this, a client connected to instance A never receives an
+// event published on instance B — the hard ceiling on horizontal scaling.
+builder.Services.AddSignalR()
+    .AddStackExchangeRedis(
+        builder.Configuration.GetConnectionString("Redis")!,
+        options =>
+        {
+            options.Configuration.ChannelPrefix = RedisChannel.Literal("rally-signalr");
+        });
 builder.Services.AddSingleton<ConnectionTracker>();
 
 builder.Services.AddScoped<DomainEventInterceptor>();
@@ -229,59 +254,70 @@ builder.Services.AddSwaggerGen(c =>
 // Add Rate Limiting
 var isDev = builder.Environment.IsDevelopment();
 
+// Rate limiting is Redis-backed so limits hold ACROSS instances. With the old
+// in-memory limiter, N instances meant N× the effective limit (each kept its own
+// counter), defeating the protection. RedisRateLimiting reuses the registered
+// IConnectionMultiplexer singleton (resolved per-request via RequestServices).
+// Note: the Redis sliding-window limiter is a true sliding window (sorted-set
+// based), so it has no SegmentsPerWindow knob — the prior segment counts are dropped
+// but the PermitLimit/Window (the actual protection) are unchanged.
+IConnectionMultiplexer ResolveRedis(HttpContext context) =>
+    context.RequestServices.GetRequiredService<IConnectionMultiplexer>();
+
 builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("otp", context =>
-        RateLimitPartition.GetSlidingWindowLimiter(
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new SlidingWindowRateLimiterOptions
+            _ => new RedisSlidingWindowRateLimiterOptions
             {
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
                 PermitLimit = isDev ? 100 : 3,
-                Window = isDev ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(10),
-                SegmentsPerWindow = 2
+                Window = isDev ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(10)
             }));
 
     options.AddPolicy("login", context =>
-        RateLimitPartition.GetSlidingWindowLimiter(
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new SlidingWindowRateLimiterOptions
+            _ => new RedisSlidingWindowRateLimiterOptions
             {
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
                 PermitLimit = isDev ? 100 : 5,
-                Window = isDev ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(15),
-                SegmentsPerWindow = 3
+                Window = isDev ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(15)
             }));
 
     options.AddPolicy("refresh", context =>
-        RateLimitPartition.GetSlidingWindowLimiter(
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new SlidingWindowRateLimiterOptions
+            _ => new RedisSlidingWindowRateLimiterOptions
             {
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
                 PermitLimit = isDev ? 100 : 10,
-                Window = TimeSpan.FromMinutes(1),
-                SegmentsPerWindow = 2
+                Window = TimeSpan.FromMinutes(1)
             }));
 
     // Public marketing lead capture: 10 requests/minute per IP in prod.
     // Used by /api/waitlist and /api/restaurant-leads (anonymous landing-page endpoints).
     options.AddPolicy("lead-capture", context =>
-        RateLimitPartition.GetSlidingWindowLimiter(
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new SlidingWindowRateLimiterOptions
+            _ => new RedisSlidingWindowRateLimiterOptions
             {
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
                 PermitLimit = isDev ? 100 : 10,
-                Window = TimeSpan.FromMinutes(1),
-                SegmentsPerWindow = 2
+                Window = TimeSpan.FromMinutes(1)
             }));
 
     // Admin CSV export: 5 requests/minute per admin (by JWT sub claim).
     // Falls back to remote IP if unauthenticated, but the endpoint also requires auth.
     options.AddPolicy("admin-export", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
+        RedisRateLimitPartition.GetFixedWindowRateLimiter(
             context.User.FindFirst("sub")?.Value
                 ?? context.Connection.RemoteIpAddress?.ToString()
                 ?? "unknown",
-            _ => new FixedWindowRateLimiterOptions
+            _ => new RedisFixedWindowRateLimiterOptions
             {
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
                 PermitLimit = isDev ? 100 : 5,
                 Window = TimeSpan.FromMinutes(1)
             }));
@@ -322,7 +358,9 @@ builder.Services.AddCors(options =>
                 "https://hivago.in",
                 "https://www.hivago.in",
                 "https://api.hivago.in",
-                "https://staging.api.hivago.in")
+                "https://staging.api.hivago.in",
+                 "http://localhost:8081/")
+
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
