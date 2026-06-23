@@ -497,3 +497,7 @@ $RECYCLE.BIN/
 Keys/
 *.pem
 appsettings.Development.json
+# Rally — local build/diagnostic scratch files
+*.err
+*.err.txt
+scripts/*.csv

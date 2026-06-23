@@ -67,6 +67,22 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<DeliveryRequest>> GetStuckForRedispatchAsync(
+        DateTime stuckBefore,
+        CancellationToken ct = default)
+    {
+        return await _dbContext.DeliveryRequests
+            .Where(r => r.Status == DeliveryRequestStatus.Created
+                     || r.Status == DeliveryRequestStatus.PendingDispatch
+                     || r.Status == DeliveryRequestStatus.SearchingOwnFleet
+                     || r.Status == DeliveryRequestStatus.Searching3PL)
+            .Where(r => r.RiderId == null)
+            .Where(r => r.UpdatedAt < stuckBefore)
+            .OrderBy(r => r.UpdatedAt)
+            .Take(50)
+            .ToListAsync(ct);
+    }
+
     public async Task AddAsync(DeliveryRequest request, CancellationToken ct = default)
     {
         await _dbContext.DeliveryRequests.AddAsync(request, ct);
