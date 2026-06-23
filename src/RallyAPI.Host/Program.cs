@@ -39,8 +39,15 @@ try
 var builder = WebApplication.CreateBuilder(args);
 
 // Sentry error tracking. DSN is read from config "Sentry:Dsn" / env SENTRY_DSN.
-// When the DSN is empty (local dev, CI) the SDK no-ops, so this is safe everywhere.
-builder.WebHost.UseSentry();
+// Only initialize when a DSN is actually configured: UseSentry() throws
+// ArgumentNullException on a null/unset DSN (only an empty STRING no-ops). On
+// Railway appsettings.json isn't in the image and SENTRY_DSN is unset -> null ->
+// it crashed the whole app on startup. Guarding makes it safe with no DSN.
+var sentryDsn = builder.Configuration["Sentry:Dsn"];
+if (!string.IsNullOrWhiteSpace(sentryDsn))
+{
+    builder.WebHost.UseSentry();
+}
 
 builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)
