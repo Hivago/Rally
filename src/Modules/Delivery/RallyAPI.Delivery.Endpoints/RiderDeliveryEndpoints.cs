@@ -21,7 +21,7 @@ public static class RiderDeliveryEndpoints
 {
     public static IEndpointRouteBuilder MapRiderDeliveryEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/v1/riders/delivery")
+        var group = app.MapGroup("/api/v1/rider/delivery")
             .WithTags("Rider Delivery")
             .RequireAuthorization("Rider")
             .WithOpenApi();

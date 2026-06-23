@@ -31,7 +31,7 @@ public class UpdateProfile : IEndpoint
             .WithSummary("Update rider profile")
             .RequireAuthorization("Rider");
 
-        app.MapPost("/api/v1/riders/{riderId:guid}/kyc/upload-url",
+        app.MapPost("api/users/riders/{riderId:guid}/kyc/upload-url",
     async (
         Guid riderId,
         [FromBody] GenerateKycUploadUrlRequest request,
@@ -53,8 +53,8 @@ public class UpdateProfile : IEndpoint
     .WithName("GenerateRiderKycUploadUrl")
     .WithTags("Users - Images");
 
-        // PATCH /api/v1/riders/{riderId}/kyc/confirm  (Step 2)
-        app.MapPatch("/api/v1/riders/{riderId:guid}/kyc/confirm",
+        // PATCH /api/users/riders/{riderId}/kyc/confirm  (Step 2)
+        app.MapPatch("api/users/riders/{riderId:guid}/kyc/confirm",
             async (
                 Guid riderId,
                 [FromBody] ConfirmKycRequest request,
