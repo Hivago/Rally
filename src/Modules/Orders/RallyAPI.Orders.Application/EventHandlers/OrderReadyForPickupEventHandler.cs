@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using RallyAPI.Orders.Application.Abstractions;
 using RallyAPI.Orders.Domain.Abstractions;
 using RallyAPI.Orders.Domain.Events;
 using RallyAPI.SharedKernel.IntegrationEvents.Orders;
@@ -9,20 +10,26 @@ namespace RallyAPI.Orders.Application.EventHandlers;
 /// <summary>
 /// Bridge handler: OrderReadyForPickup domain event -> OrderReadyForPickupIntegrationEvent.
 /// Notifies the Delivery module to trigger immediate rider dispatch.
+///
+/// The integration event is written to the transactional outbox rather than published
+/// in-process: the OutboxProcessor then delivers it with retries to the Delivery consumer.
+/// An in-process publish that threw (or whose long dispatch was cancelled when the request
+/// thread ended) was swallowed by the domain-event interceptor, so the rider was never
+/// dispatched with no retry. The dispatch recovery service is a further backstop.
 /// </summary>
 public sealed class OrderReadyForPickupEventHandler : INotificationHandler<OrderReadyForPickupEvent>
 {
     private readonly IOrderRepository _orderRepository;
-    private readonly IPublisher _publisher;
+    private readonly IOutboxWriter _outbox;
     private readonly ILogger<OrderReadyForPickupEventHandler> _logger;
 
     public OrderReadyForPickupEventHandler(
         IOrderRepository orderRepository,
-        IPublisher publisher,
+        IOutboxWriter outbox,
         ILogger<OrderReadyForPickupEventHandler> logger)
     {
         _orderRepository = orderRepository;
-        _publisher = publisher;
+        _outbox = outbox;
         _logger = logger;
     }
 
@@ -46,8 +53,8 @@ public sealed class OrderReadyForPickupEventHandler : INotificationHandler<Order
             restaurantId: order.RestaurantId
         );
 
-        await _publisher.Publish(integrationEvent, cancellationToken);
+        await _outbox.WriteAsync(integrationEvent, cancellationToken);
 
-        _logger.LogInformation("Published OrderReadyForPickupIntegrationEvent for Order {OrderNumber}", order.OrderNumber.Value);
+        _logger.LogInformation("Enqueued OrderReadyForPickupIntegrationEvent to outbox for Order {OrderNumber}", order.OrderNumber.Value);
     }
 }

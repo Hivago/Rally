@@ -17,6 +17,15 @@ public interface IDeliveryRequestRepository
     Task<DeliveryRequest?> GetActiveByRiderAsync(Guid riderId, CancellationToken ct = default);
     Task<IReadOnlyList<DeliveryRequest>> GetByStatusAsync(DeliveryRequestStatus status, CancellationToken ct = default);
     Task<IReadOnlyList<DeliveryRequest>> GetPendingDispatchAsync(DateTime dispatchBefore, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns requests wedged in a pre-assignment state (Created / PendingDispatch /
+    /// SearchingOwnFleet / Searching3PL) with no rider assigned that have been idle
+    /// (no status change) since before <paramref name="stuckBefore"/>. Used by the
+    /// dispatch recovery service to re-trigger dispatch for orders whose inline
+    /// dispatch was interrupted and never retried.
+    /// </summary>
+    Task<IReadOnlyList<DeliveryRequest>> GetStuckForRedispatchAsync(DateTime stuckBefore, CancellationToken ct = default);
     Task AddAsync(DeliveryRequest request, CancellationToken ct = default);
     Task UpdateAsync(DeliveryRequest request, CancellationToken ct = default);
  

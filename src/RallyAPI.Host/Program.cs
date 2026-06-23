@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RallyAPI.Catalog.Endpoints;
 using RallyAPI.Delivery.Endpoints;
+using RallyAPI.Host.BackgroundServices;
 using RallyAPI.Host.DevEndpoints;
 using RallyAPI.Host.Hubs;
 using RallyAPI.Host.Services;
@@ -213,6 +214,10 @@ builder.Services.AddScoped<IRiderNotificationService, SignalRRiderNotificationSe
 
 // Real-time rider location push to the customer tracking the order
 builder.Services.AddScoped<ICustomerNotificationService, SignalRCustomerNotificationService>();
+
+// Safety net: re-dispatch delivery requests wedged in a pre-assignment state when the
+// inline dispatch (on the ready-for-pickup / outbox path) was interrupted and never retried.
+builder.Services.AddHostedService<DeliveryDispatchRecoveryService>();
 
 
 // Add Swagger
