@@ -48,6 +48,10 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .Enrich.FromLogContext()
     .Enrich.WithEnvironmentName()
     .Enrich.WithThreadId()
+    // Always write to console, even when appsettings.json (which carries the
+    // Serilog config) is absent from the deployed image — otherwise post-startup
+    // logs and exceptions vanish on Railway, making boot failures invisible.
+    .WriteTo.Console()
     // Route Serilog Error+ events (incl. those logged by ExceptionHandlingMiddleware,
     // which catches exceptions so they never reach Sentry's ASP.NET middleware) into
     // the Sentry SDK already initialized by UseSentry(). InitializeSdk=false avoids a
@@ -488,6 +492,9 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
+        // Write straight to stderr too: on Railway the Serilog config may be absent
+        // and a buffered/async sink can lose this before the crash kills the process.
+        Console.Error.WriteLine($"[STARTUP MIGRATION ERROR] {ex}");
         logger.LogError(ex, "An error occurred while migrating the database.");
         throw;
     }
@@ -498,6 +505,7 @@ app.Run();
 }
 catch (Exception ex)
 {
+    Console.Error.WriteLine($"[STARTUP FATAL] {ex}");
     Log.Fatal(ex, "Application terminated unexpectedly");
 }
 finally
