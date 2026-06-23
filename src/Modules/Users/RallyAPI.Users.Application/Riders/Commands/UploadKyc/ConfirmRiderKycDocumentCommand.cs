@@ -54,8 +54,10 @@ public sealed class ConfirmRiderKycDocumentCommandHandler
             return Result.Failure<ConfirmRiderKycDocumentResponse>(
                 Error.Forbidden("You can only upload your own KYC documents."));
 
-        // 2. Load rider aggregate
-        var rider = await _riderRepository.GetByIdAsync(command.RiderId, ct);
+        // 2. Load rider aggregate WITH its KYC documents. We need the collection
+        //    tracked so the replace path below finds an existing doc of the same
+        //    type (and so the new doc is tracked as Added, not Modified).
+        var rider = await _riderRepository.GetByIdWithKycAsync(command.RiderId, ct);
         if (rider is null)
             return Result.Failure<ConfirmRiderKycDocumentResponse>(
                 Error.NotFound("Rider", command.RiderId));
@@ -67,21 +69,31 @@ public sealed class ConfirmRiderKycDocumentCommandHandler
             return Result.Failure<ConfirmRiderKycDocumentResponse>(
                 StorageErrors.InvalidFileKey);
 
-        // 4. Delete old file from R2 if rider is replacing an existing document
+        // 4. If replacing an existing document of the same type, delete its file
+        //    and remove its row.
         var existingDoc = rider.KycDocuments
             .FirstOrDefault(d => d.DocumentType == command.DocumentType);
         if (existingDoc is not null)
+        {
             await _storage.DeleteAsync(existingDoc.FileKey, ct);
+            _riderRepository.RemoveKycDocument(existingDoc);
+        }
 
-        // 5. Build public URL and update Rider aggregate
+        // 5. Insert the new document directly as its own row. We deliberately do
+        //    NOT mutate or save the Rider aggregate here: Rider carries a `Version`
+        //    optimistic-concurrency token, and persisting the graph made EF emit a
+        //    concurrency-checked UPDATE on the rider row that affected 0 rows
+        //    (DbUpdateConcurrencyException -> HTTP 500). Writing only the child
+        //    table via an explicit INSERT sidesteps the concurrency check entirely.
         var publicUrl = _storage.BuildPublicUrl(command.FileKey);
-        var document = rider.AddOrReplaceKycDocument(
+        var document = RiderKycDocument.Create(
+            command.RiderId,
             command.DocumentType,
             command.FileKey,
             publicUrl);
+        _riderRepository.AddKycDocument(document);
 
-        // 6. Save rider — EF Core cascade saves the KycDocuments collection
-        _riderRepository.Update(rider, ct);
+        // 6. Save — INSERT (+ optional DELETE) only; no UPDATE on the rider row.
         await _unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new ConfirmRiderKycDocumentResponse(

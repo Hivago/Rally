@@ -16,4 +16,10 @@ public interface IRiderRepository
     Task<(List<Rider> Items, int TotalCount)> GetPagedAsync(bool? isOnline, KycStatus? kycStatus, int page, int pageSize, CancellationToken cancellationToken = default);
     Task AddAsync(Rider rider, CancellationToken cancellationToken = default);
     void Update(Rider rider, CancellationToken cancellationToken = default);
+
+    // KYC documents are written directly as their own rows so we never issue a
+    // concurrency-checked UPDATE against the Rider aggregate (which carries a
+    // Version token). See ConfirmRiderKycDocumentCommandHandler.
+    void AddKycDocument(RiderKycDocument document);
+    void RemoveKycDocument(RiderKycDocument document);
 }
