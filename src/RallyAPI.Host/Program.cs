@@ -364,7 +364,7 @@ builder.Services.AddCors(options =>
                 "https://www.hivago.in",
                 "https://api.hivago.in",
                 "https://staging.api.hivago.in",
-                 "http://localhost:8081/")
+                "http://localhost:8081/")
 
             .AllowAnyMethod()
             .AllowAnyHeader()
