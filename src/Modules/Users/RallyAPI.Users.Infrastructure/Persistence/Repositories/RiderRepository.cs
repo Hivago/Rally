@@ -94,4 +94,14 @@ public class RiderRepository : IRiderRepository
         _context.Riders.Update(rider);
     }
 
+    public void AddKycDocument(RiderKycDocument document)
+    {
+        _context.Set<RiderKycDocument>().Add(document);
+    }
+
+    public void RemoveKycDocument(RiderKycDocument document)
+    {
+        _context.Set<RiderKycDocument>().Remove(document);
+    }
+
 }
