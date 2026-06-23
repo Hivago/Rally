@@ -269,6 +269,11 @@ builder.Services.AddSwaggerGen(c =>
 
 // Add Rate Limiting
 var isDev = builder.Environment.IsDevelopment();
+// Relax rate limits outside Production so the Staging test environment isn't throttled
+// like prod (it runs as Production via the Dockerfile otherwise). Set
+// ASPNETCORE_ENVIRONMENT=Staging on the staging service to get the lenient limits while
+// keeping Swagger/dev endpoints off and the real SMS provider on.
+var relaxedLimits = isDev || builder.Environment.IsStaging();
 
 // Rate limiting is Redis-backed so limits hold ACROSS instances. With the old
 // in-memory limiter, N instances meant N× the effective limit (each kept its own
@@ -288,8 +293,8 @@ builder.Services.AddRateLimiter(options =>
             _ => new RedisSlidingWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = isDev ? 100 : 3,
-                Window = isDev ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(10)
+                PermitLimit = relaxedLimits ? 100 : 3,
+                Window = relaxedLimits ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(10)
             }));
 
     options.AddPolicy("login", context =>
@@ -298,8 +303,8 @@ builder.Services.AddRateLimiter(options =>
             _ => new RedisSlidingWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = isDev ? 100 : 5,
-                Window = isDev ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(15)
+                PermitLimit = relaxedLimits ? 100 : 5,
+                Window = relaxedLimits ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(15)
             }));
 
     options.AddPolicy("refresh", context =>
@@ -308,7 +313,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new RedisSlidingWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = isDev ? 100 : 10,
+                PermitLimit = relaxedLimits ? 100 : 10,
                 Window = TimeSpan.FromMinutes(1)
             }));
 
@@ -320,7 +325,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new RedisSlidingWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = isDev ? 100 : 10,
+                PermitLimit = relaxedLimits ? 100 : 10,
                 Window = TimeSpan.FromMinutes(1)
             }));
 
@@ -334,7 +339,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new RedisFixedWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = isDev ? 100 : 5,
+                PermitLimit = relaxedLimits ? 100 : 5,
                 Window = TimeSpan.FromMinutes(1)
             }));
 
