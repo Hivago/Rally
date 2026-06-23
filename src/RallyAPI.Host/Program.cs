@@ -343,29 +343,50 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-// CORS
+// CORS — allowed browser origins are environment-specific.
+//
+// The committed default below is the PRODUCTION allowlist (safe by default: no
+// localhost, no preview deploys). Staging widens it via the Cors:AllowedOrigins
+// config — on Railway set the env var Cors__AllowedOrigins to a comma-separated
+// list (localhost + *.vercel.app previews + the prod domains) so the frontend
+// devs can keep pointing their localhost at the staging API. Local dev always
+// gets the localhost origins appended automatically, so no config is needed there.
+//
+// Note: CORS origins are scheme+host+port with NO trailing slash or path — a value
+// like "https://api.hivago.in" (the API itself) is never used by a browser and is
+// intentionally omitted. Trailing slashes are trimmed defensively.
+string[] productionOrigins =
+[
+    "https://hivago.in",
+    "https://www.hivago.in",
+    "https://admin.hivago.in",
+    "https://restaurant.hivago.in",
+];
+
+string[] localhostOrigins =
+[
+    "http://localhost:3000",     // React dev server
+    "http://localhost:5173",     // Vite dev server
+    "http://localhost:4173",     // Vite preview
+    "http://localhost:8081",     // Expo/React Native web
+];
+
+var configuredOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? string.Empty)
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+var allowedOrigins = (configuredOrigins.Length > 0 ? configuredOrigins : productionOrigins)
+    .Concat(builder.Environment.IsDevelopment() ? localhostOrigins : [])
+    .Select(o => o.TrimEnd('/'))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
+
+Log.Information("CORS allowed origins ({Count}): {Origins}", allowedOrigins.Length, string.Join(", ", allowedOrigins));
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins(
-                "http://localhost:3000",     // React dev server
-                "http://localhost:5173",     // Vite dev server
-                "http://localhost:8081",     // Expo/React Native web
-                "https://hivago.vercel.app",   // Production 
-                "https://hivago-restaurant.vercel.app",
-                "http://localhost:4173",
-                "https://hivago-admin.vercel.app",
-                "https://admin.hivago.in",
-                "https://restaurant.hivago.in",
-                "https://about-hivago.vercel.app",
-                "https://hivago-restaurant.vercel.app",
-                "https://hivago.in",
-                "https://www.hivago.in",
-                "https://api.hivago.in",
-                "https://staging.api.hivago.in",
-                "http://localhost:8081/")
-
+        policy.WithOrigins(allowedOrigins)
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
