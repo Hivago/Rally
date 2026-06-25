@@ -19,7 +19,7 @@ public sealed class RiderQueryService : IRiderQueryService
     /// <summary>
     /// Maximum age of location data to consider "fresh" (in minutes).
     /// </summary>
-    private const int MaxLocationAgeMinutes = 5;
+    private const int MaxLocationAgeMinutes = 10;
 
     public RiderQueryService(
         UsersDbContext dbContext,
