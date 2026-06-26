@@ -26,6 +26,16 @@ public interface IDeliveryRequestRepository
     /// dispatch was interrupted and never retried.
     /// </summary>
     Task<IReadOnlyList<DeliveryRequest>> GetStuckForRedispatchAsync(DateTime stuckBefore, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reads the delivery's CURRENT status straight from the database, bypassing the
+    /// change-tracker identity map. The inline dispatcher holds one DbContext for the
+    /// whole dispatch run, so a normal (tracking) reload returns its own stale copy and
+    /// misses a rider acceptance committed on another connection. Returns null if the
+    /// request no longer exists.
+    /// </summary>
+    Task<DeliveryRequestStatus?> GetCurrentStatusAsync(Guid id, CancellationToken ct = default);
+
     Task AddAsync(DeliveryRequest request, CancellationToken ct = default);
     Task UpdateAsync(DeliveryRequest request, CancellationToken ct = default);
  

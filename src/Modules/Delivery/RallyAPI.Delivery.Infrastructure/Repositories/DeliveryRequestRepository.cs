@@ -83,6 +83,20 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
             .ToListAsync(ct);
     }
 
+    public async Task<DeliveryRequestStatus?> GetCurrentStatusAsync(Guid id, CancellationToken ct = default)
+    {
+        // AsNoTracking + scalar projection: always hits the DB and never returns a
+        // change-tracked instance, so a concurrent rider acceptance is visible even
+        // from the long-lived dispatch DbContext.
+        var rows = await _dbContext.DeliveryRequests
+            .AsNoTracking()
+            .Where(r => r.Id == id)
+            .Select(r => (DeliveryRequestStatus?)r.Status)
+            .ToListAsync(ct);
+
+        return rows.Count > 0 ? rows[0] : null;
+    }
+
     public async Task AddAsync(DeliveryRequest request, CancellationToken ct = default)
     {
         await _dbContext.DeliveryRequests.AddAsync(request, ct);

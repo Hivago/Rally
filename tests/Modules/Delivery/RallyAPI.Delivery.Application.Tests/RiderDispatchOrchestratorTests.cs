@@ -69,14 +69,16 @@ public class RiderDispatchOrchestratorTests
             .CreateTaskAsync(Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>())
             .Returns(CreateTaskResult.Success("TASK-001", deliveryRequest.OrderId.ToString(), "assigned", null, "ProRouting"));
 
-        // Reload after timeout: webhook has fired, status = Assigned3PL
+        // After the 3PL wait the webhook has assigned the task. The orchestrator reads the
+        // TRUE status via GetCurrentStatusAsync (a fresh DB read), not a stale tracking reload.
         _repository
-            .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(_ =>
             {
                 // Status is Searching3PL when we get here (set by orchestrator before 3PL call)
-                deliveryRequest.Assign3PLRider("TASK-001", "ProRouting", "Rahul", "+91999", null, 95m);
-                return deliveryRequest;
+                if (deliveryRequest.Status == DeliveryRequestStatus.Searching3PL)
+                    deliveryRequest.Assign3PLRider("TASK-001", "ProRouting", "Rahul", "+91999", null, 95m);
+                return (DeliveryRequestStatus?)deliveryRequest.Status;
             });
 
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
@@ -103,17 +105,19 @@ public class RiderDispatchOrchestratorTests
 
         _repository
             .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(_ =>
             {
                 callCount++;
                 if (callCount == 1)
-                {
-                    // First reload: still Searching3PL → orchestrator detects timeout
-                    return deliveryRequest;
-                }
-                // Second reload (own fleet): rider accepted
-                deliveryRequest.AssignOwnFleetRider(riderId, "Suresh", "+919876543210");
-                return deliveryRequest;
+                    return (DeliveryRequestStatus?)DeliveryRequestStatus.Searching3PL; // 3PL timed out
+                // Own-fleet pass: rider accepts during the offer window.
+                if (deliveryRequest.Status == DeliveryRequestStatus.SearchingOwnFleet)
+                    deliveryRequest.AssignOwnFleetRider(riderId, "Suresh", "+919876543210");
+                return (DeliveryRequestStatus?)deliveryRequest.Status;
             });
 
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
@@ -139,10 +143,16 @@ public class RiderDispatchOrchestratorTests
 
         _repository
             .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(_ =>
             {
-                deliveryRequest.AssignOwnFleetRider(riderId, "Suresh", "+919876543210");
-                return deliveryRequest;
+                // Rider accepts during the offer window.
+                if (deliveryRequest.Status == DeliveryRequestStatus.SearchingOwnFleet)
+                    deliveryRequest.AssignOwnFleetRider(riderId, "Suresh", "+919876543210");
+                return (DeliveryRequestStatus?)deliveryRequest.Status;
             });
 
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
@@ -185,10 +195,15 @@ public class RiderDispatchOrchestratorTests
             .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new[] { BuildRider(riderId) });
 
-        // Reload: rider did not accept, status stays SearchingOwnFleet
+        // Rider did not accept, status stays SearchingOwnFleet across both the reload
+        // (offer expiry) and the fresh status probes.
         _repository
             .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(_ => deliveryRequest);
+
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => (DeliveryRequestStatus?)deliveryRequest.Status);
 
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
 
