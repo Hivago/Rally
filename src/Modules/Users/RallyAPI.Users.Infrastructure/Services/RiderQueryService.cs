@@ -199,6 +199,156 @@ public sealed class RiderQueryService : IRiderQueryService
         };
     }
 
+    /// <inheritdoc />
+    public async Task<RiderEligibilityReport> DiagnoseEligibilityAsync(
+        Guid riderId,
+        double pickupLatitude,
+        double pickupLongitude,
+        double radiusKm,
+        CancellationToken ct = default)
+    {
+        var rider = await _dbContext.Riders
+            .AsNoTracking()
+            .Where(r => r.Id == riderId)
+            .Select(r => new RiderEligibilitySnapshot
+            {
+                Id = r.Id,
+                Name = r.Name,
+                IsActive = r.IsActive,
+                IsOnline = r.IsOnline,
+                KycStatus = r.KycStatus.ToString(),
+                CurrentDeliveryId = r.CurrentDeliveryId,
+                Latitude = r.CurrentLatitude.HasValue ? (double)r.CurrentLatitude.Value : null,
+                Longitude = r.CurrentLongitude.HasValue ? (double)r.CurrentLongitude.Value : null,
+                LastLocationUpdate = r.LastLocationUpdate
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (rider is null)
+        {
+            return new RiderEligibilityReport
+            {
+                RiderId = riderId,
+                Found = false,
+                Eligible = false,
+                Checks = [],
+                FailedChecks = ["Exists"]
+            };
+        }
+
+        return BuildReport(rider, pickupLatitude, pickupLongitude, radiusKm);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<RiderEligibilityReport>> DiagnoseAllRidersAsync(
+        double pickupLatitude,
+        double pickupLongitude,
+        double radiusKm,
+        int maxRiders = 200,
+        CancellationToken ct = default)
+    {
+        // Intentionally NOT pre-filtered by location/online — the whole point of the
+        // diagnostic is to surface WHY a rider is excluded (e.g. a far-away or offline
+        // rider), so we evaluate every rider and let the gates explain themselves.
+        var riders = await _dbContext.Riders
+            .AsNoTracking()
+            .OrderByDescending(r => r.IsOnline)
+            .ThenBy(r => r.Name)
+            .Take(maxRiders)
+            .Select(r => new RiderEligibilitySnapshot
+            {
+                Id = r.Id,
+                Name = r.Name,
+                IsActive = r.IsActive,
+                IsOnline = r.IsOnline,
+                KycStatus = r.KycStatus.ToString(),
+                CurrentDeliveryId = r.CurrentDeliveryId,
+                Latitude = r.CurrentLatitude.HasValue ? (double)r.CurrentLatitude.Value : null,
+                Longitude = r.CurrentLongitude.HasValue ? (double)r.CurrentLongitude.Value : null,
+                LastLocationUpdate = r.LastLocationUpdate
+            })
+            .ToListAsync(ct);
+
+        return riders
+            .Select(r => BuildReport(r, pickupLatitude, pickupLongitude, radiusKm))
+            // Eligible first, then closest to pickup.
+            .OrderByDescending(r => r.Eligible)
+            .ThenBy(r => r.DistanceToPickupKm ?? double.MaxValue)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Evaluates every offer-eligibility gate for one rider, in the same order
+    /// <see cref="GetAvailableRidersAsync"/> applies them. Single source of truth for
+    /// both diagnostic entry points.
+    /// </summary>
+    private static RiderEligibilityReport BuildReport(
+        RiderEligibilitySnapshot r,
+        double pickupLatitude,
+        double pickupLongitude,
+        double radiusKm)
+    {
+        var locationCutoff = DateTime.UtcNow.AddMinutes(-MaxLocationAgeMinutes);
+        var hasLocation = r.Latitude.HasValue && r.Longitude.HasValue;
+
+        double? distanceKm = hasLocation
+            ? Math.Round(GeoCalculator.CalculateDistanceKm(
+                pickupLatitude, pickupLongitude, r.Latitude!.Value, r.Longitude!.Value), 2)
+            : null;
+
+        var locationAgeText = r.LastLocationUpdate.HasValue
+            ? $"{(DateTime.UtcNow - r.LastLocationUpdate.Value).TotalMinutes:F1} min ago"
+            : "never";
+
+        var checks = new List<RiderEligibilityCheck>
+        {
+            new() { Name = "IsActive", Passed = r.IsActive,
+                Actual = r.IsActive.ToString(), Requirement = "true" },
+            new() { Name = "IsOnline", Passed = r.IsOnline,
+                Actual = r.IsOnline.ToString(), Requirement = "true" },
+            new() { Name = "KycVerified", Passed = r.KycStatus == "Verified",
+                Actual = r.KycStatus, Requirement = "Verified" },
+            new() { Name = "NotOnAnotherDelivery", Passed = r.CurrentDeliveryId is null,
+                Actual = r.CurrentDeliveryId?.ToString() ?? "null", Requirement = "null (no active delivery)" },
+            new() { Name = "HasLocation", Passed = hasLocation,
+                Actual = hasLocation ? $"({r.Latitude}, {r.Longitude})" : "missing",
+                Requirement = "lat/lng present" },
+            new() { Name = "LocationFresh",
+                Passed = r.LastLocationUpdate.HasValue && r.LastLocationUpdate.Value >= locationCutoff,
+                Actual = locationAgeText, Requirement = $"within {MaxLocationAgeMinutes} min" },
+            new() { Name = "WithinSearchRadius",
+                Passed = distanceKm.HasValue && distanceKm.Value <= radiusKm,
+                Actual = distanceKm.HasValue ? $"{distanceKm.Value} km" : "unknown (no location)",
+                Requirement = $"<= {radiusKm} km from pickup" }
+        };
+
+        var failed = checks.Where(c => !c.Passed).Select(c => c.Name).ToList();
+
+        return new RiderEligibilityReport
+        {
+            RiderId = r.Id,
+            RiderName = r.Name,
+            Found = true,
+            Eligible = failed.Count == 0,
+            DistanceToPickupKm = distanceKm,
+            Checks = checks,
+            FailedChecks = failed
+        };
+    }
+
+    private sealed class RiderEligibilitySnapshot
+    {
+        public Guid Id { get; init; }
+        public string Name { get; init; } = string.Empty;
+        public bool IsActive { get; init; }
+        public bool IsOnline { get; init; }
+        public string KycStatus { get; init; } = string.Empty;
+        public Guid? CurrentDeliveryId { get; init; }
+        public double? Latitude { get; init; }
+        public double? Longitude { get; init; }
+        public DateTime? LastLocationUpdate { get; init; }
+    }
+
     /// <summary>
     /// Creates a display name (first name + last initial).
     /// "Rahul Kumar" → "Rahul K."
