@@ -64,6 +64,31 @@ public interface IRiderQueryService
     Task<RiderPublicInfo?> GetRiderPublicInfoAsync(
         Guid riderId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Diagnoses why a specific rider would or would not receive a delivery offer
+    /// for the given pickup location. Runs every gate used by
+    /// <see cref="GetAvailableRidersAsync"/> and reports each one's pass/fail with
+    /// the rider's actual value. Ops/debug only.
+    /// </summary>
+    Task<RiderEligibilityReport> DiagnoseEligibilityAsync(
+        Guid riderId,
+        double pickupLatitude,
+        double pickupLongitude,
+        double radiusKm,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Runs the eligibility diagnostic across all riders (capped) for a pickup
+    /// location, so callers can see at a glance which riders are eligible and why
+    /// the rest are excluded. Ops/debug only.
+    /// </summary>
+    Task<IReadOnlyList<RiderEligibilityReport>> DiagnoseAllRidersAsync(
+        double pickupLatitude,
+        double pickupLongitude,
+        double radiusKm,
+        int maxRiders = 200,
+        CancellationToken ct = default);
 }
 
 /// <summary>
