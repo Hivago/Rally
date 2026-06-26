@@ -145,19 +145,23 @@ public sealed class RiderDispatchOrchestrator
             // Wait for response
             await Task.Delay(TimeSpan.FromSeconds(_options.AcceptanceTimeoutSeconds), ct);
 
-            // Reload to check if accepted
-            deliveryRequest = (await _requestRepository.GetByIdWithOffersAsync(deliveryRequest.Id, ct))!;
+            // Read the TRUE status from the DB. This whole dispatch runs on one long-lived
+            // DbContext, so a tracking reload returns our own stale copy and MISSES the
+            // rider's acceptance (committed on another connection) — which is exactly how an
+            // assigned delivery used to get clobbered back to Failed below.
+            var statusAfterWait = await _requestRepository.GetCurrentStatusAsync(deliveryRequest.Id, ct);
 
-            if (deliveryRequest.Status == DeliveryRequestStatus.RiderAssigned)
+            if (statusAfterWait >= DeliveryRequestStatus.RiderAssigned)
             {
                 _logger.LogInformation(
-                    "Rider {RiderId} accepted delivery {DeliveryId}",
-                    rider.RiderId, deliveryRequest.Id);
+                    "Delivery {DeliveryId} is now {Status} (rider {RiderId} accepted); ending own-fleet dispatch.",
+                    deliveryRequest.Id, statusAfterWait, rider.RiderId);
 
                 return DispatchResult.Success(FleetType.OwnFleet, rider.RiderId);
             }
 
-            // Mark offer as expired if still pending
+            // Still searching → expire this offer and move to the next rider.
+            deliveryRequest = (await _requestRepository.GetByIdWithOffersAsync(deliveryRequest.Id, ct))!;
             var currentOffer = deliveryRequest.RiderOffers.First(o => o.Id == offer.Id);
             if (currentOffer.Status == RiderOfferStatus.Pending)
             {
@@ -166,7 +170,17 @@ public sealed class RiderDispatchOrchestrator
             }
         }
 
-        // All riders exhausted
+        // All riders exhausted. Final fresh check: a rider may have accepted in the gap
+        // between the last poll and now. Never fail over an assignment.
+        var finalStatus = await _requestRepository.GetCurrentStatusAsync(deliveryRequest.Id, ct);
+        if (finalStatus >= DeliveryRequestStatus.RiderAssigned)
+        {
+            _logger.LogInformation(
+                "Delivery {DeliveryId} became {Status} before fail — not failing.",
+                deliveryRequest.Id, finalStatus);
+            return DispatchResult.Success(FleetType.OwnFleet, null);
+        }
+
         _logger.LogInformation(
             "All {Count} Own Fleet riders exhausted",
             riders.Count);
@@ -259,10 +273,12 @@ public sealed class RiderDispatchOrchestrator
         // Wait for webhook assignment
         await Task.Delay(TimeSpan.FromSeconds(_options.AcceptanceTimeoutSeconds), ct);
 
-        // Reload to get the freshest state (avoid race condition with late webhook)
-        deliveryRequest = (await _requestRepository.GetByIdWithOffersAsync(deliveryRequest.Id, ct))!;
+        // Read the true status from the DB. The 3PL assignment arrives via webhook on a
+        // separate connection, which this long-lived dispatch context's tracking reload
+        // would miss (stale identity-map copy) — so probe fresh instead.
+        var status3pl = await _requestRepository.GetCurrentStatusAsync(deliveryRequest.Id, ct);
 
-        if (deliveryRequest.Status == DeliveryRequestStatus.Searching3PL)
+        if (status3pl == DeliveryRequestStatus.Searching3PL)
         {
             _logger.LogWarning("ProRouting timeout reached, cancelling 3PL and falling back...");
             await _thirdPartyProvider.CancelTaskAsync(createResult.TaskId!, "Rider assignment timeout from Orchestrator", ct);
@@ -270,15 +286,15 @@ public sealed class RiderDispatchOrchestrator
         }
 
         // It either got Assigned3PL or some other status (e.g. Cancelled/Failed via webhook)
-        if (deliveryRequest.Status == DeliveryRequestStatus.Assigned3PL)
+        if (status3pl == DeliveryRequestStatus.Assigned3PL)
         {
              return DispatchResult.Success(FleetType.ThirdParty, null, createResult.TaskId);
         }
-        else 
+        else
         {
-             // If the status is not Assigned3PL and not Searching3PL, it means the webhook explicitly failed/cancelled it already. 
-             // We return a failure here so we fallback to Own Fleet. 
-            return DispatchResult.Failed($"3PL webhook returned alternative status: {deliveryRequest.Status}");
+             // If the status is not Assigned3PL and not Searching3PL, it means the webhook explicitly failed/cancelled it already.
+             // We return a failure here so we fallback to Own Fleet.
+            return DispatchResult.Failed($"3PL webhook returned alternative status: {status3pl}");
         }
     }
 

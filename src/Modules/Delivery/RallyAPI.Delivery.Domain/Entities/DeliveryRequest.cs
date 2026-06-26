@@ -369,6 +369,13 @@ public sealed class DeliveryRequest : AggregateRoot
 
     public void MarkFailed(DeliveryFailureReason reason, string? notes = null, string? photoUrl = null)
     {
+        // Never let a stale/late dispatch failure clobber a delivery a rider has already
+        // accepted (RiderAssigned/Assigned3PL), one that has progressed past assignment,
+        // or one already terminal. The inline dispatcher can reach this with a stale view
+        // after a rider accepted on another connection. (Also makes re-fails idempotent.)
+        if (Status >= DeliveryRequestStatus.RiderAssigned)
+            return;
+
         Status = DeliveryRequestStatus.Failed;
         FailedAt = DateTime.UtcNow;
         FailureReason = reason;
