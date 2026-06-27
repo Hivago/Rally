@@ -38,5 +38,15 @@ public interface IDeliveryRequestRepository
 
     Task AddAsync(DeliveryRequest request, CancellationToken ct = default);
     Task UpdateAsync(DeliveryRequest request, CancellationToken ct = default);
- 
+
+    /// <summary>
+    /// Persists the request and returns <c>true</c> if the write committed. Returns
+    /// <c>false</c> if a concurrent update bumped the row's concurrency token (xmin) and
+    /// the write was rejected — i.e. a rider acceptance committed on another connection
+    /// between the caller's last status probe and this write. The inline dispatcher uses
+    /// this for terminal "Failed" writes so it honors the assignment instead of clobbering
+    /// it back to Failed. Unlike <see cref="UpdateAsync"/>, a lost race is a normal,
+    /// expected outcome here — not an exception the caller must handle.
+    /// </summary>
+    Task<bool> TryUpdateAsync(DeliveryRequest request, CancellationToken ct = default);
 }

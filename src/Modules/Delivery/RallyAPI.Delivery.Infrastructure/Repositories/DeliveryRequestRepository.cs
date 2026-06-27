@@ -109,4 +109,23 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
         await _dbContext.SaveChangesAsync(ct);
     }
 
+    public async Task<bool> TryUpdateAsync(DeliveryRequest request, CancellationToken ct = default)
+    {
+        _dbContext.DeliveryRequests.Update(request);
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // xmin changed under us: a rider acceptance (or any other writer) committed on
+            // another connection after we loaded this row. The guarded UPDATE matched zero
+            // rows, so nothing was written — the assignment stands. Detach so the failed,
+            // still-Modified entry can't be replayed on a later SaveChanges from this
+            // long-lived dispatch DbContext.
+            _dbContext.Entry(request).State = EntityState.Detached;
+            return false;
+        }
+    }
 }
