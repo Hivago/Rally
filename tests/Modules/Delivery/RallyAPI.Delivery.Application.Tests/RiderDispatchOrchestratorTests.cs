@@ -58,6 +58,13 @@ public class RiderDispatchOrchestratorTests
         _thirdPartyProvider
             .UpdateOrderAsync(Arg.Any<UpdateOrderRequest>(), Arg.Any<CancellationToken>())
             .Returns(UpdateOrderResult.Success("searching", "ProRouting"));
+
+        // Terminal failure writes go through TryUpdateAsync; true = the Failed write
+        // committed (no concurrent accept). Tests that simulate a lost concurrency race
+        // override this to false.
+        _repository
+            .TryUpdateAsync(Arg.Any<DeliveryRequest>(), Arg.Any<CancellationToken>())
+            .Returns(true);
     }
 
     [Fact]
@@ -209,6 +216,44 @@ public class RiderDispatchOrchestratorTests
 
         result.IsSuccess.Should().BeFalse();
         deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Failed);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_WhenRiderAcceptsAsTerminalFailWriteRaces_ShouldHonorAssignmentNotFail()
+    {
+        // The residual sub-second race: every fresh status probe still reads SearchingOwnFleet,
+        // but the rider's acceptance commits on another connection right before the terminal
+        // Failed write. xmin catches it — TryUpdateAsync returns false (UPDATE matched 0 rows).
+        // The orchestrator must treat that as the rider winning, NOT fail the delivery.
+        var riderId = Guid.NewGuid();
+        var deliveryRequest = BuildCreatedRequest();
+
+        _thirdPartyProvider
+            .CreateTaskAsync(Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>())
+            .Returns(CreateTaskResult.Failure("Service unavailable", "ProRouting"));
+
+        _riderQueryService
+            .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new[] { BuildRider(riderId) });
+
+        _repository
+            .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        // Probes never see the accept (stale identity-map symptom the token defends against).
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => (DeliveryRequestStatus?)deliveryRequest.Status);
+
+        // The guarded terminal write loses the race.
+        _repository
+            .TryUpdateAsync(Arg.Any<DeliveryRequest>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var result = await _orchestrator.DispatchAsync(deliveryRequest);
+
+        result.IsSuccess.Should().BeTrue();
+        result.FleetType.Should().Be(FleetType.OwnFleet);
     }
 
     [Fact]

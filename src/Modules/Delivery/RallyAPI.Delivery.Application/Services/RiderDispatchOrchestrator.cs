@@ -91,7 +91,13 @@ public sealed class RiderDispatchOrchestrator
         {
             _logger.LogInformation("No riders available in Own Fleet");
             deliveryRequest.MarkFailed(DeliveryFailureReason.NoRidersAvailable, "All dispatch options exhausted (ProRouting failed/timed out and Own Fleet unavailable)");
-            await _requestRepository.UpdateAsync(deliveryRequest, ct);
+            if (!await _requestRepository.TryUpdateAsync(deliveryRequest, ct))
+            {
+                _logger.LogInformation(
+                    "Delivery {DeliveryId} failure write rejected by concurrency token — a rider accepted concurrently. Honoring the assignment.",
+                    deliveryRequest.Id);
+                return DispatchResult.Success(FleetType.OwnFleet, null);
+            }
             return DispatchResult.Failed("No riders available after exhausting all options.");
         }
 
@@ -186,7 +192,13 @@ public sealed class RiderDispatchOrchestrator
             riders.Count);
 
         deliveryRequest.MarkFailed(DeliveryFailureReason.NoRidersAvailable, "All dispatch options exhausted (ProRouting failed/timed out and Own Fleet declined)");
-        await _requestRepository.UpdateAsync(deliveryRequest, ct);
+        if (!await _requestRepository.TryUpdateAsync(deliveryRequest, ct))
+        {
+            _logger.LogInformation(
+                "Delivery {DeliveryId} failure write rejected by concurrency token — a rider accepted concurrently. Honoring the assignment.",
+                deliveryRequest.Id);
+            return DispatchResult.Success(FleetType.OwnFleet, null);
+        }
 
         return DispatchResult.Failed("All riders exhausted");
     }
