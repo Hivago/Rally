@@ -72,6 +72,8 @@ public static class OrderMappingExtensions
             OrderNumber = order.OrderNumber.Value,
             Status = order.Status,
             StatusDisplay = order.Status.GetDisplayName(),
+            PaymentStatus = order.PaymentStatus,
+            PaymentStatusDisplay = order.PaymentStatus.GetDisplayName(),
             RestaurantName = order.RestaurantName,
             TotalItems = order.Items.Sum(i => i.Quantity),
             Total = order.Pricing.Total.Amount,
