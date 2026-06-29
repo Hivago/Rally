@@ -1,5 +1,8 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using FluentValidation;
+using MediatR;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RallyAPI.Delivery.Application.Behaviors;
 using RallyAPI.Delivery.Application.Services;
 
 namespace RallyAPI.Delivery.Application;
@@ -10,9 +13,17 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // MediatR
+        var assembly = typeof(DependencyInjection).Assembly;
+
+        // MediatR + validation pipeline
         services.AddMediatR(cfg =>
-            cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly));
+        {
+            cfg.RegisterServicesFromAssembly(assembly);
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+        });
+
+        // FluentValidation validators (MarkPickedUp, MarkDelivered, DeclineDeliveryOffer, ...)
+        services.AddValidatorsFromAssembly(assembly);
 
         // Options
         services.Configure<PrepTimeOptions>(
