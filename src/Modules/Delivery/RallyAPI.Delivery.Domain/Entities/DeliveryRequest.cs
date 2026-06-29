@@ -310,7 +310,13 @@ public sealed class DeliveryRequest : AggregateRoot
 
     public void MarkRiderArrivedPickup()
     {
-        EnsureStatus(DeliveryRequestStatus.RiderEnRoutePickup);
+        // Own-fleet riders go straight from RiderAssigned to arrived — the rider
+        // app has no separate "en route to pickup" step (only 3PL callbacks set
+        // RiderEnRoutePickup). Accept the assigned states so arrival isn't blocked.
+        EnsureStatus(
+            DeliveryRequestStatus.RiderAssigned,
+            DeliveryRequestStatus.Assigned3PL,
+            DeliveryRequestStatus.RiderEnRoutePickup);
 
         Status = DeliveryRequestStatus.RiderArrivedPickup;
         ArrivedPickupAt = DateTime.UtcNow;
