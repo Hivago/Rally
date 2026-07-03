@@ -84,6 +84,22 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Configurations
                 .HasDefaultValue(false)
                 .IsRequired();
 
+            // Bank details (nullable — set by rider for payout)
+            builder.Property(r => r.BankAccountNumber)
+                .HasColumnName("bank_account_number")
+                .HasMaxLength(20)
+                .IsRequired(false);
+
+            builder.Property(r => r.BankIfscCode)
+                .HasColumnName("bank_ifsc_code")
+                .HasMaxLength(11)
+                .IsRequired(false);
+
+            builder.Property(r => r.BankAccountName)
+                .HasColumnName("bank_account_name")
+                .HasMaxLength(255)
+                .IsRequired(false);
+
             // Location tracking
             builder.Property(r => r.CurrentLatitude)
                 .HasColumnName("current_latitude")

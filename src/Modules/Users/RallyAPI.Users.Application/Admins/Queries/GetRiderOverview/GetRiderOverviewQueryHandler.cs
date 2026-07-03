@@ -71,6 +71,17 @@ internal sealed class GetRiderOverviewQueryHandler
             // No rider ratings module yet — returning zeros is honest.
             // Will populate when the ratings aggregate ships.
             AverageRating: 0m,
-            TotalRatings: 0);
+            TotalRatings: 0,
+
+            BankAccountNumber: Mask(rider.BankAccountNumber),
+            BankIfscCode: rider.BankIfscCode,
+            BankAccountName: rider.BankAccountName);
+    }
+
+    private static string? Mask(string? accountNumber)
+    {
+        if (string.IsNullOrEmpty(accountNumber) || accountNumber.Length < 4)
+            return accountNumber;
+        return new string('*', accountNumber.Length - 4) + accountNumber[^4..];
     }
 }
