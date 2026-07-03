@@ -86,6 +86,42 @@ public static class OrderMappingExtensions
         };
     }
 
+    /// <summary>
+    /// Maps an order to its kitchen-facing ticket (KOT). No pricing/money —
+    /// only what the kitchen needs to prepare and pack the order.
+    /// </summary>
+    public static KitchenTicketDto ToKitchenTicket(this Order order)
+    {
+        return new KitchenTicketDto
+        {
+            OrderId = order.Id,
+            OrderNumber = order.OrderNumber.Value,
+
+            FulfillmentType = order.FulfillmentType,
+            FulfillmentDisplay = order.FulfillmentType switch
+            {
+                FulfillmentType.Pickup => "PICKUP",
+                _                      => "DELIVERY"
+            },
+
+            CustomerName = order.CustomerName,
+            StatusDisplay = order.Status.GetDisplayName(),
+            PlacedAt = order.CreatedAt,
+
+            Items = order.Items
+                .Select(i => new KitchenTicketItemDto
+                {
+                    ItemName = i.ItemName,
+                    Quantity = i.Quantity,
+                    SpecialInstructions = i.SpecialInstructions
+                })
+                .ToList(),
+            TotalItems = order.Items.Sum(i => i.Quantity),
+
+            SpecialInstructions = order.SpecialInstructions
+        };
+    }
+
     public static OrderItemDto ToDto(this OrderItem item)
     {
         return new OrderItemDto
