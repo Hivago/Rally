@@ -33,8 +33,18 @@ internal sealed class GetRiderProfileQueryHandler
             rider.IsActive,
             rider.IsOnline,
             rider.CurrentLatitude,
-            rider.CurrentLongitude);
+            rider.CurrentLongitude,
+            Mask(rider.BankAccountNumber),
+            rider.BankIfscCode,
+            rider.BankAccountName);
 
         return Result.Success(response);
+    }
+
+    private static string? Mask(string? accountNumber)
+    {
+        if (string.IsNullOrEmpty(accountNumber) || accountNumber.Length < 4)
+            return accountNumber;
+        return new string('*', accountNumber.Length - 4) + accountNumber[^4..];
     }
 }
