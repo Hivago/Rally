@@ -48,7 +48,7 @@ internal sealed class SwitchToOutletCommandHandler
         var refreshTokenHash = HashToken(tokenPair.RefreshToken);
         var refreshToken = RefreshToken.Create(
             refreshTokenHash, restaurant.Id, "restaurant",
-            TimeSpan.FromDays(30));
+            RefreshToken.DefaultLifetime);
 
         await _refreshTokenRepository.AddAsync(refreshToken, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

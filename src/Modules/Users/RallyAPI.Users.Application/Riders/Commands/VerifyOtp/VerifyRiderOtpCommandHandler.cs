@@ -116,7 +116,7 @@ internal sealed class VerifyRiderOtpCommandHandler
         var refreshTokenHash = HashToken(tokenPair.RefreshToken);
         var refreshToken = RefreshToken.Create(
             refreshTokenHash, rider.Id, "rider",
-            TimeSpan.FromDays(30));
+            RefreshToken.DefaultLifetime);
 
         await _refreshTokenRepository.AddAsync(refreshToken, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

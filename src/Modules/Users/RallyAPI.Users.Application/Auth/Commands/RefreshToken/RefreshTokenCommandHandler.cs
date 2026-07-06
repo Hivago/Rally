@@ -9,6 +9,14 @@ namespace RallyAPI.Users.Application.Auth.Commands.RefreshToken;
 public sealed class RefreshTokenCommandHandler
     : IRequestHandler<RefreshTokenCommand, Result<RefreshTokenResponse>>
 {
+    /// <summary>
+    /// Grace window during which reuse of a just-rotated refresh token is treated as a
+    /// concurrent-refresh race (parallel requests / multiple tabs) rather than theft.
+    /// Without this, two tabs refreshing at the same moment would trip theft detection
+    /// and force the user to log in again.
+    /// </summary>
+    private static readonly TimeSpan ConcurrentRefreshGrace = TimeSpan.FromSeconds(30);
+
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly ICustomerRepository _customerRepository;
     private readonly IRiderRepository _riderRepository;
@@ -51,17 +59,29 @@ public sealed class RefreshTokenCommandHandler
         // 2. Check if token was already used (theft detection!)
         if (storedToken.IsRevoked)
         {
-            // Someone reused an old token — revoke ALL tokens for this user
-            var allTokens = await _refreshTokenRepository.GetActiveTokensByUserIdAsync(
-                storedToken.UserId, cancellationToken);
+            // A token that was ROTATED (has a successor) and reused within a short grace
+            // window is almost always a race between parallel requests or browser tabs —
+            // not theft. Let it through and mint a fresh pair instead of revoking the family.
+            var isConcurrentRefresh =
+                storedToken.ReplacedByTokenId is not null &&
+                storedToken.RevokedAt is not null &&
+                DateTime.UtcNow - storedToken.RevokedAt.Value <= ConcurrentRefreshGrace;
 
-            foreach (var t in allTokens)
-                t.Revoke();
+            if (!isConcurrentRefresh)
+            {
+                // Genuine reuse of a long-dead or explicitly-revoked token — revoke ALL
+                // tokens for this user.
+                var allTokens = await _refreshTokenRepository.GetActiveTokensByUserIdAsync(
+                    storedToken.UserId, cancellationToken);
 
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+                foreach (var t in allTokens)
+                    t.Revoke();
 
-            return Result.Failure<RefreshTokenResponse>(
-                Error.Validation("Token reuse detected. All sessions revoked. Please login again."));
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                return Result.Failure<RefreshTokenResponse>(
+                    Error.Validation("Token reuse detected. All sessions revoked. Please login again."));
+            }
         }
 
         // 3. Check if expired
@@ -84,10 +104,13 @@ public sealed class RefreshTokenCommandHandler
             storedToken.UserId,
             storedToken.UserType,
             storedToken.UserType == "admin"
-                ? TimeSpan.FromDays(1)
-                : TimeSpan.FromDays(30));
+                ? Domain.Entities.RefreshToken.AdminLifetime
+                : Domain.Entities.RefreshToken.DefaultLifetime);
 
-        storedToken.Revoke(newRefreshToken.Id); // Link old → new
+        // Link old → new. Skip if already revoked (concurrent-refresh grace path) so we
+        // don't disturb the original rotation chain / move the grace window forward.
+        if (!storedToken.IsRevoked)
+            storedToken.Revoke(newRefreshToken.Id);
         await _refreshTokenRepository.AddAsync(newRefreshToken, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

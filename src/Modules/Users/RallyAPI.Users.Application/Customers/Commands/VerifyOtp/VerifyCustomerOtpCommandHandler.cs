@@ -56,7 +56,7 @@
 
 //        if (customer is null)
 //        {
-//            // First time user — auto-register
+//            // First time user ï¿½ auto-register
 //            var createResult = Customer.Create(phoneResult.Value);
 //            if (createResult.IsFailure)
 //                return Result.Failure<VerifyCustomerOtpResponse>(createResult.Error);
@@ -91,13 +91,13 @@
 ////## What This Does
 
 ////1. ** Verifies OTP** via Redis(no more dummy token)
-////2. ** Auto-registers** new customers on first login(common pattern for food delivery apps — user enters phone, gets OTP, account created automatically)
+////2. ** Auto-registers** new customers on first login(common pattern for food delivery apps ï¿½ user enters phone, gets OTP, account created automatically)
 ////3. ** Returns `isNewCustomer`** so your frontend knows to show a "complete your profile" screen
 ////4. ** Generates real JWT** with proper claims
 
 ////---
 
-////One question before you build — does your `ICustomerRepository` have a `GetByPhoneAsync` method? And does it have an `Add` method?
+////One question before you build ï¿½ does your `ICustomerRepository` have a `GetByPhoneAsync` method? And does it have an `Add` method?
 
 ////Paste a quick look at:
 ////```
@@ -183,7 +183,7 @@ public sealed class VerifyCustomerOtpCommandHandler
         var refreshTokenHash = HashToken(tokenPair.RefreshToken);
         var refreshToken = RefreshToken.Create(
             refreshTokenHash, customer.Id, "customer",
-            TimeSpan.FromDays(30));
+            RefreshToken.DefaultLifetime);
 
         await _refreshTokenRepository.AddAsync(refreshToken, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

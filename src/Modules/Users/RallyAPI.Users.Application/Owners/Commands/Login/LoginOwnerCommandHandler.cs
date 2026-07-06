@@ -59,7 +59,7 @@ internal sealed class LoginOwnerCommandHandler
         var refreshTokenHash = HashToken(tokenPair.RefreshToken);
         var refreshToken = RefreshToken.Create(
             refreshTokenHash, owner.Id, "owner",
-            TimeSpan.FromDays(30));
+            RefreshToken.DefaultLifetime);
 
         await _refreshTokenRepository.AddAsync(refreshToken, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
