@@ -30,6 +30,10 @@ public static class OrderErrors
         "Order.InvalidTotal",
         "Order total must be greater than zero");
 
+    public static Error BelowMinimumOrderValue(decimal minimum, string currency = "INR") => Error.Create(
+        "Order.BelowMinimumOrderValue",
+        $"Order subtotal must be at least {currency} {minimum:0.##} to place an order");
+
     public static Error InvalidCustomer(Guid customerId) => Error.Create(
         "Order.InvalidCustomer",
         $"Customer with ID '{customerId}' was not found or is inactive");

@@ -33,6 +33,12 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
 
     private const string DefaultCurrency = "INR";
 
+    /// <summary>
+    /// Minimum food subtotal (in INR) required to place an order.
+    /// Applies to the item subtotal only — delivery fee, tax, and other charges are excluded.
+    /// </summary>
+    private const decimal MinimumOrderValue = 150m;
+
     public PlaceOrderCommandHandler(
         IOrderRepository orderRepository,
         IOrderNumberGenerator orderNumberGenerator,
@@ -163,6 +169,18 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
 
             if (resolvedItems.Count == 0)
                 return Result.Failure<OrderDto>(OrderErrors.EmptyItems);
+
+            // Step 4a: Enforce minimum order value against the authoritative food subtotal
+            // (computed from resolved items, not the client-supplied Pricing.SubTotal).
+            var foodSubTotal = resolvedItems.Sum(i => i.UnitPrice * i.Quantity);
+            if (foodSubTotal < MinimumOrderValue)
+            {
+                _logger.LogWarning(
+                    "Order rejected — subtotal {SubTotal} is below minimum order value {Minimum} for Customer {CustomerId}",
+                    foodSubTotal, MinimumOrderValue, command.CustomerId);
+                return Result.Failure<OrderDto>(
+                    OrderErrors.BelowMinimumOrderValue(MinimumOrderValue, DefaultCurrency));
+            }
 
             // Step 5: Generate order number
             var orderNumber = await _orderNumberGenerator.GenerateAsync(cancellationToken);
