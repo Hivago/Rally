@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RallyAPI.Orders.Infrastructure;
@@ -11,9 +12,11 @@ using RallyAPI.Orders.Infrastructure;
 namespace RallyAPI.Orders.Infrastructure.Migrations
 {
     [DbContext(typeof(OrdersDbContext))]
-    partial class OrdersDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260707063630_AddOrderCutleryRequested")]
+    partial class AddOrderCutleryRequested
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -805,41 +808,6 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasDatabaseName("ix_payout_ledger_owner_status");
 
                     b.ToTable("payout_ledger", "orders");
-                });
-
-            modelBuilder.Entity("RallyAPI.Orders.Infrastructure.Outbox.OutboxMessage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("Error")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("OccurredOn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("ProcessedOn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("RetryCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OccurredOn")
-                        .HasDatabaseName("IX_OutboxMessages_Unprocessed")
-                        .HasFilter("\"ProcessedOn\" IS NULL");
-
-                    b.ToTable("OutboxMessages", "orders");
                 });
 
             modelBuilder.Entity("RallyAPI.Orders.Domain.Entities.CartItem", b =>

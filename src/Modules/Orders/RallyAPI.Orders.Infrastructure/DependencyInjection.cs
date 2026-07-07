@@ -100,6 +100,10 @@ public static class DependencyInjection
         // Options
         services.Configure<PricingOptions>(
             configuration.GetSection(PricingOptions.SectionName));
+        services.Configure<RallyAPI.Orders.Application.Options.OrderPlacementOptions>(
+            configuration.GetSection(RallyAPI.Orders.Application.Options.OrderPlacementOptions.SectionName));
+        services.Configure<RallyAPI.Orders.Application.Options.PlatformOptions>(
+            configuration.GetSection(RallyAPI.Orders.Application.Options.PlatformOptions.SectionName));
 
         return services;
     }

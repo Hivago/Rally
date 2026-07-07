@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using RallyAPI.Delivery.Domain.Abstractions;
 using RallyAPI.Delivery.Infrastructure.Persistence;
 using RallyAPI.Delivery.Infrastructure.Repositories;
+using RallyAPI.Delivery.Infrastructure.Services;
+using RallyAPI.SharedKernel.Abstractions.Delivery;
 
 namespace RallyAPI.Delivery.Infrastructure;
 
@@ -36,6 +38,9 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryRequestRepository, DeliveryRequestRepository>();
         services.AddScoped<IIgmTicketRepository, IgmTicketRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        // Cross-module read consumed by Orders (customer bill/label delivery OTP)
+        services.AddScoped<IOrderDeliveryCodeService, OrderDeliveryCodeService>();
 
         // IRiderNotificationService is registered by the host (SignalRRiderNotificationService).
         // Do not register the stub here — it would silently mask the real implementation

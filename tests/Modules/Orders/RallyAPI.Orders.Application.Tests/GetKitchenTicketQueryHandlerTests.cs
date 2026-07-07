@@ -45,6 +45,36 @@ public class GetKitchenTicketQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenCutleryRequested_ShouldFlagCutleryOnTicket()
+    {
+        var restaurantId = Guid.NewGuid();
+        var order = BuildPaidOrder(restaurantId, cutleryRequested: true);
+        var query = new GetKitchenTicketQuery(order.Id, restaurantId, "Restaurant");
+
+        _orderRepository.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.CutleryRequested.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Handle_WhenCutleryNotRequested_ShouldDefaultToFalse()
+    {
+        var restaurantId = Guid.NewGuid();
+        var order = BuildPaidOrder(restaurantId);
+        var query = new GetKitchenTicketQuery(order.Id, restaurantId, "Restaurant");
+
+        _orderRepository.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.CutleryRequested.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Handle_ForDeliveryOrder_ShouldDisplayDelivery()
     {
         var restaurantId = Guid.NewGuid();
@@ -136,7 +166,7 @@ public class GetKitchenTicketQueryHandlerTests
 
     #region Helpers
 
-    private static Order BuildPaidOrder(Guid restaurantId, string? orderNote = null)
+    private static Order BuildPaidOrder(Guid restaurantId, string? orderNote = null, bool cutleryRequested = false)
     {
         var deliveryAddress = Address.Create(
             street: "42 Brigade Road",
@@ -161,7 +191,8 @@ public class GetKitchenTicketQueryHandlerTests
             restaurantName: "Dosa Corner",
             pricing: pricing,
             deliveryInfo: deliveryInfo,
-            specialInstructions: orderNote);
+            specialInstructions: orderNote,
+            cutleryRequested: cutleryRequested);
 
         AddSampleItems(order);
         order.ConfirmPayment("PAY-TEST-001", null);

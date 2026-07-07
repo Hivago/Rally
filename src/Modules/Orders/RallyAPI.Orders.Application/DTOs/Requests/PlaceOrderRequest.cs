@@ -38,6 +38,12 @@ public sealed record PlaceOrderRequest
 
     // Optional
     public string? SpecialInstructions { get; init; }
+
+    /// <summary>
+    /// Whether the customer wants cutlery included. Printed as a distinct line
+    /// on the kitchen ticket. Defaults to false.
+    /// </summary>
+    public bool CutleryRequested { get; init; }
 }
 
 /// <summary>

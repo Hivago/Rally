@@ -51,6 +51,7 @@ must be able to **print automatically the moment a new (paid) order arrives**, a
   "placedAt": "2026-07-03T12:41:09Z",
   "totalItems": 3,
   "specialInstructions": "No onions in anything",   // nullable (order-level)
+  "cutleryRequested": true,           // print "** SEND CUTLERY **" when true
   "items": [
     { "itemName": "Paneer Tikka",   "quantity": 2, "specialInstructions": "Extra spicy" },
     { "itemName": "Butter Naan",    "quantity": 1, "specialInstructions": null }
@@ -58,8 +59,59 @@ must be able to **print automatically the moment a new (paid) order arrives**, a
 }
 ```
 
+> `cutleryRequested` is a structured boolean (sent by the customer app at order time via
+> `POST /api/orders` → `cutleryRequested`). Render it as its own line on the KOT, not inside
+> the free-text order requests.
+
 > Auth note: the restaurant's JWT `sub` == its `restaurantId`, and the endpoint only
 > returns tickets for that restaurant. No `restaurantId` needs to be passed by the client.
+
+### Customer Bill / Order Label endpoint (BACKEND — DONE)
+
+The **second** print — the copy that goes ON the packed bag (Zomato's customer/label copy).
+Unlike the KOT, this DOES carry pricing, delivery address, distance/ETA, the delivery OTP,
+and FSSAI numbers.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/orders/{orderId}/label` | `AdminOrRestaurant` | Returns `OrderLabelDto`. Same 404-on-unauthorized rule as the KOT. |
+
+**Response shape (`OrderLabelDto`):**
+
+```jsonc
+{
+  "orderId": "0f9c...",
+  "orderNumber": "RA-000123",
+  "fulfillmentType": "Delivery",      // "Delivery" | "Pickup"
+  "fulfillmentDisplay": "DELIVERY",
+  "statusDisplay": "Paid",
+  "placedAt": "2026-07-06T16:22:00Z",
+  "customerName": "Aviral",
+  "customerPhone": "98860...",        // nullable
+  "restaurantName": "Annada",
+  "restaurantAddress": "Airoli, Navi Mumbai",   // nullable
+  "restaurantFssai": "21526068000923",          // nullable
+  "platformFssai": "10019064001810",            // nullable (Rally's own, from config)
+  "deliveryAddress": "CHS, Sector 9, Airoli...",// null for pickup
+  "distanceKm": 3.0,                            // null for pickup
+  "estimatedMinutes": 12,                       // null for pickup
+  "deliveryOtp": "1937",                        // pickup code; null for pickup orders / before dispatch
+  "totalItems": 1,
+  "currency": "INR",
+  "subTotal": 319, "tax": 0, "deliveryFee": 0, "packagingFee": 0, "discount": 140, "total": 179,
+  "specialInstructions": "add spoon and onion", // nullable
+  "cutleryRequested": true,
+  "items": [
+    { "itemName": "Chicken Dum Biryani", "quantity": 1, "unitPrice": 319, "lineTotal": 319, "specialInstructions": null }
+  ]
+}
+```
+
+> Add `"This is not a tax invoice."` and the "delivery partner will scan to pickup" footer as
+> **static UI text** (they're not in the payload). `deliveryOtp`/`deliveryAddress`/`distanceKm`
+> are null for pickup orders — hide those blocks when null. Build a second print component
+> (`OrderLabel`) reusing the same `react-to-print` / 80mm approach as the KOT; the manual
+> "Print bill" button lives next to "Print KOT".
 
 ### SignalR — Auto-print trigger (ALREADY EXISTS, no backend change)
 

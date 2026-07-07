@@ -123,7 +123,7 @@ internal sealed class LoginAdminCommandHandler
         var refreshTokenHash = HashToken(tokenPair.RefreshToken);
         var refreshToken = RefreshToken.Create(
             refreshTokenHash, admin.Id, "admin",
-            TimeSpan.FromDays(1)); // Shorter for admins
+            RefreshToken.AdminLifetime); // Shorter for admins
 
         await _refreshTokenRepository.AddAsync(refreshToken, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

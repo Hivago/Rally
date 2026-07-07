@@ -460,6 +460,14 @@ if (app.Environment.IsDevelopment())
 }
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapGet("/", () => "Rally API is running!");
+app.MapGet("/version", (IHostEnvironment env) => Results.Ok(new
+{
+    version = BuildInfo.Version,
+    commit = BuildInfo.Commit,
+    branch = BuildInfo.Branch,
+    builtAt = BuildInfo.BuildTimestampUtc,
+    environment = env.EnvironmentName
+}));
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
     ResponseWriter = WriteHealthCheckResponse
