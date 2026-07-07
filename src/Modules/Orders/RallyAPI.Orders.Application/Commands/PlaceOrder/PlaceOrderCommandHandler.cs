@@ -1,9 +1,11 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RallyAPI.Orders.Application.Abstractions;
 using RallyAPI.Orders.Application.Cart.Abstractions;
 using RallyAPI.Orders.Application.DTOs;
 using RallyAPI.Orders.Application.Mappings;
+using RallyAPI.Orders.Application.Options;
 using RallyAPI.Orders.Domain.Abstractions;
 using RallyAPI.Orders.Domain.Entities;
 using RallyAPI.Orders.Domain.Errors;
@@ -30,14 +32,9 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
     private readonly ICartCacheService _cartCache;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<PlaceOrderCommandHandler> _logger;
+    private readonly OrderPlacementOptions _placementOptions;
 
     private const string DefaultCurrency = "INR";
-
-    /// <summary>
-    /// Minimum food subtotal (in INR) required to place an order.
-    /// Applies to the item subtotal only — delivery fee, tax, and other charges are excluded.
-    /// </summary>
-    private const decimal MinimumOrderValue = 150m;
 
     public PlaceOrderCommandHandler(
         IOrderRepository orderRepository,
@@ -48,7 +45,8 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         ICartRepository cartRepository,
         ICartCacheService cartCache,
         IUnitOfWork unitOfWork,
-        ILogger<PlaceOrderCommandHandler> logger)
+        ILogger<PlaceOrderCommandHandler> logger,
+        IOptions<OrderPlacementOptions> placementOptions)
     {
         _orderRepository = orderRepository;
         _orderNumberGenerator = orderNumberGenerator;
@@ -59,6 +57,7 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         _cartCache = cartCache;
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _placementOptions = placementOptions.Value;
     }
 
     public async Task<Result<OrderDto>> Handle(PlaceOrderCommand command, CancellationToken cancellationToken)
@@ -172,14 +171,19 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
 
             // Step 4a: Enforce minimum order value against the authoritative food subtotal
             // (computed from resolved items, not the client-supplied Pricing.SubTotal).
-            var foodSubTotal = resolvedItems.Sum(i => i.UnitPrice * i.Quantity);
-            if (foodSubTotal < MinimumOrderValue)
+            // Threshold is configurable via the "OrderPlacement" section; 0 disables the check.
+            var minimumOrderValue = _placementOptions.MinimumOrderValue;
+            if (minimumOrderValue > 0)
             {
-                _logger.LogWarning(
-                    "Order rejected — subtotal {SubTotal} is below minimum order value {Minimum} for Customer {CustomerId}",
-                    foodSubTotal, MinimumOrderValue, command.CustomerId);
-                return Result.Failure<OrderDto>(
-                    OrderErrors.BelowMinimumOrderValue(MinimumOrderValue, DefaultCurrency));
+                var foodSubTotal = resolvedItems.Sum(i => i.UnitPrice * i.Quantity);
+                if (foodSubTotal < minimumOrderValue)
+                {
+                    _logger.LogWarning(
+                        "Order rejected — subtotal {SubTotal} is below minimum order value {Minimum} for Customer {CustomerId}",
+                        foodSubTotal, minimumOrderValue, command.CustomerId);
+                    return Result.Failure<OrderDto>(
+                        OrderErrors.BelowMinimumOrderValue(minimumOrderValue, DefaultCurrency));
+                }
             }
 
             // Step 5: Generate order number
@@ -263,7 +267,8 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
                 customerPhone: command.CustomerPhone,
                 customerEmail: command.CustomerEmail,
                 restaurantPhone: restaurantDetails?.Phone ?? command.Request.RestaurantPhone,
-                specialInstructions: command.Request.SpecialInstructions);
+                specialInstructions: command.Request.SpecialInstructions,
+                cutleryRequested: command.Request.CutleryRequested);
 
             // Step 10: Add items
             order.AddItems(orderItems);

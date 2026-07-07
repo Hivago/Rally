@@ -277,6 +277,10 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
             .HasColumnName("special_instructions")
             .HasMaxLength(1000);
 
+        builder.Property(o => o.CutleryRequested)
+            .HasColumnName("cutlery_requested")
+            .HasDefaultValue(false);
+
         builder.Property(o => o.InternalNotes)
             .HasColumnName("internal_notes")
             .HasMaxLength(2000);

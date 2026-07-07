@@ -31,6 +31,9 @@ public sealed record KitchenTicketDto
 
     // Order-level preparation note (e.g. "No onions in anything", "Ring bell")
     public string? SpecialInstructions { get; init; }
+
+    // Whether the customer asked for cutlery — printed as its own line ("SEND CUTLERY")
+    public bool CutleryRequested { get; init; }
 }
 
 /// <summary>

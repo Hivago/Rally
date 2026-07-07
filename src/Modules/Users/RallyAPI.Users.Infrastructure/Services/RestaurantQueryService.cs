@@ -225,7 +225,8 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
             CommissionPercentage = r.CommissionPercentage,
             CommissionFlatFee = r.CommissionFlatFee,
             OwnerId = r.OwnerId,
-            AcceptsPickup = r.AcceptsPickup
+            AcceptsPickup = r.AcceptsPickup,
+            FssaiNumber = r.FssaiNumber
         };
     }
 

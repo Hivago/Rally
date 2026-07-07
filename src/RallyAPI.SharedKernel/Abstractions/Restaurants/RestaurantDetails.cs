@@ -24,6 +24,12 @@ public sealed record RestaurantDetails
     public Guid? OwnerId { get; init; }
 
     /// <summary>
+    /// The restaurant's FSSAI food-licence number, if set. Printed on the customer
+    /// bill/label (legal requirement for food businesses in India). Nullable.
+    /// </summary>
+    public string? FssaiNumber { get; init; }
+
+    /// <summary>
     /// True when the restaurant accepts customer pickup orders. Default false.
     /// Consumed by Orders.PlaceOrder to reject pickup orders against delivery-only restaurants.
     /// </summary>

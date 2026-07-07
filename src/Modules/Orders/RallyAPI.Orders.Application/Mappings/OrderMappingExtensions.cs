@@ -116,7 +116,74 @@ public static class OrderMappingExtensions
                 .ToList(),
             TotalItems = order.Items.Sum(i => i.Quantity),
 
-            SpecialInstructions = order.SpecialInstructions
+            SpecialInstructions = order.SpecialInstructions,
+            CutleryRequested = order.CutleryRequested
+        };
+    }
+
+    /// <summary>
+    /// Builds the customer bill/label. Restaurant address/FSSAI, the platform FSSAI, and the
+    /// delivery OTP are supplied by the handler (they live outside the Orders aggregate).
+    /// </summary>
+    public static OrderLabelDto ToOrderLabel(
+        this Order order,
+        string? restaurantAddress,
+        string? restaurantFssai,
+        string? platformFssai,
+        string? deliveryOtp)
+    {
+        var pricing = order.Pricing;
+        var currency = pricing.Total.Currency;
+
+        return new OrderLabelDto
+        {
+            OrderId = order.Id,
+            OrderNumber = order.OrderNumber.Value,
+
+            FulfillmentType = order.FulfillmentType,
+            FulfillmentDisplay = order.FulfillmentType switch
+            {
+                FulfillmentType.Pickup => "PICKUP",
+                _                      => "DELIVERY"
+            },
+            StatusDisplay = order.Status.GetDisplayName(),
+            PlacedAt = order.CreatedAt,
+
+            CustomerName = order.CustomerName,
+            CustomerPhone = order.CustomerPhone,
+
+            RestaurantName = order.RestaurantName,
+            RestaurantAddress = restaurantAddress,
+            RestaurantFssai = restaurantFssai,
+            PlatformFssai = platformFssai,
+
+            DeliveryAddress = order.DeliveryInfo?.DeliveryAddress.FullAddress,
+            DistanceKm = order.DeliveryInfo?.DistanceKm,
+            EstimatedMinutes = order.DeliveryInfo?.EstimatedMinutes,
+            DeliveryOtp = deliveryOtp,
+
+            Items = order.Items
+                .Select(i => new OrderLabelItemDto
+                {
+                    ItemName = i.ItemName,
+                    Quantity = i.Quantity,
+                    UnitPrice = i.UnitPrice.Amount,
+                    LineTotal = i.TotalPrice.Amount,
+                    SpecialInstructions = i.SpecialInstructions
+                })
+                .ToList(),
+            TotalItems = order.Items.Sum(i => i.Quantity),
+
+            Currency = currency,
+            SubTotal = pricing.SubTotal.Amount,
+            Tax = pricing.Tax.Amount,
+            DeliveryFee = pricing.DeliveryFee.Amount,
+            PackagingFee = pricing.PackagingFee.Amount,
+            Discount = pricing.Discount.Amount,
+            Total = pricing.Total.Amount,
+
+            SpecialInstructions = order.SpecialInstructions,
+            CutleryRequested = order.CutleryRequested
         };
     }
 
