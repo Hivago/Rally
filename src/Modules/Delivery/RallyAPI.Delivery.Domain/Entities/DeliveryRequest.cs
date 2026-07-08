@@ -534,7 +534,10 @@ public sealed class DeliveryRequest : AggregateRoot
     }
 
     /// <summary>
-    /// Start searching for riders
+    /// Start searching for riders. Opens the search on our OWN fleet first; the
+    /// orchestrator falls back to 3PL only if no own rider accepts (own-fleet-first
+    /// dispatch). Thin wrapper over <see cref="StartSearchingOwnFleet"/> so existing
+    /// callers (TriggerDispatch / OrderReadyForPickup) need no change.
     /// </summary>
     public void StartSearching()
     {
@@ -543,9 +546,6 @@ public sealed class DeliveryRequest : AggregateRoot
             return; // Already searching or assigned
         }
 
-        Status = DeliveryRequestStatus.Searching3PL;
-        FleetType = Enums.FleetType.ThirdParty;
-        SearchingStartedAt = DateTime.UtcNow;
-        UpdatedAt = DateTime.UtcNow;
+        StartSearchingOwnFleet();
     }
 }
