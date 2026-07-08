@@ -77,8 +77,24 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
                      || r.Status == DeliveryRequestStatus.SearchingOwnFleet
                      || r.Status == DeliveryRequestStatus.Searching3PL)
             .Where(r => r.RiderId == null)
+            // Exclude deliveries that have been handed off to the 3PL provider and are legitimately
+            // waiting on its webhook — re-triggering those would create a duplicate provider task.
+            // Their timeout is enforced separately by GetThirdPartySearchTimedOutAsync.
+            .Where(r => !(r.Status == DeliveryRequestStatus.Searching3PL && r.ThirdPartyDispatchedAt != null))
             .Where(r => r.UpdatedAt < stuckBefore)
             .OrderBy(r => r.UpdatedAt)
+            .Take(50)
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<DeliveryRequest>> GetThirdPartySearchTimedOutAsync(
+        DateTime dispatchedBefore,
+        CancellationToken ct = default)
+    {
+        return await _dbContext.DeliveryRequests
+            .Where(r => r.Status == DeliveryRequestStatus.Searching3PL)
+            .Where(r => r.ThirdPartyDispatchedAt != null && r.ThirdPartyDispatchedAt < dispatchedBefore)
+            .OrderBy(r => r.ThirdPartyDispatchedAt)
             .Take(50)
             .ToListAsync(ct);
     }

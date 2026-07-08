@@ -72,52 +72,75 @@ public sealed class RiderDispatchOrchestrator
             return ownResult;
         }
 
-        _logger.LogInformation(
-            "No own-fleet rider took delivery {DeliveryId}. Falling back to 3PL.",
-            deliveryRequest.Id);
-
-        // Move the request into 3PL search. This can race a rider decline/accept committed on
-        // another connection (which bumps xmin), so reload FRESH and retry rather than writing
-        // through the dispatcher's stale tracked copy. A concurrent accept short-circuits.
-        DeliveryRequest? fresh = null;
-        for (var attempt = 0; attempt < MaxConcurrencyRetries; attempt++)
+        // Own fleet produced no rider. Decide 3PL-vs-fail based on whether 3PL was already tried:
+        // if ThirdPartyDispatchedAt is set, this IS the post-timeout own-fleet retry the recovery
+        // service kicked off — do NOT loop back to 3PL, just fail out. A concurrent accept short-circuits.
+        var preState = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
+        if (preState is null)
         {
-            fresh = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
-            if (fresh is null)
-            {
-                return DispatchResult.Failed("Delivery request no longer exists");
-            }
-            if (fresh.Status >= DeliveryRequestStatus.RiderAssigned)
-            {
-                return DispatchResult.Success(fresh.FleetType ?? FleetType.OwnFleet, fresh.RiderId);
-            }
-            if (fresh.Status == DeliveryRequestStatus.Searching3PL)
-            {
-                break; // already there (e.g. a concurrent path moved it)
-            }
-            if (fresh.Status is not (DeliveryRequestStatus.SearchingOwnFleet
-                or DeliveryRequestStatus.Created
-                or DeliveryRequestStatus.PendingDispatch))
-            {
-                // Terminal/unexpected (Cancelled/Failed/etc.) — nothing to dispatch.
-                return DispatchResult.Failed($"Delivery in non-dispatchable status {fresh.Status}");
-            }
-
-            fresh.StartSearching3PL();
-            if (await _requestRepository.TryUpdateAsync(fresh, ct))
-            {
-                break;
-            }
-            // Lost the write to a concurrent decline/accept — loop and re-decide on fresh state.
+            return DispatchResult.Failed("Delivery request no longer exists");
+        }
+        if (preState.Status >= DeliveryRequestStatus.RiderAssigned)
+        {
+            return DispatchResult.Success(preState.FleetType ?? FleetType.OwnFleet, preState.RiderId);
         }
 
-        var thirdPartyResult = await AssignVia3PLAsync(fresh!, ct);
-        if (thirdPartyResult.IsSuccess)
+        DeliveryRequest? fresh = preState;
+
+        if (preState.ThirdPartyDispatchedAt is null)
         {
-            return thirdPartyResult;
+            _logger.LogInformation(
+                "No own-fleet rider took delivery {DeliveryId}. Handing off to 3PL.",
+                deliveryRequest.Id);
+
+            // Move into 3PL search. Reload FRESH + retry so a concurrent rider decline/accept
+            // (which bumps xmin) neither crashes the write nor clobbers a real assignment.
+            for (var attempt = 0; attempt < MaxConcurrencyRetries; attempt++)
+            {
+                fresh = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
+                if (fresh is null)
+                {
+                    return DispatchResult.Failed("Delivery request no longer exists");
+                }
+                if (fresh.Status >= DeliveryRequestStatus.RiderAssigned)
+                {
+                    return DispatchResult.Success(fresh.FleetType ?? FleetType.OwnFleet, fresh.RiderId);
+                }
+                if (fresh.Status == DeliveryRequestStatus.Searching3PL)
+                {
+                    break; // already there (e.g. a concurrent path moved it)
+                }
+                if (fresh.Status is not (DeliveryRequestStatus.SearchingOwnFleet
+                    or DeliveryRequestStatus.Created
+                    or DeliveryRequestStatus.PendingDispatch))
+                {
+                    return DispatchResult.Failed($"Delivery in non-dispatchable status {fresh.Status}");
+                }
+
+                fresh.StartSearching3PL();
+                if (await _requestRepository.TryUpdateAsync(fresh, ct))
+                {
+                    break;
+                }
+                // Lost the write to a concurrent decline/accept — loop and re-decide on fresh state.
+            }
+
+            // Hand off to the provider (non-blocking). Success here means "task created, provider
+            // is searching" — the webhook assigns and the recovery service enforces the timeout.
+            var thirdPartyResult = await AssignVia3PLAsync(fresh!, ct);
+            if (thirdPartyResult.IsSuccess)
+            {
+                return thirdPartyResult;
+            }
+        }
+        else
+        {
+            _logger.LogInformation(
+                "3PL already attempted for delivery {DeliveryId}; own-fleet retry exhausted — marking failed.",
+                deliveryRequest.Id);
         }
 
-        // Both own fleet and 3PL exhausted → terminal failure. Same fresh-reload + retry so a
+        // Own fleet + 3PL exhausted → terminal failure. Same fresh-reload + retry so a
         // reject/accept that changed xmin never turns into a spurious concurrency crash, and a
         // genuine assignment is honored instead of clobbered to Failed.
         for (var attempt = 0; attempt < MaxConcurrencyRetries; attempt++)
@@ -545,35 +568,33 @@ public sealed class RiderDispatchOrchestrator
         }
 
         _logger.LogInformation(
-            "ProRouting task {TaskId} updated. Waiting {Timeout}s for agent assignment.",
-            createResult.TaskId, _options.AcceptanceTimeoutSeconds);
+            "ProRouting task {TaskId} updated for delivery {DeliveryId}. Handing off; provider will search for an agent.",
+            createResult.TaskId, deliveryRequest.Id);
 
-        // Wait for webhook assignment
-        await Task.Delay(TimeSpan.FromSeconds(_options.AcceptanceTimeoutSeconds), ct);
-
-        // Read the true status from the DB. The 3PL assignment arrives via webhook on a
-        // separate connection, which this long-lived dispatch context's tracking reload
-        // would miss (stale identity-map copy) — so probe fresh instead.
-        var status3pl = await _requestRepository.GetCurrentStatusAsync(deliveryRequest.Id, ct);
-
-        if (status3pl == DeliveryRequestStatus.Searching3PL)
+        // Non-blocking handoff. We do NOT wait inline for assignment: the provider can take
+        // several minutes to find an agent, and this dispatch runs on the Orders outbox thread
+        // — blocking it would stall every other integration event. The provider's webhook flips
+        // us to Assigned3PL when an agent accepts; DeliveryDispatchRecoveryService enforces the
+        // search timeout (cancel + retry own fleet). Record the task id + dispatch time so the
+        // sweeper can find and cancel this task, and so the recovery service doesn't re-trigger a
+        // duplicate booking for a delivery that's legitimately waiting on the provider webhook.
+        if (deliveryRequest.Status == DeliveryRequestStatus.Searching3PL)
         {
-            _logger.LogWarning("ProRouting timeout reached, cancelling 3PL and falling back...");
-            await _thirdPartyProvider.CancelTaskAsync(createResult.TaskId!, "Rider assignment timeout from Orchestrator", ct);
-            return DispatchResult.Failed("3PL assignment timed out");
+            deliveryRequest.MarkThirdPartyDispatched(createResult.TaskId!);
+            if (!await _requestRepository.TryUpdateAsync(deliveryRequest, ct))
+            {
+                // Rare: a webhook/decline changed the row between our provider calls and this
+                // write. Reload fresh and re-record only if still searching 3PL.
+                var fresh = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
+                if (fresh is { Status: DeliveryRequestStatus.Searching3PL })
+                {
+                    fresh.MarkThirdPartyDispatched(createResult.TaskId!);
+                    await _requestRepository.TryUpdateAsync(fresh, ct);
+                }
+            }
         }
 
-        // It either got Assigned3PL or some other status (e.g. Cancelled/Failed via webhook)
-        if (status3pl == DeliveryRequestStatus.Assigned3PL)
-        {
-             return DispatchResult.Success(FleetType.ThirdParty, null, createResult.TaskId);
-        }
-        else
-        {
-             // If the status is not Assigned3PL and not Searching3PL, it means the webhook explicitly failed/cancelled it already.
-             // We return a failure here so we fallback to Own Fleet.
-            return DispatchResult.Failed($"3PL webhook returned alternative status: {status3pl}");
-        }
+        return DispatchResult.Success(FleetType.ThirdParty, null, createResult.TaskId);
     }
 
     private decimal CalculateEarnings(decimal deliveryFee)
@@ -626,6 +647,13 @@ public sealed class DispatchOptions
     /// acceptance, in seconds. Smaller = snappier assignment, more queries.
     /// </summary>
     public int OfferPollIntervalSeconds { get; set; } = 2;
+
+    /// <summary>
+    /// How long we let the 3PL provider search for an agent (after a non-blocking handoff)
+    /// before the recovery service cancels the task and retries own fleet once. Enforced
+    /// out-of-band by DeliveryDispatchRecoveryService, not by blocking the dispatch thread.
+    /// </summary>
+    public int ThirdPartySearchTimeoutMinutes { get; set; } = 15;
 
     public decimal RiderEarningsPercentage { get; set; } = 80;
     public string WebhookUrl { get; set; } = "https://your-domain.com/api/webhooks/prorouting";

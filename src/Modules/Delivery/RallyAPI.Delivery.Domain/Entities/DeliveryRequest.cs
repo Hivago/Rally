@@ -88,6 +88,15 @@ public sealed class DeliveryRequest : AggregateRoot
     public DateTime CreatedAt { get; private set; }
     public DateTime? DispatchAt { get; private set; }
     public DateTime? SearchingStartedAt { get; private set; }
+
+    /// <summary>
+    /// When the 3PL (ProRouting) task was created and we began waiting for the provider
+    /// to find an agent. Drives the 3PL search-timeout sweep. Its presence ALSO means
+    /// "3PL has already been attempted" — after a 3PL timeout we retry own fleet once and,
+    /// if that also fails, mark Failed rather than looping back to 3PL.
+    /// </summary>
+    public DateTime? ThirdPartyDispatchedAt { get; private set; }
+
     public DateTime? AssignedAt { get; private set; }
     public DateTime? ArrivedPickupAt { get; private set; }
     public DateTime? PickedUpAt { get; private set; }
@@ -254,6 +263,21 @@ public sealed class DeliveryRequest : AggregateRoot
             Id, OrderId, OrderNumber,
             Enums.FleetType.ThirdParty,
             null, riderName, riderPhone, trackingUrl));
+    }
+
+    /// <summary>
+    /// Records that the 3PL task was created and we've handed off to the provider to search
+    /// for an agent. Stays in <see cref="DeliveryRequestStatus.Searching3PL"/> — the provider
+    /// webhook flips us to Assigned3PL when an agent accepts, and the dispatch-recovery service
+    /// enforces the search timeout. Non-blocking: we do NOT wait inline for assignment.
+    /// </summary>
+    public void MarkThirdPartyDispatched(string taskId)
+    {
+        EnsureStatus(DeliveryRequestStatus.Searching3PL);
+
+        ExternalTaskId = taskId;
+        ThirdPartyDispatchedAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void Update3PLRiderInfo(string? riderName, string? riderPhone, string? trackingUrl)
@@ -451,7 +475,9 @@ public sealed class DeliveryRequest : AggregateRoot
     {
         EnsureStatus(DeliveryRequestStatus.Searching3PL, DeliveryRequestStatus.Assigned3PL);
 
-        // Clear stale 3PL info
+        // Clear stale 3PL info. NOTE: ThirdPartyDispatchedAt is intentionally KEPT — it marks
+        // that 3PL was already attempted, so a post-timeout own-fleet retry that also fails will
+        // mark the delivery Failed instead of looping back to 3PL.
         ExternalTaskId = null;
         ExternalTrackingUrl = null;
         ExternalLspName = null;

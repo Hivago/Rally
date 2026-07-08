@@ -211,8 +211,16 @@ The inline dispatcher runs on ONE long-lived DbContext. Its tracking reloads ret
 - **Base = `staging`** — already has the xmin token + `TryUpdateAsync`/`GetCurrentStatusAsync` prerequisites (`b78e764`, `894df2f`) that `master`/current branch lack.
 - Accept-handler hardening promoted from "deferred" to in-scope (broadcast makes concurrent accepts normal).
 
+### 3PL search timeout (added 2026-07-08)
+The 3PL side previously blocked 30s then **cancelled** the ProRouting task — far too short (agents take minutes) and it stalled the Orders outbox thread. Changed to a **non-blocking handoff**:
+- `AssignVia3PLAsync` now creates the task + pushes OTPs, records `DeliveryRequest.ThirdPartyDispatchedAt` + `ExternalTaskId` (new domain method `MarkThirdPartyDispatched`), and **returns** (status stays `Searching3PL`). The provider webhook assigns an agent asynchronously; no inline wait.
+- **`DeliveryDispatchRecoveryService`** gained a 3PL-timeout sweep: `Searching3PL` deliveries whose `ThirdPartyDispatchedAt` is older than `Delivery:Dispatch:ThirdPartySearchTimeoutMinutes` (**15**) get their task cancelled and **own fleet retried once**; if that retry also finds no rider it marks **Failed** (the presence of `ThirdPartyDispatchedAt` tells the orchestrator's fallback "3PL already tried — don't loop back").
+- Recovery's `GetStuckForRedispatchAsync` now **excludes** `Searching3PL` rows that have `ThirdPartyDispatchedAt` set, so a delivery legitimately waiting on the webhook isn't re-triggered into a **duplicate** provider booking.
+- Migration `20260708090506_AddThirdPartyDispatchedAt` (single nullable `third_party_dispatched_at` column) — applied + boot-smoke-tested locally.
+- The kill-switch legacy path (`OwnFleetFirst=false`) also becomes non-blocking for 3PL (it shares `AssignVia3PLAsync`); own-fleet fallback there is now webhook/sweeper-driven rather than a 30s inline wait.
+
 ### Known Related Issues (not addressed here)
-- Dispatch still runs **inline/blocking** inside the integration-event handler. Broadcast shortens the own-fleet phase to one window (better than sequential), but the 3PL 30s wait still blocks. Durable/background runner is a separate follow-up.
+- Own-fleet broadcast still blocks its single acceptance window (~30s) inline on the outbox thread. Acceptable for now; a fully durable/background dispatch runner remains a separate follow-up.
 - Non-dispatch `DeliveryRequest` writers (MarkPickedUp/MarkDelivered/…) can still surface `DbUpdateConcurrencyException` as 500 under genuine concurrent edits — pre-existing, out of scope.
 
 ### Open Questions
