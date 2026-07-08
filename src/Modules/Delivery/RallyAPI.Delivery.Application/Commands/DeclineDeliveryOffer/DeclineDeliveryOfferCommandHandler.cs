@@ -59,10 +59,19 @@ public sealed class DeclineDeliveryOfferCommandHandler : IRequestHandler<Decline
 
         offer.Reject(request.Reason);
 
-        await _requestRepository.UpdateAsync(deliveryRequest, cancellationToken);
+        // Concurrency-guarded: the dispatcher may write this same row (expire offers / fall to
+        // 3PL) at the same moment. On a lost race the reject simply didn't stick — surface it as
+        // a benign "already responded" rather than a 500.
+        if (!await _requestRepository.TryUpdateAsync(deliveryRequest, cancellationToken))
+        {
+            _logger.LogInformation(
+                "Decline of offer {OfferId} by rider {RiderId} lost a concurrency race; offer already resolved.",
+                request.OfferId, request.RiderId);
+            return Result.Failure(DeliveryErrors.OfferAlreadyResponded);
+        }
 
         _logger.LogInformation(
-            "Offer {OfferId} declined by rider {RiderId}. Dispatch orchestrator will try next rider on timeout.",
+            "Offer {OfferId} declined by rider {RiderId}. Dispatch orchestrator will fall back on timeout.",
             request.OfferId, request.RiderId);
 
         return Result.Success();

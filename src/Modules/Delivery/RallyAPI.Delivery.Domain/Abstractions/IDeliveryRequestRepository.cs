@@ -36,6 +36,16 @@ public interface IDeliveryRequestRepository
     /// </summary>
     Task<DeliveryRequestStatus?> GetCurrentStatusAsync(Guid id, CancellationToken ct = default);
 
+    /// <summary>
+    /// Reloads the aggregate (root + offers) bypassing the change-tracker identity map,
+    /// so the returned entity reflects accept/decline writes committed on OTHER connections
+    /// and carries the CURRENT concurrency token (xmin). Use this before a
+    /// mutate-then-<see cref="TryUpdateAsync"/> in the long-lived inline dispatcher: a plain
+    /// tracking reload would hand back the dispatcher's own stale copy, whose write then
+    /// either throws a concurrency exception or clobbers a concurrent change.
+    /// </summary>
+    Task<DeliveryRequest?> GetByIdFreshAsync(Guid id, CancellationToken ct = default);
+
     Task AddAsync(DeliveryRequest request, CancellationToken ct = default);
     Task UpdateAsync(DeliveryRequest request, CancellationToken ct = default);
 

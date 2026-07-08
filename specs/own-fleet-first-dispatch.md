@@ -161,6 +161,7 @@ None new. Relies on the existing empty-body xmin migration already on `staging`.
 | Zero eligible own riders | `GetAvailableRidersAsync` empty → return `Failed` from own phase → book 3PL immediately. No delay, no `MarkFailed`. |
 | Riders offered, none accept | Window elapses → `ExpireAllPendingOffers` → fall to 3PL. |
 | Two riders accept ~same instant | xmin makes one write win; loser gets `Result.Failure("already assigned")` (409), loser `CurrentDeliveryId` untouched. |
+| A rider **rejects** during the window | Decline bumps xmin on another connection. Orchestrator reloads FRESH (`GetByIdFreshAsync`) and re-reads real status before/after each write — a token change is NOT read as an accept. Falls back to 3PL cleanly; no spurious OwnFleet success and no concurrency-exception crash. Decline handler itself uses `TryUpdateAsync` (benign "already responded" on a lost race, not a 500). |
 | Rider accepts as window is closing | Poll or final reload detects `RiderAssigned` → `Success(OwnFleet)`; 3PL never booked. |
 | Notification send fails for some riders | Broadcast proceeds; those riders simply don't get the offer. Log per-rider failures. |
 | 3PL `CreateTask` fails after own miss | `MarkFailed(NoRidersAvailable, "Own fleet + 3PL exhausted")`, no dangling task. |
@@ -192,12 +193,17 @@ None new. Relies on the existing empty-body xmin migration already on `staging`.
 
 ## Implementation Notes (updated during build)
 
-### Files to Modify
-- `src/Modules/Delivery/RallyAPI.Delivery.Application/Services/RiderDispatchOrchestrator.cs` — flip order; replace sequential loop with broadcast + single polling window; options.
+### Files Modified
+- `src/Modules/Delivery/RallyAPI.Delivery.Application/Services/RiderDispatchOrchestrator.cs` — flip order; broadcast + single polling window; options; fresh-reload + status re-check on every concurrency-guarded write (reject-safe).
 - `src/Modules/Delivery/RallyAPI.Delivery.Domain/Entities/DeliveryRequest.cs` — repoint `StartSearching()` to `SearchingOwnFleet`.
 - `src/Modules/Delivery/RallyAPI.Delivery.Application/Commands/AcceptDeliveryOffer/AcceptDeliveryOfferCommandHandler.cs` — status guard, `TryUpdateAsync`, reorder rider write (§4.3).
+- `src/Modules/Delivery/RallyAPI.Delivery.Application/Commands/DeclineDeliveryOffer/DeclineDeliveryOfferCommandHandler.cs` — `TryUpdateAsync` so a reject that races the dispatcher returns a benign result, not a 500.
+- `src/Modules/Delivery/RallyAPI.Delivery.Domain/Abstractions/IDeliveryRequestRepository.cs` + `.../Repositories/DeliveryRequestRepository.cs` — new `GetByIdFreshAsync` (detaches the stale identity-map copy, reloads with current xmin).
 - `src/RallyAPI.Host/appsettings.json` — `OwnFleetFirst`, `OfferPollIntervalSeconds`.
-- `tests/Modules/Delivery/RallyAPI.Delivery.Application.Tests/RiderDispatchOrchestratorTests.cs` (+ accept-handler tests) — update/extend.
+- `tests/Modules/Delivery/RallyAPI.Delivery.Application.Tests/RiderDispatchOrchestratorTests.cs` + `DeclineDeliveryOfferCommandHandlerTests.cs` — updated/extended (incl. reject regression test).
+
+### Key correctness note (added after first cut)
+The inline dispatcher runs on ONE long-lived DbContext. Its tracking reloads return the dispatcher's own STALE copy, so any write after a rider accept/**reject** (committed on another connection, bumping xmin) would either throw `DbUpdateConcurrencyException` or misread the token change as an acceptance. Fix: reload via `GetByIdFreshAsync` immediately before each mutate→`TryUpdateAsync`, and on a lost race re-read the true status (`GetCurrentStatusAsync`) to decide accept-vs-fallback rather than assuming "accepted." Retry loops capped by `MaxConcurrencyRetries`; if still contended, bail to the recovery service.
 
 ### Decisions Made
 - **Broadcast (parallel), not sequential** — fire offers to ALL eligible riders in radius, cap `MaxRidersToTry` (10), first-accept-wins. (Supersedes the earlier "cap to nearest 1–2" idea.)

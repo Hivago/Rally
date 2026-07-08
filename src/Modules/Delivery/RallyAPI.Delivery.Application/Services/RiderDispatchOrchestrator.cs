@@ -11,6 +11,11 @@ namespace RallyAPI.Delivery.Application.Services;
 
 public sealed class RiderDispatchOrchestrator
 {
+    // Caps the reload-and-retry loops that transition to 3PL / mark Failed when a concurrent
+    // rider decline or accept keeps bumping the delivery's concurrency token. A handful of
+    // attempts is plenty; if still contended we bail and let the recovery service pick it up.
+    private const int MaxConcurrencyRetries = 5;
+
     private readonly IRiderQueryService _riderQueryService;
     private readonly IRiderNotificationService _notificationService;
     private readonly IThirdPartyDeliveryProvider _thirdPartyProvider;
@@ -71,53 +76,82 @@ public sealed class RiderDispatchOrchestrator
             "No own-fleet rider took delivery {DeliveryId}. Falling back to 3PL.",
             deliveryRequest.Id);
 
-        // Reload fresh: the own-fleet phase probed status via GetCurrentStatusAsync and
-        // may have detached the tracked entity on a concurrency-guarded write.
-        var fresh = await _requestRepository.GetByIdAsync(deliveryRequest.Id, ct);
-        if (fresh is null)
+        // Move the request into 3PL search. This can race a rider decline/accept committed on
+        // another connection (which bumps xmin), so reload FRESH and retry rather than writing
+        // through the dispatcher's stale tracked copy. A concurrent accept short-circuits.
+        DeliveryRequest? fresh = null;
+        for (var attempt = 0; attempt < MaxConcurrencyRetries; attempt++)
         {
-            return DispatchResult.Failed("Delivery request no longer exists");
+            fresh = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
+            if (fresh is null)
+            {
+                return DispatchResult.Failed("Delivery request no longer exists");
+            }
+            if (fresh.Status >= DeliveryRequestStatus.RiderAssigned)
+            {
+                return DispatchResult.Success(fresh.FleetType ?? FleetType.OwnFleet, fresh.RiderId);
+            }
+            if (fresh.Status == DeliveryRequestStatus.Searching3PL)
+            {
+                break; // already there (e.g. a concurrent path moved it)
+            }
+            if (fresh.Status is not (DeliveryRequestStatus.SearchingOwnFleet
+                or DeliveryRequestStatus.Created
+                or DeliveryRequestStatus.PendingDispatch))
+            {
+                // Terminal/unexpected (Cancelled/Failed/etc.) — nothing to dispatch.
+                return DispatchResult.Failed($"Delivery in non-dispatchable status {fresh.Status}");
+            }
+
+            fresh.StartSearching3PL();
+            if (await _requestRepository.TryUpdateAsync(fresh, ct))
+            {
+                break;
+            }
+            // Lost the write to a concurrent decline/accept — loop and re-decide on fresh state.
         }
 
-        // A rider may have accepted right at the window boundary — never override it.
-        if (fresh.Status >= DeliveryRequestStatus.RiderAssigned)
-        {
-            return DispatchResult.Success(fresh.FleetType ?? FleetType.OwnFleet, fresh.RiderId);
-        }
-
-        fresh.StartSearching3PL();
-        await _requestRepository.UpdateAsync(fresh, ct);
-
-        var thirdPartyResult = await AssignVia3PLAsync(fresh, ct);
+        var thirdPartyResult = await AssignVia3PLAsync(fresh!, ct);
         if (thirdPartyResult.IsSuccess)
         {
             return thirdPartyResult;
         }
 
-        // Both own fleet and 3PL exhausted → terminal failure (concurrency-guarded).
-        fresh = await _requestRepository.GetByIdAsync(fresh.Id, ct);
-        if (fresh is null)
+        // Both own fleet and 3PL exhausted → terminal failure. Same fresh-reload + retry so a
+        // reject/accept that changed xmin never turns into a spurious concurrency crash, and a
+        // genuine assignment is honored instead of clobbered to Failed.
+        for (var attempt = 0; attempt < MaxConcurrencyRetries; attempt++)
         {
-            return DispatchResult.Failed("Delivery request no longer exists");
-        }
-        if (fresh.Status >= DeliveryRequestStatus.RiderAssigned)
-        {
-            return DispatchResult.Success(fresh.FleetType ?? FleetType.OwnFleet, fresh.RiderId);
+            fresh = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
+            if (fresh is null)
+            {
+                return DispatchResult.Failed("Delivery request no longer exists");
+            }
+            if (fresh.Status >= DeliveryRequestStatus.RiderAssigned)
+            {
+                _logger.LogInformation(
+                    "Delivery {DeliveryId} was assigned ({Status}) before the terminal fail — honoring it.",
+                    fresh.Id, fresh.Status);
+                return DispatchResult.Success(fresh.FleetType ?? FleetType.OwnFleet, fresh.RiderId);
+            }
+
+            // MarkFailed self-guards against Status >= RiderAssigned, so this only fails a
+            // request that is genuinely still unassigned.
+            fresh.MarkFailed(
+                DeliveryFailureReason.NoRidersAvailable,
+                "All dispatch options exhausted (Own Fleet declined/unavailable and 3PL failed/timed out)");
+
+            if (await _requestRepository.TryUpdateAsync(fresh, ct))
+            {
+                return DispatchResult.Failed("All dispatch options exhausted");
+            }
+            // Lost to a concurrent write — reload and re-check whether it was an assignment.
         }
 
-        fresh.MarkFailed(
-            DeliveryFailureReason.NoRidersAvailable,
-            "All dispatch options exhausted (Own Fleet declined/unavailable and 3PL failed/timed out)");
-
-        if (!await _requestRepository.TryUpdateAsync(fresh, ct))
-        {
-            _logger.LogInformation(
-                "Delivery {DeliveryId} failure write rejected by concurrency token — a rider accepted concurrently. Honoring the assignment.",
-                fresh.Id);
-            return DispatchResult.Success(FleetType.OwnFleet, null);
-        }
-
-        return DispatchResult.Failed("All dispatch options exhausted");
+        _logger.LogWarning(
+            "Delivery {DeliveryId} terminal-fail write kept losing the concurrency race; leaving for the recovery service.",
+            deliveryRequest.Id);
+        return DispatchResult.Failed("All dispatch options exhausted (contended)");
     }
 
     /// <summary>
@@ -207,7 +241,7 @@ public sealed class RiderDispatchOrchestrator
             }
             if (status >= DeliveryRequestStatus.RiderAssigned)
             {
-                var assigned = await _requestRepository.GetByIdAsync(deliveryRequest.Id, ct);
+                var assigned = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
                 _logger.LogInformation(
                     "Own-fleet rider {RiderId} accepted delivery {DeliveryId}.",
                     assigned?.RiderId, deliveryRequest.Id);
@@ -215,23 +249,27 @@ public sealed class RiderDispatchOrchestrator
             }
         }
 
-        // Window elapsed with no acceptance → expire pending offers and fall back to 3PL.
-        var latest = await _requestRepository.GetByIdWithOffersAsync(deliveryRequest.Id, ct);
-        if (latest is null)
+        // Window elapsed. Re-read the TRUE status: did a rider accept right at the boundary?
+        var finalStatus = await _requestRepository.GetCurrentStatusAsync(deliveryRequest.Id, ct);
+        if (finalStatus is null)
         {
             return DispatchResult.Failed("Delivery request no longer exists");
         }
-        if (latest.Status >= DeliveryRequestStatus.RiderAssigned)
+        if (finalStatus >= DeliveryRequestStatus.RiderAssigned)
         {
-            return DispatchResult.Success(FleetType.OwnFleet, latest.RiderId);
+            var assigned = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
+            return DispatchResult.Success(FleetType.OwnFleet, assigned?.RiderId);
         }
 
-        latest.ExpireAllPendingOffers();
-        if (!await _requestRepository.TryUpdateAsync(latest, ct))
+        // No acceptance → best-effort expire the pending offers (they are past ExpiresAt by now
+        // anyway) and fall back to 3PL. This write is NON-critical: if it loses the concurrency
+        // race to a rider decline/accept we simply move on — we do NOT treat that as an accept
+        // (a reject also bumps xmin), so the caller's fresh status re-check decides the outcome.
+        var latest = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
+        if (latest is { Status: DeliveryRequestStatus.SearchingOwnFleet })
         {
-            // A rider accepted between our last poll and this write — honor it.
-            var assigned = await _requestRepository.GetByIdAsync(deliveryRequest.Id, ct);
-            return DispatchResult.Success(FleetType.OwnFleet, assigned?.RiderId);
+            latest.ExpireAllPendingOffers();
+            await _requestRepository.TryUpdateAsync(latest, ct); // result intentionally ignored
         }
 
         _logger.LogInformation(

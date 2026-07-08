@@ -110,6 +110,8 @@ public class DeclineDeliveryOfferCommandHandlerTests
             .Returns(new[] { deliveryRequest });
         _repository.GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(deliveryRequest);
+        _repository.TryUpdateAsync(deliveryRequest, Arg.Any<CancellationToken>())
+            .Returns(true);
 
         var command = new DeclineDeliveryOfferCommand { OfferId = offer.Id, RiderId = riderId, Reason = "Too far" };
 
@@ -118,7 +120,7 @@ public class DeclineDeliveryOfferCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         offer.Status.Should().Be(RiderOfferStatus.Rejected);
         offer.RejectionReason.Should().Be("Too far");
-        await _repository.Received(1).UpdateAsync(deliveryRequest, Arg.Any<CancellationToken>());
+        await _repository.Received(1).TryUpdateAsync(deliveryRequest, Arg.Any<CancellationToken>());
     }
 
     #region Helpers

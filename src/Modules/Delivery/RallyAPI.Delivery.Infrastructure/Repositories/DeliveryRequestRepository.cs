@@ -97,6 +97,24 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
         return rows.Count > 0 ? rows[0] : null;
     }
 
+    public async Task<DeliveryRequest?> GetByIdFreshAsync(Guid id, CancellationToken ct = default)
+    {
+        // Detach any tracked copy of this aggregate (root + its offers) that the long-lived
+        // dispatch context is holding, so the reload reflects accept/decline writes committed
+        // on other connections and picks up the current xmin. Without this, EF returns the
+        // stale identity-map instance and its next write conflicts or clobbers.
+        var stale = _dbContext.ChangeTracker.Entries()
+            .Where(e => (e.Entity is DeliveryRequest dr && dr.Id == id)
+                     || (e.Entity is RiderOffer ro && ro.DeliveryRequestId == id))
+            .ToList();
+        foreach (var entry in stale)
+            entry.State = EntityState.Detached;
+
+        return await _dbContext.DeliveryRequests
+            .Include(r => r.RiderOffers)
+            .FirstOrDefaultAsync(r => r.Id == id, ct);
+    }
+
     public async Task AddAsync(DeliveryRequest request, CancellationToken ct = default)
     {
         await _dbContext.DeliveryRequests.AddAsync(request, ct);
