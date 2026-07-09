@@ -28,6 +28,14 @@ public interface IDeliveryRequestRepository
     Task<IReadOnlyList<DeliveryRequest>> GetStuckForRedispatchAsync(DateTime stuckBefore, CancellationToken ct = default);
 
     /// <summary>
+    /// Returns deliveries handed off to the 3PL provider (status <c>Searching3PL</c> with a
+    /// recorded <see cref="DeliveryRequest.ThirdPartyDispatchedAt"/>) whose provider search has
+    /// run longer than the timeout — i.e. dispatched before <paramref name="dispatchedBefore"/>
+    /// and still not assigned. The recovery service cancels these tasks and retries own fleet.
+    /// </summary>
+    Task<IReadOnlyList<DeliveryRequest>> GetThirdPartySearchTimedOutAsync(DateTime dispatchedBefore, CancellationToken ct = default);
+
+    /// <summary>
     /// Reads the delivery's CURRENT status straight from the database, bypassing the
     /// change-tracker identity map. The inline dispatcher holds one DbContext for the
     /// whole dispatch run, so a normal (tracking) reload returns its own stale copy and

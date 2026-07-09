@@ -227,6 +227,9 @@ public sealed class DeliveryRequestConfiguration : IEntityTypeConfiguration<Deli
         builder.Property(r => r.SearchingStartedAt)
             .HasColumnName("searching_started_at");
 
+        builder.Property(r => r.ThirdPartyDispatchedAt)
+            .HasColumnName("third_party_dispatched_at");
+
         builder.Property(r => r.AssignedAt)
             .HasColumnName("assigned_at");
 
