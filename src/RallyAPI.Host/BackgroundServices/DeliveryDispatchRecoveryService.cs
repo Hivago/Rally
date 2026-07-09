@@ -35,6 +35,13 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan StuckThreshold = TimeSpan.FromMinutes(2);
+
+    // Hard age floor for stuck-recovery: never re-dispatch an order created longer ago than this.
+    // A genuinely recoverable stuck order (interrupted dispatch) is minutes old; anything older is
+    // dead. Without this, a deploy/restart re-dispatches the entire historical backlog and books
+    // real 3PL riders for months-old orders (incident 2026-07-09: 68 April/May orders re-booked).
+    private static readonly TimeSpan StuckMaxAge = TimeSpan.FromHours(3);
+
     private const int BatchSize = 10;
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -132,8 +139,10 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
         var repository = scope.ServiceProvider.GetRequiredService<IDeliveryRequestRepository>();
         var sender = scope.ServiceProvider.GetRequiredService<ISender>();
 
-        var stuckBefore = DateTime.UtcNow - StuckThreshold;
-        var stuck = await repository.GetStuckForRedispatchAsync(stuckBefore, ct);
+        var now = DateTime.UtcNow;
+        var stuckBefore = now - StuckThreshold;
+        var createdAfter = now - StuckMaxAge;
+        var stuck = await repository.GetStuckForRedispatchAsync(stuckBefore, createdAfter, ct);
         if (stuck.Count == 0)
             return;
 

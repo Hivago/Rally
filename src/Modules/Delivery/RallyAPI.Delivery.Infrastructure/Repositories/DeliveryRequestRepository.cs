@@ -69,6 +69,7 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
 
     public async Task<IReadOnlyList<DeliveryRequest>> GetStuckForRedispatchAsync(
         DateTime stuckBefore,
+        DateTime createdAfter,
         CancellationToken ct = default)
     {
         return await _dbContext.DeliveryRequests
@@ -77,6 +78,9 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
                      || r.Status == DeliveryRequestStatus.SearchingOwnFleet
                      || r.Status == DeliveryRequestStatus.Searching3PL)
             .Where(r => r.RiderId == null)
+            // Hard age floor: never resurrect stale orders. A recoverable stuck order is minutes
+            // old; anything older is dead and must not be re-dispatched (or re-booked to 3PL).
+            .Where(r => r.CreatedAt >= createdAfter)
             // Exclude deliveries that have been handed off to the 3PL provider and are legitimately
             // waiting on its webhook — re-triggering those would create a duplicate provider task.
             // Their timeout is enforced separately by GetThirdPartySearchTimedOutAsync.
