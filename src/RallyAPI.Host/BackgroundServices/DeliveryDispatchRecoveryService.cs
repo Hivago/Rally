@@ -23,10 +23,10 @@ namespace RallyAPI.Host.BackgroundServices;
 ///
 /// (2) 3PL search timeout: after own fleet finds no rider we hand off to the 3PL provider
 /// NON-BLOCKING (status Searching3PL). The provider's webhook flips us to Assigned3PL when an
-/// agent accepts. This service enforces the ceiling: a Searching3PL delivery whose provider
-/// search has run past <see cref="DispatchOptions.ThirdPartySearchTimeoutMinutes"/> gets its
-/// provider task cancelled and own fleet retried once (which then fails if still no rider —
-/// ThirdPartyDispatchedAt marks that 3PL was already attempted).
+/// agent accepts. If a Searching3PL delivery's provider search runs past
+/// <see cref="DispatchOptions.ThirdPartySearchTimeoutMinutes"/> with no agent, this service
+/// cancels the stale task and RE-BOOKS a fresh 3PL task (never gives up / never fails for lack
+/// of a rider — 3PL is the guaranteed backstop, it just takes time).
 ///
 /// Re-dispatch is safe: TriggerDispatch is idempotent per state, and the xmin concurrency token
 /// rejects a losing write (skipped, retried next tick).
@@ -181,14 +181,14 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
 
         var batch = timedOut.Take(BatchSize).ToList();
         _logger.LogWarning(
-            "3PL search timeout: {Total} delivery(ies) past {Minutes}min with no agent, retrying own fleet for {Batch}",
+            "3PL search timeout: {Total} delivery(ies) past {Minutes}min with no agent, re-booking a fresh 3PL task for {Batch}",
             timedOut.Count, _dispatchOptions.ThirdPartySearchTimeoutMinutes, batch.Count);
 
         foreach (var request in batch)
         {
             try
             {
-                // Reload fresh and take over only if still genuinely waiting on 3PL — a webhook
+                // Reload fresh and act only if still genuinely waiting on 3PL — a webhook
                 // may have assigned an agent between the query and now.
                 var fresh = await repository.GetByIdFreshAsync(request.Id, ct);
                 if (fresh is null || fresh.Status != DeliveryRequestStatus.Searching3PL)
@@ -196,36 +196,38 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
 
                 var taskId = fresh.ExternalTaskId;
 
-                // Flip to own-fleet search FIRST (xmin-guarded). If a concurrent webhook assigned
-                // an agent, this loses the race — skip, don't cancel the live task.
-                fresh.TransitionToOwnFleetSearch();
+                // Reset the 3PL search FIRST (xmin-guarded), clearing the stale task so the next
+                // dispatch books a FRESH one. If a concurrent webhook assigned an agent, this loses
+                // the race — skip, don't cancel the live task. We never give up on 3PL for lack of
+                // a rider; it always assigns eventually, it just takes time.
+                fresh.ResetForThirdPartyRetry();
                 if (!await repository.TryUpdateAsync(fresh, ct))
                 {
                     _logger.LogInformation(
-                        "3PL timeout takeover of delivery {DeliveryId} lost the race to a webhook assignment; skipping.",
+                        "3PL timeout re-book of delivery {DeliveryId} lost the race to a webhook assignment; skipping.",
                         request.Id);
                     continue;
                 }
 
                 _logger.LogWarning(
-                    "3PL search timed out for delivery {DeliveryId} (Order {OrderId}, task {TaskId}); cancelling and retrying own fleet.",
+                    "3PL search timed out for delivery {DeliveryId} (Order {OrderId}, task {TaskId}); cancelling stale task and re-booking 3PL.",
                     fresh.Id, fresh.OrderId, taskId);
 
                 if (!string.IsNullOrEmpty(taskId))
                 {
-                    var cancel = await provider.CancelTaskAsync(taskId, "3PL search timeout — retrying own fleet", ct);
+                    var cancel = await provider.CancelTaskAsync(taskId, "3PL search timeout — re-booking a fresh task", ct);
                     if (!cancel.IsSuccess)
                         _logger.LogWarning(
                             "Failed to cancel timed-out 3PL task {TaskId} for delivery {DeliveryId}: {Error}",
                             taskId, fresh.Id, cancel.ErrorMessage);
                 }
 
-                // Retry own fleet once. The fallback in the orchestrator sees ThirdPartyDispatchedAt
-                // is set and will mark the delivery Failed rather than looping back to 3PL.
+                // Re-dispatch: the delivery is Searching3PL with no live task, so dispatch books a
+                // fresh 3PL task and keeps searching. The order is never failed for lack of a rider.
                 var result = await sender.Send(new TriggerDispatchCommand { DeliveryRequestId = fresh.Id }, ct);
                 if (result.IsFailure)
                     _logger.LogWarning(
-                        "Own-fleet retry after 3PL timeout for delivery {DeliveryId} returned failure: {Error}",
+                        "3PL re-book after timeout for delivery {DeliveryId} returned failure: {Error}",
                         fresh.Id, result.Error);
             }
             catch (Exception ex)
