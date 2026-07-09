@@ -638,6 +638,16 @@ public sealed class DispatchOptions
     /// </summary>
     public bool OwnFleetFirst { get; set; } = true;
 
+    /// <summary>
+    /// When true, the search starts DURING prep (at restaurant-accept) instead of waiting for
+    /// food-ready. The accept handler resolves the real delivery fee from the order's quote and
+    /// schedules a predictive <c>DispatchAt = ConfirmedAt + (prep − buffer)</c>; the recovery
+    /// service's due-dispatch sweep fires it when that time arrives. Food-ready stays as the floor
+    /// (dispatches immediately if the kitchen beats the prediction). Default off — ship dark and
+    /// flip on once validated. When off, dispatch behaves exactly as today (ready-time trigger).
+    /// </summary>
+    public bool EarlyDispatchEnabled { get; set; } = false;
+
     public double SearchRadiusKm { get; set; } = 5.0;
     public int MaxRidersToTry { get; set; } = 10;
     public int AcceptanceTimeoutSeconds { get; set; } = 30;

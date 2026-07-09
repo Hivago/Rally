@@ -3,6 +3,7 @@ using MediatR;
 using RallyAPI.Delivery.Application.Commands.TriggerDispatch;
 using RallyAPI.Delivery.Application.Services;
 using RallyAPI.Delivery.Domain.Abstractions;
+using RallyAPI.Delivery.Domain.Entities;
 using RallyAPI.Delivery.Domain.Enums;
 using RallyAPI.SharedKernel.Abstractions.Delivery;
 
@@ -10,6 +11,10 @@ namespace RallyAPI.Host.BackgroundServices;
 
 /// <summary>
 /// Safety net + timeout enforcer for rider dispatch.
+///
+/// (0) Early/predictive dispatch (when DispatchOptions.EarlyDispatchEnabled): fires the rider
+/// search for PendingDispatch requests whose scheduled DispatchAt has arrived, so the search
+/// starts during prep rather than at food-ready. See <see cref="SweepDueDispatchesAsync"/>.
 ///
 /// (1) Re-dispatch stuck requests: the normal trigger (OrderReadyForPickup -> TriggerDispatch)
 /// runs dispatch on the outbox thread. If that work is interrupted, a DeliveryRequest can wedge
@@ -58,6 +63,9 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
         {
             try
             {
+                if (_dispatchOptions.EarlyDispatchEnabled)
+                    await SweepDueDispatchesAsync(stoppingToken);
+
                 await RecoverStuckAsync(stoppingToken);
                 await SweepThirdPartyTimeoutsAsync(stoppingToken);
             }
@@ -68,6 +76,52 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Delivery dispatch recovery tick failed");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Early/predictive dispatch: fires the rider search for any PendingDispatch request whose
+    /// scheduled <see cref="DeliveryRequest.DispatchAt"/> has arrived. This starts the search DURING
+    /// prep so a rider reaches the restaurant around food-ready. Gated on
+    /// <see cref="DispatchOptions.EarlyDispatchEnabled"/>. Idempotent: TriggerDispatch no-ops if the
+    /// request already moved past PendingDispatch (e.g. the food-ready event fired first), and a
+    /// request that stays PendingDispatch (interrupted dispatch) is simply retried next tick.
+    /// </summary>
+    private async Task SweepDueDispatchesAsync(CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IDeliveryRequestRepository>();
+        var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+
+        var due = await repository.GetPendingDispatchAsync(DateTime.UtcNow, ct);
+        if (due.Count == 0)
+            return;
+
+        var batch = due.Take(BatchSize).ToList();
+        _logger.LogInformation(
+            "Early dispatch: {Total} delivery request(s) due, dispatching {Batch}",
+            due.Count, batch.Count);
+
+        foreach (var request in batch)
+        {
+            try
+            {
+                _logger.LogInformation(
+                    "Early-dispatching delivery {DeliveryId} (Order {OrderId}, DispatchAt {DispatchAt:o})",
+                    request.Id, request.OrderId, request.DispatchAt);
+
+                var result = await sender.Send(
+                    new TriggerDispatchCommand { DeliveryRequestId = request.Id }, ct);
+
+                if (result.IsFailure)
+                    _logger.LogWarning(
+                        "Early dispatch of delivery {DeliveryId} returned failure: {Error}",
+                        request.Id, result.Error);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Early dispatch of delivery {DeliveryId} threw", request.Id);
             }
         }
     }

@@ -81,6 +81,13 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
             // waiting on its webhook — re-triggering those would create a duplicate provider task.
             // Their timeout is enforced separately by GetThirdPartySearchTimedOutAsync.
             .Where(r => !(r.Status == DeliveryRequestStatus.Searching3PL && r.ThirdPartyDispatchedAt != null))
+            // A PendingDispatch request is scheduled for a future DispatchAt (early/predictive
+            // dispatch). Don't treat it as "stuck" until that scheduled time has passed — otherwise
+            // the 2-min idle net would front-run the prep timer. Its on-time firing is owned by the
+            // due-dispatch sweep (GetPendingDispatchAsync). With early dispatch off, DispatchAt is
+            // ConfirmedAt, so this is already in the past and behavior is unchanged.
+            .Where(r => r.Status != DeliveryRequestStatus.PendingDispatch
+                     || (r.DispatchAt.HasValue && r.DispatchAt.Value <= stuckBefore))
             .Where(r => r.UpdatedAt < stuckBefore)
             .OrderBy(r => r.UpdatedAt)
             .Take(50)
