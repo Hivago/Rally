@@ -69,6 +69,32 @@ public class MarkPickedUpCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenPickupCodeIsNull_ShouldFailCleanlyNotThrow()
+    {
+        // A null/missing code must be rejected as an invalid code, not blow up
+        // with a NullReferenceException (500). Validation normally catches this,
+        // but the handler must be null-safe on its own.
+        var riderId = Guid.NewGuid();
+        var delivery = BuildArrivedAtPickup(riderId);
+
+        _repository.GetByIdAsync(delivery.Id, Arg.Any<CancellationToken>()).Returns(delivery);
+
+        var command = new MarkPickedUpCommand
+        {
+            DeliveryRequestId = delivery.Id,
+            RiderId = riderId,
+            PickupCode = null!
+        };
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Message.Should().Contain("Invalid pickup code");
+        delivery.Status.Should().Be(DeliveryRequestStatus.RiderArrivedPickup);
+        await _repository.DidNotReceive().UpdateAsync(Arg.Any<DeliveryRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Handle_WhenRiderNotAssigned_ShouldFailBeforeCodeCheck()
     {
         var assignedRider = Guid.NewGuid();

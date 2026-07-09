@@ -18,6 +18,8 @@ using RallyAPI.Orders.Application.Queries.GetOrdersByCustomer;
 using RallyAPI.Orders.Application.Commands.AddOrderNote;
 using RallyAPI.Orders.Application.Queries.GetActiveOrders;
 using RallyAPI.Orders.Application.Queries.GetFilteredOrders;
+using RallyAPI.Orders.Application.Queries.GetKitchenTicket;
+using RallyAPI.Orders.Application.Queries.GetOrderLabel;
 using RallyAPI.Orders.Application.Queries.GetOrderById;
 using RallyAPI.Orders.Application.Queries.GetOrderByNumber;
 using RallyAPI.Orders.Application.Queries.GetOrderNotes;
@@ -64,6 +66,22 @@ public static class OrderEndpoints
             .WithSummary("Get order by ID")
             .RequireAuthorization()
             .Produces<OrderDto>()
+            .Produces<ProblemDetails>(StatusCodes.Status404NotFound);
+
+        // Get Kitchen Ticket / KOT (Restaurant or Admin) — print-oriented, no pricing
+        group.MapGet("/{orderId:guid}/kot", GetKitchenTicket)
+            .WithName("GetKitchenTicket")
+            .WithSummary("Get the Kitchen Order Ticket (KOT) for an order")
+            .RequireAuthorization("AdminOrRestaurant")
+            .Produces<KitchenTicketDto>()
+            .Produces<ProblemDetails>(StatusCodes.Status404NotFound);
+
+        // Get customer bill / order label (Restaurant or Admin) — the copy that goes on the bag
+        group.MapGet("/{orderId:guid}/label", GetOrderLabel)
+            .WithName("GetOrderLabel")
+            .WithSummary("Get the customer bill/label (pricing, address, OTP, FSSAI) for an order")
+            .RequireAuthorization("AdminOrRestaurant")
+            .Produces<OrderLabelDto>()
             .Produces<ProblemDetails>(StatusCodes.Status404NotFound);
 
         // Get Order by Number
@@ -295,6 +313,44 @@ public static class OrderEndpoints
 
         var callerRole = GetCallerRole(currentUser);
         var result = await mediator.Send(new GetOrderByIdQuery(orderId, currentUser.UserId.Value, callerRole), cancellationToken);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : result.Error.ToErrorResult();
+    }
+
+    private static async Task<IResult> GetKitchenTicket(
+        Guid orderId,
+        IMediator mediator,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.UserId.HasValue)
+            return Results.Unauthorized();
+
+        var callerRole = GetCallerRole(currentUser);
+        var result = await mediator.Send(
+            new GetKitchenTicketQuery(orderId, currentUser.UserId.Value, callerRole),
+            cancellationToken);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : result.Error.ToErrorResult();
+    }
+
+    private static async Task<IResult> GetOrderLabel(
+        Guid orderId,
+        IMediator mediator,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.UserId.HasValue)
+            return Results.Unauthorized();
+
+        var callerRole = GetCallerRole(currentUser);
+        var result = await mediator.Send(
+            new GetOrderLabelQuery(orderId, currentUser.UserId.Value, callerRole),
+            cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)

@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\RallyAPI.SharedKernel\RallyAPI.SharedKernel.csproj" />
     <ProjectReference Include="..\..\src\Modules\Orders\RallyAPI.Orders.Application\RallyAPI.Orders.Application.csproj" />
     <ProjectReference Include="..\..\src\Modules\Delivery\RallyAPI.Delivery.Application\RallyAPI.Delivery.Application.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Delivery\RallyAPI.Delivery.Infrastructure\RallyAPI.Delivery.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

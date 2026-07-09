@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using RallyAPI.Orders.Application.Abstractions;
 using RallyAPI.Orders.Domain.Abstractions;
 using RallyAPI.Orders.Domain.Enums;
 using RallyAPI.Orders.Domain.Events;
@@ -10,20 +11,26 @@ namespace RallyAPI.Orders.Application.EventHandlers;
 /// <summary>
 /// Bridge handler: OrderConfirmed domain event -> OrderConfirmedIntegrationEvent.
 /// This crosses the module boundary to the Delivery module.
+///
+/// The integration event is written to the transactional outbox rather than published
+/// in-process: the OutboxProcessor then delivers it with retries to the (idempotent)
+/// Delivery consumer. Previously an in-process publish that threw (e.g. a Delivery DB
+/// blip) was swallowed by the domain-event interceptor, permanently losing the delivery
+/// request for that order with no retry.
 /// </summary>
 public sealed class OrderConfirmedEventHandler : INotificationHandler<OrderConfirmedEvent>
 {
     private readonly IOrderRepository _orderRepository;
-    private readonly IPublisher _publisher;
+    private readonly IOutboxWriter _outbox;
     private readonly ILogger<OrderConfirmedEventHandler> _logger;
 
     public OrderConfirmedEventHandler(
         IOrderRepository orderRepository,
-        IPublisher publisher,
+        IOutboxWriter outbox,
         ILogger<OrderConfirmedEventHandler> logger)
     {
         _orderRepository = orderRepository;
-        _publisher = publisher;
+        _outbox = outbox;
         _logger = logger;
     }
 
@@ -78,8 +85,8 @@ public sealed class OrderConfirmedEventHandler : INotificationHandler<OrderConfi
             isPickupOrder: isPickup
         );
 
-        await _publisher.Publish(integrationEvent, cancellationToken);
-        
-        _logger.LogInformation("Published OrderConfirmedIntegrationEvent for Order {OrderNumber}", order.OrderNumber.Value);
+        await _outbox.WriteAsync(integrationEvent, cancellationToken);
+
+        _logger.LogInformation("Enqueued OrderConfirmedIntegrationEvent to outbox for Order {OrderNumber}", order.OrderNumber.Value);
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using RallyAPI.Orders.Domain.Entities;
+using RallyAPI.Orders.Infrastructure.Outbox;
 
 namespace RallyAPI.Orders.Infrastructure;
 
@@ -21,6 +22,7 @@ public sealed class OrdersDbContext : DbContext
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Payout> Payouts => Set<Payout>();
     public DbSet<PayoutLedger> PayoutLedgers => Set<PayoutLedger>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -13,6 +13,14 @@ public sealed class DeliveryRequestConfiguration : IEntityTypeConfiguration<Deli
 
         builder.HasKey(r => r.Id);
 
+        // Optimistic concurrency via Postgres' system xmin column. Postgres bumps xmin on
+        // EVERY row update regardless of which connection/DbContext wrote it, so a rider
+        // acceptance committed on another connection invalidates the inline dispatcher's
+        // stale terminal "Failed" write — EF emits a WHERE xmin = @original guard and the
+        // losing write is rejected instead of clobbering the assignment. No DDL: xmin is a
+        // built-in system column, so the migration carries no ALTER TABLE.
+        builder.UseXminAsConcurrencyToken();
+
         builder.Property(r => r.Id)
             .HasColumnName("id")
             .ValueGeneratedNever();
@@ -218,6 +226,9 @@ public sealed class DeliveryRequestConfiguration : IEntityTypeConfiguration<Deli
 
         builder.Property(r => r.SearchingStartedAt)
             .HasColumnName("searching_started_at");
+
+        builder.Property(r => r.ThirdPartyDispatchedAt)
+            .HasColumnName("third_party_dispatched_at");
 
         builder.Property(r => r.AssignedAt)
             .HasColumnName("assigned_at");

@@ -67,6 +67,12 @@ public sealed class Order : AggregateRoot
 
     // Instructions & Notes
     public string? SpecialInstructions { get; private set; }
+
+    /// <summary>
+    /// Whether the customer asked for cutlery to be included. Printed as a distinct
+    /// line on the kitchen ticket ("SEND CUTLERY"). Defaults to false.
+    /// </summary>
+    public bool CutleryRequested { get; private set; }
     public string? InternalNotes { get; private set; }
 
     // Metadata (flexible JSON for future needs)
@@ -92,7 +98,8 @@ public sealed class Order : AggregateRoot
         DeliveryInfo? deliveryInfo,
         OrderPricing pricing,
         string? deliveryQuoteId,
-        string? specialInstructions)
+        string? specialInstructions,
+        bool cutleryRequested)
     {
         Id = Guid.NewGuid();
         OrderNumber = orderNumber;
@@ -117,6 +124,7 @@ public sealed class Order : AggregateRoot
         DeliveryQuoteId = deliveryQuoteId;
 
         SpecialInstructions = specialInstructions;
+        CutleryRequested = cutleryRequested;
 
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
@@ -141,7 +149,8 @@ public sealed class Order : AggregateRoot
         string? customerPhone = null,
         string? customerEmail = null,
         string? restaurantPhone = null,
-        string? specialInstructions = null)
+        string? specialInstructions = null,
+        bool cutleryRequested = false)
     {
         if (customerId == Guid.Empty)
             throw new ArgumentException("Customer ID is required", nameof(customerId));
@@ -174,7 +183,8 @@ public sealed class Order : AggregateRoot
             deliveryInfo,
             pricing,
             deliveryQuoteId,
-            specialInstructions?.Trim());
+            specialInstructions?.Trim(),
+            cutleryRequested);
 
         return order;
     }

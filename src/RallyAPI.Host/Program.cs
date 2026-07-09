@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RallyAPI.Catalog.Endpoints;
 using RallyAPI.Delivery.Endpoints;
+using RallyAPI.Host.BackgroundServices;
 using RallyAPI.Host.DevEndpoints;
 using RallyAPI.Host.Hubs;
 using RallyAPI.Host.Services;
@@ -19,7 +20,10 @@ using RallyAPI.SharedKernel.Abstractions.Notifications;
 using RallyAPI.SharedKernel.Extensions;
 using RallyAPI.SharedKernel.Infrastructure;
 using RallyAPI.Users.Endpoints;
+using RedisRateLimiting;
 using Serilog;
+using Serilog.Events;
+using StackExchange.Redis;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.RateLimiting;
@@ -34,12 +38,37 @@ try
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Sentry error tracking. DSN is read from config "Sentry:Dsn" / env SENTRY_DSN.
+// Only initialize when a DSN is actually configured: UseSentry() throws
+// ArgumentNullException on a null/unset DSN (only an empty STRING no-ops). On
+// Railway appsettings.json isn't in the image and SENTRY_DSN is unset -> null ->
+// it crashed the whole app on startup. Guarding makes it safe with no DSN.
+var sentryDsn = builder.Configuration["Sentry:Dsn"];
+if (!string.IsNullOrWhiteSpace(sentryDsn))
+{
+    builder.WebHost.UseSentry();
+}
+
 builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)
     .ReadFrom.Services(services)
     .Enrich.FromLogContext()
     .Enrich.WithEnvironmentName()
-    .Enrich.WithThreadId());
+    .Enrich.WithThreadId()
+    // Always write to console, even when appsettings.json (which carries the
+    // Serilog config) is absent from the deployed image — otherwise post-startup
+    // logs and exceptions vanish on Railway, making boot failures invisible.
+    .WriteTo.Console()
+    // Route Serilog Error+ events (incl. those logged by ExceptionHandlingMiddleware,
+    // which catches exceptions so they never reach Sentry's ASP.NET middleware) into
+    // the Sentry SDK already initialized by UseSentry(). InitializeSdk=false avoids a
+    // second init; when no DSN is configured the SDK is disabled and this is a no-op.
+    .WriteTo.Sentry(o =>
+    {
+        o.InitializeSdk = false;
+        o.MinimumEventLevel = LogEventLevel.Error;
+        o.MinimumBreadcrumbLevel = LogEventLevel.Information;
+    }));
 
 // Serialize enums as strings in all HTTP responses (minimal API + TypedResults)
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -53,8 +82,16 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
 
 builder.Services.AddHttpContextAccessor();
 
-// SignalR
-builder.Services.AddSignalR();
+// SignalR with a Redis backplane so real-time messages fan out across every
+// instance. Without this, a client connected to instance A never receives an
+// event published on instance B — the hard ceiling on horizontal scaling.
+builder.Services.AddSignalR()
+    .AddStackExchangeRedis(
+        builder.Configuration.GetConnectionString("Redis")!,
+        options =>
+        {
+            options.Configuration.ChannelPrefix = RedisChannel.Literal("rally-signalr");
+        });
 builder.Services.AddSingleton<ConnectionTracker>();
 
 builder.Services.AddScoped<DomainEventInterceptor>();
@@ -189,6 +226,10 @@ builder.Services.AddScoped<IRiderNotificationService, SignalRRiderNotificationSe
 // Real-time rider location push to the customer tracking the order
 builder.Services.AddScoped<ICustomerNotificationService, SignalRCustomerNotificationService>();
 
+// Safety net: re-dispatch delivery requests wedged in a pre-assignment state when the
+// inline dispatch (on the ready-for-pickup / outbox path) was interrupted and never retried.
+builder.Services.AddHostedService<DeliveryDispatchRecoveryService>();
+
 
 // Add Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -228,61 +269,77 @@ builder.Services.AddSwaggerGen(c =>
 
 // Add Rate Limiting
 var isDev = builder.Environment.IsDevelopment();
+// Relax rate limits outside Production so the Staging test environment isn't throttled
+// like prod (it runs as Production via the Dockerfile otherwise). Set
+// ASPNETCORE_ENVIRONMENT=Staging on the staging service to get the lenient limits while
+// keeping Swagger/dev endpoints off and the real SMS provider on.
+var relaxedLimits = isDev || builder.Environment.IsStaging();
+
+// Rate limiting is Redis-backed so limits hold ACROSS instances. With the old
+// in-memory limiter, N instances meant N× the effective limit (each kept its own
+// counter), defeating the protection. RedisRateLimiting reuses the registered
+// IConnectionMultiplexer singleton (resolved per-request via RequestServices).
+// Note: the Redis sliding-window limiter is a true sliding window (sorted-set
+// based), so it has no SegmentsPerWindow knob — the prior segment counts are dropped
+// but the PermitLimit/Window (the actual protection) are unchanged.
+IConnectionMultiplexer ResolveRedis(HttpContext context) =>
+    context.RequestServices.GetRequiredService<IConnectionMultiplexer>();
 
 builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("otp", context =>
-        RateLimitPartition.GetSlidingWindowLimiter(
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new SlidingWindowRateLimiterOptions
+            _ => new RedisSlidingWindowRateLimiterOptions
             {
-                PermitLimit = isDev ? 100 : 3,
-                Window = isDev ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(10),
-                SegmentsPerWindow = 2
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
+                PermitLimit = relaxedLimits ? 100 : 3,
+                Window = relaxedLimits ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(10)
             }));
 
     options.AddPolicy("login", context =>
-        RateLimitPartition.GetSlidingWindowLimiter(
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new SlidingWindowRateLimiterOptions
+            _ => new RedisSlidingWindowRateLimiterOptions
             {
-                PermitLimit = isDev ? 100 : 5,
-                Window = isDev ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(15),
-                SegmentsPerWindow = 3
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
+                PermitLimit = relaxedLimits ? 100 : 5,
+                Window = relaxedLimits ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(15)
             }));
 
     options.AddPolicy("refresh", context =>
-        RateLimitPartition.GetSlidingWindowLimiter(
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new SlidingWindowRateLimiterOptions
+            _ => new RedisSlidingWindowRateLimiterOptions
             {
-                PermitLimit = isDev ? 100 : 10,
-                Window = TimeSpan.FromMinutes(1),
-                SegmentsPerWindow = 2
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
+                PermitLimit = relaxedLimits ? 100 : 10,
+                Window = TimeSpan.FromMinutes(1)
             }));
 
     // Public marketing lead capture: 10 requests/minute per IP in prod.
     // Used by /api/waitlist and /api/restaurant-leads (anonymous landing-page endpoints).
     options.AddPolicy("lead-capture", context =>
-        RateLimitPartition.GetSlidingWindowLimiter(
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new SlidingWindowRateLimiterOptions
+            _ => new RedisSlidingWindowRateLimiterOptions
             {
-                PermitLimit = isDev ? 100 : 10,
-                Window = TimeSpan.FromMinutes(1),
-                SegmentsPerWindow = 2
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
+                PermitLimit = relaxedLimits ? 100 : 10,
+                Window = TimeSpan.FromMinutes(1)
             }));
 
     // Admin CSV export: 5 requests/minute per admin (by JWT sub claim).
     // Falls back to remote IP if unauthenticated, but the endpoint also requires auth.
     options.AddPolicy("admin-export", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
+        RedisRateLimitPartition.GetFixedWindowRateLimiter(
             context.User.FindFirst("sub")?.Value
                 ?? context.Connection.RemoteIpAddress?.ToString()
                 ?? "unknown",
-            _ => new FixedWindowRateLimiterOptions
+            _ => new RedisFixedWindowRateLimiterOptions
             {
-                PermitLimit = isDev ? 100 : 5,
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
+                PermitLimit = relaxedLimits ? 100 : 5,
                 Window = TimeSpan.FromMinutes(1)
             }));
 
@@ -302,27 +359,50 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-// CORS
+// CORS — allowed browser origins are environment-specific.
+//
+// The committed default below is the PRODUCTION allowlist (safe by default: no
+// localhost, no preview deploys). Staging widens it via the Cors:AllowedOrigins
+// config — on Railway set the env var Cors__AllowedOrigins to a comma-separated
+// list (localhost + *.vercel.app previews + the prod domains) so the frontend
+// devs can keep pointing their localhost at the staging API. Local dev always
+// gets the localhost origins appended automatically, so no config is needed there.
+//
+// Note: CORS origins are scheme+host+port with NO trailing slash or path — a value
+// like "https://api.hivago.in" (the API itself) is never used by a browser and is
+// intentionally omitted. Trailing slashes are trimmed defensively.
+string[] productionOrigins =
+[
+    "https://hivago.in",
+    "https://www.hivago.in",
+    "https://admin.hivago.in",
+    "https://restaurant.hivago.in",
+];
+
+string[] localhostOrigins =
+[
+    "http://localhost:3000",     // React dev server
+    "http://localhost:5173",     // Vite dev server
+    "http://localhost:4173",     // Vite preview
+    "http://localhost:8081",     // Expo/React Native web
+];
+
+var configuredOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? string.Empty)
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+var allowedOrigins = (configuredOrigins.Length > 0 ? configuredOrigins : productionOrigins)
+    .Concat(builder.Environment.IsDevelopment() ? localhostOrigins : [])
+    .Select(o => o.TrimEnd('/'))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
+
+Log.Information("CORS allowed origins ({Count}): {Origins}", allowedOrigins.Length, string.Join(", ", allowedOrigins));
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins(
-                "http://localhost:3000",     // React dev server
-                "http://localhost:5173",     // Vite dev server
-                "http://localhost:8081",     // Expo/React Native web
-                "https://hivago.vercel.app",   // Production 
-                "https://hivago-restaurant.vercel.app",
-                "http://localhost:4173",
-                "https://hivago-admin.vercel.app",
-                "https://admin.hivago.in",
-                "https://restaurant.hivago.in",
-                "https://about-hivago.vercel.app",
-                "https://hivago-restaurant.vercel.app",
-                "https://hivago.in",
-                "https://www.hivago.in",
-                "https://api.hivago.in",
-                "https://staging.api.hivago.in")
+        policy.WithOrigins(allowedOrigins)
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
@@ -380,6 +460,14 @@ if (app.Environment.IsDevelopment())
 }
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapGet("/", () => "Rally API is running!");
+app.MapGet("/version", (IHostEnvironment env) => Results.Ok(new
+{
+    version = BuildInfo.Version,
+    commit = BuildInfo.Commit,
+    branch = BuildInfo.Branch,
+    builtAt = BuildInfo.BuildTimestampUtc,
+    environment = env.EnvironmentName
+}));
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
     ResponseWriter = WriteHealthCheckResponse
@@ -424,6 +512,9 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
+        // Write straight to stderr too: on Railway the Serilog config may be absent
+        // and a buffered/async sink can lose this before the crash kills the process.
+        Console.Error.WriteLine($"[STARTUP MIGRATION ERROR] {ex}");
         logger.LogError(ex, "An error occurred while migrating the database.");
         throw;
     }
@@ -434,6 +525,7 @@ app.Run();
 }
 catch (Exception ex)
 {
+    Console.Error.WriteLine($"[STARTUP FATAL] {ex}");
     Log.Fatal(ex, "Application terminated unexpectedly");
 }
 finally

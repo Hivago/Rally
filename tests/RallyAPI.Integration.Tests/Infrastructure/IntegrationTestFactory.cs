@@ -234,6 +234,19 @@ public sealed class IntegrationTestFactory : WebApplicationFactory<Program>, IAs
 
         public Task<RiderPublicInfo?> GetRiderPublicInfoAsync(Guid riderId, CancellationToken ct = default)
             => Task.FromResult<RiderPublicInfo?>(null);
+
+        public Task<RiderEligibilityReport> DiagnoseEligibilityAsync(
+            Guid riderId, double pickupLatitude, double pickupLongitude, double radiusKm,
+            CancellationToken ct = default)
+            => Task.FromResult(new RiderEligibilityReport
+            {
+                RiderId = riderId, Found = false, Eligible = false
+            });
+
+        public Task<IReadOnlyList<RiderEligibilityReport>> DiagnoseAllRidersAsync(
+            double pickupLatitude, double pickupLongitude, double radiusKm, int maxRiders = 200,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<RiderEligibilityReport>>(Array.Empty<RiderEligibilityReport>());
     }
 
     private sealed class StubDeliveryPricingCalculator : IDeliveryPricingCalculator

@@ -13,6 +13,18 @@ public sealed class RefreshToken : BaseEntity
     public DateTime? RevokedAt { get; private set; }
     public Guid? ReplacedByTokenId { get; private set; } // For rotation chain
 
+    /// <summary>
+    /// Default refresh-token lifetime for end users (customer / rider / restaurant / owner).
+    /// Sliding window — a fresh token with this lifetime is minted on every rotation, so an
+    /// active user effectively never has to log in again within this window.
+    /// </summary>
+    public static readonly TimeSpan DefaultLifetime = TimeSpan.FromDays(60);
+
+    /// <summary>
+    /// Shorter refresh-token lifetime for admin sessions (higher-privilege, re-auth sooner).
+    /// </summary>
+    public static readonly TimeSpan AdminLifetime = TimeSpan.FromDays(1);
+
     private RefreshToken() { }
 
     public static RefreshToken Create(

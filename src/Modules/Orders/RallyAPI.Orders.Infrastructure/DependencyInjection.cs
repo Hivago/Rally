@@ -66,6 +66,12 @@ public static class DependencyInjection
         // Cart cleanup background service
         services.AddHostedService<CartCleanupService>();
 
+        // Transactional outbox: durable, retried delivery of cross-module integration
+        // events (e.g. OrderConfirmed -> Delivery). Writer persists; processor drains.
+        services.AddScoped<RallyAPI.Orders.Application.Abstractions.IOutboxWriter,
+            RallyAPI.Orders.Infrastructure.Outbox.OutboxWriter>();
+        services.AddHostedService<OutboxProcessor>();
+
         // Weekly payout batch creation (Mondays 6 AM IST)
         services.AddHostedService<WeeklyPayoutBatchService>();
 
@@ -94,6 +100,10 @@ public static class DependencyInjection
         // Options
         services.Configure<PricingOptions>(
             configuration.GetSection(PricingOptions.SectionName));
+        services.Configure<RallyAPI.Orders.Application.Options.OrderPlacementOptions>(
+            configuration.GetSection(RallyAPI.Orders.Application.Options.OrderPlacementOptions.SectionName));
+        services.Configure<RallyAPI.Orders.Application.Options.PlatformOptions>(
+            configuration.GetSection(RallyAPI.Orders.Application.Options.PlatformOptions.SectionName));
 
         return services;
     }

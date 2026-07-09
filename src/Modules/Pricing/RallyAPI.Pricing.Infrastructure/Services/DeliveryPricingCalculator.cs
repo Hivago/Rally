@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Options;
 using RallyAPI.SharedKernel.Abstractions.Distance;
 using RallyAPI.SharedKernel.Abstractions.Pricing;
+using RallyAPI.SharedKernel.Utilities;
 
 namespace RallyAPI.Pricing.Infrastructure.Services;
 
@@ -41,14 +42,34 @@ public sealed class DeliveryPricingCalculator : IDeliveryPricingCalculator
             request.DropLongitude,
             ct);
 
-        if (!distanceResult.IsSuccess)
+        decimal distanceKm;
+        int estimatedMinutes;
+
+        if (distanceResult.IsSuccess)
         {
-            _logger.LogWarning("Distance calculation failed: {Error}", distanceResult.ErrorMessage);
-            return DeliveryPriceResult.Failure(distanceResult.ErrorMessage ?? "Distance calculation failed");
+            distanceKm = distanceResult.DistanceKm;
+            estimatedMinutes = distanceResult.DurationMinutes;
+        }
+        else
+        {
+            // A transient Google failure must NOT deny a quote when we have coordinates
+            // and an available own-fleet rider. Estimate road distance from the
+            // straight-line (Haversine) distance with an urban-detour correction factor.
+            var straightLineKm = GeoCalculator.CalculateDistanceKm(
+                request.PickupLatitude, request.PickupLongitude,
+                request.DropLatitude, request.DropLongitude);
+
+            var estimatedRoadKm = straightLineKm * _options.StraightLineRoadFactor;
+            distanceKm = Math.Round((decimal)estimatedRoadKm, 2);
+            estimatedMinutes = GeoCalculator.EstimateTravelMinutes(estimatedRoadKm);
+
+            _logger.LogWarning(
+                "Distance API failed ({Error}); falling back to estimated road distance {Distance}km "
+                + "(straight-line {StraightLine:F2}km × {Factor} detour factor)",
+                distanceResult.ErrorMessage, distanceKm, straightLineKm, _options.StraightLineRoadFactor);
         }
 
         // Calculate fee
-        var distanceKm = distanceResult.DistanceKm;
         var fee = CalculateFee(distanceKm);
 
         // Build breakdown
@@ -67,7 +88,7 @@ public sealed class DeliveryPricingCalculator : IDeliveryPricingCalculator
             baseFee: fee.BaseFee,
             finalFee: fee.FinalFee,
             distanceKm: distanceKm,
-            estimatedMinutes: distanceResult.DurationMinutes,
+            estimatedMinutes: estimatedMinutes,
             surgeMultiplier: 1.0m, // TODO: Integrate with surge pricing
             surgeReason: null,
             expiresAt: expiresAt,
@@ -147,4 +168,11 @@ public sealed class DeliveryPricingOptions
     /// How long quotes are valid (minutes).
     /// </summary>
     public int QuoteValidityMinutes { get; set; } = 30;
+
+    /// <summary>
+    /// Multiplier applied to straight-line (Haversine) distance to approximate road
+    /// distance when the Google distance API is unavailable. Urban roads typically
+    /// run 30–50% longer than the crow-flies distance.
+    /// </summary>
+    public double StraightLineRoadFactor { get; set; } = 1.4;
 }

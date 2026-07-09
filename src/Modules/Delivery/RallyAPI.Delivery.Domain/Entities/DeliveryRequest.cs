@@ -88,6 +88,15 @@ public sealed class DeliveryRequest : AggregateRoot
     public DateTime CreatedAt { get; private set; }
     public DateTime? DispatchAt { get; private set; }
     public DateTime? SearchingStartedAt { get; private set; }
+
+    /// <summary>
+    /// When the 3PL (ProRouting) task was created and we began waiting for the provider
+    /// to find an agent. Drives the 3PL search-timeout sweep. Its presence ALSO means
+    /// "3PL has already been attempted" — after a 3PL timeout we retry own fleet once and,
+    /// if that also fails, mark Failed rather than looping back to 3PL.
+    /// </summary>
+    public DateTime? ThirdPartyDispatchedAt { get; private set; }
+
     public DateTime? AssignedAt { get; private set; }
     public DateTime? ArrivedPickupAt { get; private set; }
     public DateTime? PickedUpAt { get; private set; }
@@ -256,6 +265,21 @@ public sealed class DeliveryRequest : AggregateRoot
             null, riderName, riderPhone, trackingUrl));
     }
 
+    /// <summary>
+    /// Records that the 3PL task was created and we've handed off to the provider to search
+    /// for an agent. Stays in <see cref="DeliveryRequestStatus.Searching3PL"/> — the provider
+    /// webhook flips us to Assigned3PL when an agent accepts, and the dispatch-recovery service
+    /// enforces the search timeout. Non-blocking: we do NOT wait inline for assignment.
+    /// </summary>
+    public void MarkThirdPartyDispatched(string taskId)
+    {
+        EnsureStatus(DeliveryRequestStatus.Searching3PL);
+
+        ExternalTaskId = taskId;
+        ThirdPartyDispatchedAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void Update3PLRiderInfo(string? riderName, string? riderPhone, string? trackingUrl)
     {
         ExternalRiderName = riderName ?? ExternalRiderName;
@@ -310,7 +334,13 @@ public sealed class DeliveryRequest : AggregateRoot
 
     public void MarkRiderArrivedPickup()
     {
-        EnsureStatus(DeliveryRequestStatus.RiderEnRoutePickup);
+        // Own-fleet riders go straight from RiderAssigned to arrived — the rider
+        // app has no separate "en route to pickup" step (only 3PL callbacks set
+        // RiderEnRoutePickup). Accept the assigned states so arrival isn't blocked.
+        EnsureStatus(
+            DeliveryRequestStatus.RiderAssigned,
+            DeliveryRequestStatus.Assigned3PL,
+            DeliveryRequestStatus.RiderEnRoutePickup);
 
         Status = DeliveryRequestStatus.RiderArrivedPickup;
         ArrivedPickupAt = DateTime.UtcNow;
@@ -369,6 +399,13 @@ public sealed class DeliveryRequest : AggregateRoot
 
     public void MarkFailed(DeliveryFailureReason reason, string? notes = null, string? photoUrl = null)
     {
+        // Never let a stale/late dispatch failure clobber a delivery a rider has already
+        // accepted (RiderAssigned/Assigned3PL), one that has progressed past assignment,
+        // or one already terminal. The inline dispatcher can reach this with a stale view
+        // after a rider accepted on another connection. (Also makes re-fails idempotent.)
+        if (Status >= DeliveryRequestStatus.RiderAssigned)
+            return;
+
         Status = DeliveryRequestStatus.Failed;
         FailedAt = DateTime.UtcNow;
         FailureReason = reason;
@@ -438,7 +475,9 @@ public sealed class DeliveryRequest : AggregateRoot
     {
         EnsureStatus(DeliveryRequestStatus.Searching3PL, DeliveryRequestStatus.Assigned3PL);
 
-        // Clear stale 3PL info
+        // Clear stale 3PL info. NOTE: ThirdPartyDispatchedAt is intentionally KEPT — it marks
+        // that 3PL was already attempted, so a post-timeout own-fleet retry that also fails will
+        // mark the delivery Failed instead of looping back to 3PL.
         ExternalTaskId = null;
         ExternalTrackingUrl = null;
         ExternalLspName = null;
@@ -521,7 +560,10 @@ public sealed class DeliveryRequest : AggregateRoot
     }
 
     /// <summary>
-    /// Start searching for riders
+    /// Start searching for riders. Opens the search on our OWN fleet first; the
+    /// orchestrator falls back to 3PL only if no own rider accepts (own-fleet-first
+    /// dispatch). Thin wrapper over <see cref="StartSearchingOwnFleet"/> so existing
+    /// callers (TriggerDispatch / OrderReadyForPickup) need no change.
     /// </summary>
     public void StartSearching()
     {
@@ -530,9 +572,6 @@ public sealed class DeliveryRequest : AggregateRoot
             return; // Already searching or assigned
         }
 
-        Status = DeliveryRequestStatus.Searching3PL;
-        FleetType = Enums.FleetType.ThirdParty;
-        SearchingStartedAt = DateTime.UtcNow;
-        UpdatedAt = DateTime.UtcNow;
+        StartSearchingOwnFleet();
     }
 }

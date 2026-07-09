@@ -39,4 +39,9 @@ public sealed record RiderOverviewResponse(
 
     // Ratings — placeholder until rider ratings module ships
     decimal AverageRating,
-    int TotalRatings);
+    int TotalRatings,
+
+    // Payout bank details — account number masked (last 4 only)
+    string? BankAccountNumber,
+    string? BankIfscCode,
+    string? BankAccountName);

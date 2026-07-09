@@ -16,4 +16,7 @@ public sealed record RiderProfileResponse(
     bool IsActive,
     bool IsOnline,
     decimal? CurrentLatitude,
-    decimal? CurrentLongitude);
+    decimal? CurrentLongitude,
+    string? BankAccountNumber,
+    string? BankIfscCode,
+    string? BankAccountName);

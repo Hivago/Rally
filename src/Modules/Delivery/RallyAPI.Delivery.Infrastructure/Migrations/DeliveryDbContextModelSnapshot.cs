@@ -464,6 +464,10 @@ namespace RallyAPI.Delivery.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("status");
 
+                    b.Property<DateTime?>("ThirdPartyDispatchedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("third_party_dispatched_at");
+
                     b.Property<decimal?>("TotalAmount")
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)")
@@ -475,6 +479,12 @@ namespace RallyAPI.Delivery.Infrastructure.Migrations
 
                     b.Property<int>("Version")
                         .HasColumnType("integer");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 

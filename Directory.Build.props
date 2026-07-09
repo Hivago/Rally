@@ -1,0 +1,20 @@
+<Project>
+
+  <!--
+    Central build properties inherited by EVERY project in the solution.
+    This is the ONE place to bump the app's release version.
+  -->
+  <PropertyGroup>
+    <!-- Release version (SemVer: MAJOR.MINOR.PATCH). Bump this single line per release. -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <!--
+    Stamp the UTC build time into assembly metadata so /version can report it.
+    Evaluated at build time; on a fresh CI / Railway build this is effectively the deploy time.
+  -->
+  <ItemGroup>
+    <AssemblyMetadata Include="BuildTimestampUtc" Value="$([System.DateTime]::UtcNow.ToString('O'))" />
+  </ItemGroup>
+
+</Project>
