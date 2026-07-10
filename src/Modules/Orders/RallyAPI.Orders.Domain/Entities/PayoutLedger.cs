@@ -42,7 +42,8 @@ public sealed class PayoutLedger : BaseEntity
         Guid outletId,
         Guid orderId,
         decimal orderAmount,
-        decimal commissionFlatFee)
+        decimal commissionFlatFee,
+        decimal commissionGstPercent = 18m)
     {
         if (ownerId == Guid.Empty)
             throw new ArgumentException("Owner ID is required.", nameof(ownerId));
@@ -62,7 +63,7 @@ public sealed class PayoutLedger : BaseEntity
         // Phase 2 financial breakdown per Indian tax law.
         var gstAmount = Math.Round(orderAmount * 0.05m, 2);              // 5% GST on food (Section 9(5) CGST)
         var commissionAmount = Math.Round(commissionFlatFee, 2);
-        var commissionGst = Math.Round(commissionAmount * 0.18m, 2);     // 18% GST on commission (service)
+        var commissionGst = Math.Round(commissionAmount * commissionGstPercent / 100m, 2); // GST on commission (service, default 18%)
         var tdsAmount = Math.Round(orderAmount * 0.01m, 2);              // 1% TDS on gross subtotal (Section 194-O)
         var netAmount = orderAmount - commissionAmount - commissionGst - tdsAmount;
 
