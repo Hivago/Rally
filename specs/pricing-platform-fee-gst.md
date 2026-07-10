@@ -45,6 +45,12 @@ New options classes bound from config sections → change values in Railway with
 ## 2b. Uniform customer pricing across fleets (resolved)
 The customer always pays **our** pricing — delivery tier + platform + GST — whether the order is fulfilled by own fleet or 3PL. The 3PL provider's quoted price is **our cost only** (margin tracking), never the customer's delivery fee. So `GetQuote` computes the customer delivery fee from our tiers for BOTH paths; the 3PL provider price is recorded as cost, not shown to the customer.
 
+## 2c. Pickup orders (resolved)
+Pickup orders carry the **platform fee + its GST only** — no delivery fee, no delivery GST.
+So platform fee is an **order-level** charge (delivery AND pickup); delivery fee + its GST are delivery-only.
+- Delivery order bill (authoritative from the stored quote): delivery fee + platform fee + GST(delivery+platform).
+- Pickup order bill: platform fee + GST(platform), computed from config at placement (no quote exists).
+
 ## 3. Critical invariant (reliability)
 **`DeliveryQuote.FinalFee` MUST stay = delivery fee only.** It is the rider-earnings basis (`CalculateEarnings(QuotedPrice)`) and the 3PL `OrderAmount`. Platform fee + GST are **separate additive fields** — never folded into FinalFee, or riders would be paid a % of the platform fee/GST.
 
