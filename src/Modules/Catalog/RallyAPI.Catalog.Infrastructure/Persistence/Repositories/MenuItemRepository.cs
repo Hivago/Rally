@@ -89,4 +89,10 @@ internal sealed class MenuItemRepository : IMenuItemRepository
     public void Update(MenuItem item, CancellationToken ct = default) => _context.MenuItems.Update(item);
 
     public void Delete(MenuItem item) => _context.MenuItems.Remove(item);
+
+    // Add(...) forces Added state on the entity (and cascades to any children
+    // reachable via its navigations), so EF emits INSERT rather than UPDATE.
+    public void AddOption(MenuItemOption option) => _context.MenuItemOptions.Add(option);
+
+    public void AddOptionGroup(MenuItemOptionGroup group) => _context.MenuItemOptionGroups.Add(group);
 }

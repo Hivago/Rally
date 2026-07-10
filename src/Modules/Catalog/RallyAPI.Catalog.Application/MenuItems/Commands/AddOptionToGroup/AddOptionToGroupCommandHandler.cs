@@ -50,7 +50,10 @@ internal sealed class AddOptionToGroupCommandHandler
         group.AddOption(option);
         menuItem.AddOption(option);
 
-        _menuItemRepository.Update(menuItem, cancellationToken);
+        // menuItem/group are already tracked; the NEW option must be explicitly
+        // Added or EF misdetects the client-set Guid key as Modified and emits
+        // an UPDATE that affects 0 rows.
+        _menuItemRepository.AddOption(option);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new AddOptionToGroupResponse(option.Id);
