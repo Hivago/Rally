@@ -120,11 +120,32 @@ public sealed class EarlyDispatchIntegrationTests : IntegrationTestBase
         var past = await SeedPendingRequestAsync(dispatchAt: now.AddMinutes(-1));
 
         // Simulate the recovery tick 5 min later so the idle (UpdatedAt) threshold is satisfied.
-        var stuck = await QueryAsync(repo => repo.GetStuckForRedispatchAsync(now.AddMinutes(5)));
+        // createdAfter is a day back so the age floor doesn't exclude the freshly-seeded rows.
+        var stuck = await QueryAsync(repo =>
+            repo.GetStuckForRedispatchAsync(now.AddMinutes(5), now.AddDays(-1)));
 
         stuck.Should().Contain(r => r.Id == past, "a past-due PendingDispatch is genuinely stuck");
         stuck.Should().NotContain(r => r.Id == future,
             "a PendingDispatch scheduled for the future must not be front-run by the 2-min net");
+    }
+
+    // ─── Scenario 6: stuck-recovery age floor — never resurrect old orders ──────────────────────
+
+    [Fact]
+    public async Task GetStuckForRedispatch_ExcludesOrdersOlderThanAgeFloor()
+    {
+        var now = DateTime.UtcNow;
+
+        var recent = await SeedPendingRequestAsync(dispatchAt: now.AddMinutes(-1));
+        var ancient = await SeedPendingRequestAsync(dispatchAt: now.AddMinutes(-1), createdAt: now.AddDays(-40));
+
+        // Age floor at 3h back: the 40-day-old order must be excluded, the fresh one included.
+        var stuck = await QueryAsync(repo =>
+            repo.GetStuckForRedispatchAsync(now.AddMinutes(5), now.AddHours(-3)));
+
+        stuck.Should().Contain(r => r.Id == recent, "a recent stuck order is recoverable");
+        stuck.Should().NotContain(r => r.Id == ancient,
+            "an order older than the age floor must never be re-dispatched (the 2026-07-09 backlog bug)");
     }
 
     // NOTE: a full place-order → confirm → event-pipeline HTTP test is intentionally omitted.
@@ -171,7 +192,7 @@ public sealed class EarlyDispatchIntegrationTests : IntegrationTestBase
         return quote.Id;
     }
 
-    private async Task<Guid> SeedPendingRequestAsync(DateTime dispatchAt)
+    private async Task<Guid> SeedPendingRequestAsync(DateTime dispatchAt, DateTime? createdAt = null)
     {
         using var scope = Factory.Services.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<IDeliveryRequestRepository>();
@@ -187,6 +208,16 @@ public sealed class EarlyDispatchIntegrationTests : IntegrationTestBase
             dropAddress: "Gate", dropContactName: "C", dropContactPhone: "+919876543210",
             dispatchAt: dispatchAt);
         await repo.AddAsync(request);
+
+        // CreatedAt is stamped to now by the factory; backdate it via raw SQL when a test needs
+        // to simulate an old order (the age-floor scenario).
+        if (createdAt is not null)
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DeliveryDbContext>();
+            await db.Database.ExecuteSqlRawAsync(
+                "update delivery.delivery_requests set created_at = {0} where id = {1}",
+                createdAt.Value, request.Id);
+        }
         return request.Id;
     }
 

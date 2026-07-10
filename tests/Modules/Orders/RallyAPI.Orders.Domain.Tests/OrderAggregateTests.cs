@@ -303,6 +303,39 @@ public class OrderAggregateTests
     }
 
     [Fact]
+    public void MarkFailed_WhenOrderIsDelivered_ShouldNotClobberToFailed()
+    {
+        // Regression: a late/stale delivery-failure event must NOT flip a delivered order to
+        // Failed — customers were seeing "Failed" on orders they had actually received.
+        var order = CreatePaidOrder();
+        order.Confirm();
+        order.StartPreparing();
+        order.MarkReadyForPickup();
+        order.AssignRider(Guid.NewGuid());
+        order.MarkPickedUp();
+        order.MarkDelivered();
+
+        order.MarkFailed("Delivery failed: stale event");
+
+        order.Status.Should().Be(OrderStatus.Delivered);
+        order.DeliveredAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void MarkFailed_WhenOrderStillInProgress_ShouldFail()
+    {
+        // The guard only protects terminal orders — a genuinely in-progress order can still fail.
+        var order = CreatePaidOrder();
+        order.Confirm();
+        order.StartPreparing();
+        order.MarkReadyForPickup();
+
+        order.MarkFailed("Delivery failed");
+
+        order.Status.Should().Be(OrderStatus.Failed);
+    }
+
+    [Fact]
     public void GetValidTransitions_WhenPaid_ShouldReturnPreparingConfirmedRejectedCancelled()
     {
         var order = CreatePaidOrder();

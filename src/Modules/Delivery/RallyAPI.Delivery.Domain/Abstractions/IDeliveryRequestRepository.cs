@@ -24,8 +24,14 @@ public interface IDeliveryRequestRepository
     /// (no status change) since before <paramref name="stuckBefore"/>. Used by the
     /// dispatch recovery service to re-trigger dispatch for orders whose inline
     /// dispatch was interrupted and never retried.
+    ///
+    /// <paramref name="createdAfter"/> is a hard age floor: requests created before it are
+    /// NEVER returned. This stops a deploy/restart from resurrecting long-dead orders — a stuck
+    /// order worth recovering is minutes old, not weeks. (Incident 2026-07-09: without this floor,
+    /// the recovery service re-dispatched 68 April/May orders and booked real 3PL riders for them.)
     /// </summary>
-    Task<IReadOnlyList<DeliveryRequest>> GetStuckForRedispatchAsync(DateTime stuckBefore, CancellationToken ct = default);
+    Task<IReadOnlyList<DeliveryRequest>> GetStuckForRedispatchAsync(
+        DateTime stuckBefore, DateTime createdAfter, CancellationToken ct = default);
 
     /// <summary>
     /// Returns deliveries handed off to the 3PL provider (status <c>Searching3PL</c> with a

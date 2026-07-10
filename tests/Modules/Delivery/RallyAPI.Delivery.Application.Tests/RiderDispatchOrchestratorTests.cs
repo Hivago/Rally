@@ -159,7 +159,7 @@ public class RiderDispatchOrchestratorTests
     }
 
     [Fact]
-    public async Task DispatchAsync_When3PLFailsAndNoRidersAvailable_ShouldMarkFailedAndReturnFailure()
+    public async Task DispatchAsync_When3PLFailsAndNoRidersAvailable_ShouldStayInThirdPartySearchNotFail()
     {
         var deliveryRequest = BuildCreatedRequest();
 
@@ -173,12 +173,14 @@ public class RiderDispatchOrchestratorTests
 
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
 
+        // We never fail an order for lack of a rider — it stays in 3PL search so recovery re-books.
         result.IsSuccess.Should().BeFalse();
-        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Failed);
+        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Searching3PL);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
     }
 
     [Fact]
-    public async Task DispatchAsync_When3PLFailsAndAllRidersDecline_ShouldMarkFailedAfterExhaustingRiders()
+    public async Task DispatchAsync_When3PLFailsAndAllRidersDecline_ShouldStayInThirdPartySearchNotFail()
     {
         var riderId = Guid.NewGuid();
         var deliveryRequest = BuildCreatedRequest();
@@ -198,22 +200,27 @@ public class RiderDispatchOrchestratorTests
             .Returns(_ => deliveryRequest);
 
         _repository
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        _repository
             .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(_ => (DeliveryRequestStatus?)deliveryRequest.Status);
 
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
 
+        // No rider accepted, but we never fail — the delivery is handed back to 3PL search.
         result.IsSuccess.Should().BeFalse();
-        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Failed);
+        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Searching3PL);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
     }
 
     [Fact]
-    public async Task DispatchAsync_WhenRiderAcceptsAsTerminalFailWriteRaces_ShouldHonorAssignmentNotFail()
+    public async Task DispatchAsync_WhenRiderAcceptsBeforeTerminal_ShouldHonorAssignmentNotFail()
     {
-        // The residual sub-second race: every fresh status probe still reads SearchingOwnFleet,
-        // but the rider's acceptance commits on another connection right before the terminal
-        // Failed write. xmin catches it — TryUpdateAsync returns false (UPDATE matched 0 rows).
-        // The orchestrator must treat that as the rider winning, NOT fail the delivery.
+        // A rider's acceptance commits on another connection just as own fleet is exhausted.
+        // The loop's stale probes still read SearchingOwnFleet, but the terminal fresh reload
+        // sees the assignment and honors it — the delivery is never failed nor overwritten.
         var riderId = Guid.NewGuid();
         var deliveryRequest = BuildCreatedRequest();
 
@@ -229,20 +236,26 @@ public class RiderDispatchOrchestratorTests
             .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(_ => deliveryRequest);
 
-        // Probes never see the accept (stale identity-map symptom the token defends against).
+        // Probes never see the accept (stale identity-map symptom the fresh reload defends against).
         _repository
             .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(_ => (DeliveryRequestStatus?)deliveryRequest.Status);
 
-        // The guarded terminal write loses the race.
+        // The terminal fresh reload sees the concurrent acceptance.
         _repository
-            .TryUpdateAsync(Arg.Any<DeliveryRequest>(), Arg.Any<CancellationToken>())
-            .Returns(false);
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                if (deliveryRequest.Status == DeliveryRequestStatus.SearchingOwnFleet)
+                    deliveryRequest.AssignOwnFleetRider(riderId, "Rider", "+91999");
+                return deliveryRequest;
+            });
 
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
 
         result.IsSuccess.Should().BeTrue();
         result.FleetType.Should().Be(FleetType.OwnFleet);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
     }
 
     [Fact]
@@ -435,7 +448,7 @@ public class RiderDispatchOrchestratorTests
     }
 
     [Fact]
-    public async Task OwnFleetFirst_WhenOwnFleetAnd3PLBothFail_ShouldMarkFailed()
+    public async Task OwnFleetFirst_WhenOwnFleetAnd3PLBothFail_ShouldStayInThirdPartySearchNeverFail()
     {
         var deliveryRequest = BuildCreatedRequest();
 
@@ -455,9 +468,11 @@ public class RiderDispatchOrchestratorTests
 
         var result = await orchestrator.DispatchAsync(deliveryRequest);
 
+        // Own fleet empty and 3PL booking failed this round — the order must NOT fail. It stays
+        // in 3PL search so the recovery service keeps re-booking the provider.
         result.IsSuccess.Should().BeFalse();
-        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Failed);
-        deliveryRequest.FailureReason.Should().Be(DeliveryFailureReason.NoRidersAvailable);
+        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Searching3PL);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
     }
 
     [Fact]
@@ -510,11 +525,11 @@ public class RiderDispatchOrchestratorTests
     }
 
     [Fact]
-    public async Task OwnFleetFirst_WhenThirdPartyAlreadyDispatched_RetryOwnFleetFailsInsteadOfLoopingBackTo3PL()
+    public async Task OwnFleetFirst_WhenOwnFleetEmptyAfterPriorThirdParty_ShouldStayInThirdPartySearchNeverFail()
     {
-        // Simulate the post-3PL-timeout state the recovery service produces: 3PL was tried
-        // (ThirdPartyDispatchedAt set) then handed back to own fleet. If this own-fleet retry
-        // also finds no rider, the delivery must be Failed — NOT dispatched to 3PL a second time.
+        // Even in the legacy post-3PL state (ThirdPartyDispatchedAt set, handed to own fleet),
+        // an empty own fleet must NOT fail the order — it goes back to 3PL search so recovery
+        // keeps re-booking the provider. 3PL is the guaranteed backstop; we never give up.
         var deliveryRequest = BuildCreatedRequest();
         deliveryRequest.StartSearchingOwnFleet();
         deliveryRequest.StartSearching3PL();
@@ -535,10 +550,8 @@ public class RiderDispatchOrchestratorTests
         var result = await orchestrator.DispatchAsync(deliveryRequest);
 
         result.IsSuccess.Should().BeFalse();
-        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Failed);
-        // Must NOT book 3PL again.
-        await _thirdPartyProvider.DidNotReceive().CreateTaskAsync(
-            Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>());
+        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Searching3PL);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
     }
 
     #region Helpers

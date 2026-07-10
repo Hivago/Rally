@@ -136,45 +136,37 @@ public sealed class RiderDispatchOrchestrator
         else
         {
             _logger.LogInformation(
-                "3PL already attempted for delivery {DeliveryId}; own-fleet retry exhausted — marking failed.",
+                "3PL already booked for delivery {DeliveryId}; own fleet found nobody — staying in 3PL search.",
                 deliveryRequest.Id);
         }
 
-        // Own fleet + 3PL exhausted → terminal failure. Same fresh-reload + retry so a
-        // reject/accept that changed xmin never turns into a spurious concurrency crash, and a
-        // genuine assignment is honored instead of clobbered to Failed.
-        for (var attempt = 0; attempt < MaxConcurrencyRetries; attempt++)
+        // Own fleet found no rider and 3PL wasn't booked this round (provider error, or the
+        // handoff didn't stick). We NEVER fail an order for lack of a rider — 3PL is the
+        // guaranteed backstop, it just takes time and costs more. Leave the delivery in 3PL
+        // search so the recovery service keeps re-booking the provider until an agent is
+        // assigned. A concurrent accept short-circuits.
+        fresh = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
+        if (fresh is null)
         {
-            fresh = await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct);
-            if (fresh is null)
-            {
-                return DispatchResult.Failed("Delivery request no longer exists");
-            }
-            if (fresh.Status >= DeliveryRequestStatus.RiderAssigned)
-            {
-                _logger.LogInformation(
-                    "Delivery {DeliveryId} was assigned ({Status}) before the terminal fail — honoring it.",
-                    fresh.Id, fresh.Status);
-                return DispatchResult.Success(fresh.FleetType ?? FleetType.OwnFleet, fresh.RiderId);
-            }
-
-            // MarkFailed self-guards against Status >= RiderAssigned, so this only fails a
-            // request that is genuinely still unassigned.
-            fresh.MarkFailed(
-                DeliveryFailureReason.NoRidersAvailable,
-                "All dispatch options exhausted (Own Fleet declined/unavailable and 3PL failed/timed out)");
-
-            if (await _requestRepository.TryUpdateAsync(fresh, ct))
-            {
-                return DispatchResult.Failed("All dispatch options exhausted");
-            }
-            // Lost to a concurrent write — reload and re-check whether it was an assignment.
+            return DispatchResult.Failed("Delivery request no longer exists");
+        }
+        if (fresh.Status >= DeliveryRequestStatus.RiderAssigned)
+        {
+            return DispatchResult.Success(fresh.FleetType ?? FleetType.OwnFleet, fresh.RiderId);
         }
 
+        // Put/keep it in 3PL search with no live task so the recovery service re-books promptly.
+        if (fresh.Status == DeliveryRequestStatus.SearchingOwnFleet)
+            fresh.StartSearching3PL();
+        else if (fresh.Status == DeliveryRequestStatus.Searching3PL)
+            fresh.ResetForThirdPartyRetry();
+        await _requestRepository.TryUpdateAsync(fresh, ct);
+
         _logger.LogWarning(
-            "Delivery {DeliveryId} terminal-fail write kept losing the concurrency race; leaving for the recovery service.",
+            "No rider yet for delivery {DeliveryId} (own fleet empty; 3PL not booked this round). " +
+            "Keeping it in 3PL search — recovery will keep retrying the provider until an agent is assigned.",
             deliveryRequest.Id);
-        return DispatchResult.Failed("All dispatch options exhausted (contended)");
+        return DispatchResult.Failed("No rider yet — staying in 3PL search");
     }
 
     /// <summary>
@@ -378,16 +370,14 @@ public sealed class RiderDispatchOrchestrator
 
         if (!riders.Any())
         {
-            _logger.LogInformation("No riders available in Own Fleet");
-            deliveryRequest.MarkFailed(DeliveryFailureReason.NoRidersAvailable, "All dispatch options exhausted (ProRouting failed/timed out and Own Fleet unavailable)");
-            if (!await _requestRepository.TryUpdateAsync(deliveryRequest, ct))
-            {
-                _logger.LogInformation(
-                    "Delivery {DeliveryId} failure write rejected by concurrency token — a rider accepted concurrently. Honoring the assignment.",
-                    deliveryRequest.Id);
-                return DispatchResult.Success(FleetType.OwnFleet, null);
-            }
-            return DispatchResult.Failed("No riders available after exhausting all options.");
+            // Never fail for lack of an own-fleet rider — hand to the 3PL backstop and let the
+            // recovery service keep it searching until the provider assigns an agent.
+            _logger.LogInformation(
+                "No own-fleet riders for delivery {DeliveryId}; handing to 3PL search (never failing for no rider).",
+                deliveryRequest.Id);
+            deliveryRequest.StartSearching3PL();
+            await _requestRepository.TryUpdateAsync(deliveryRequest, ct);
+            return DispatchResult.Failed("No own-fleet riders — staying in 3PL search");
         }
 
         // Sequential notification
@@ -477,19 +467,22 @@ public sealed class RiderDispatchOrchestrator
         }
 
         _logger.LogInformation(
-            "All {Count} Own Fleet riders exhausted",
-            riders.Count);
+            "All {Count} Own Fleet riders exhausted for delivery {DeliveryId}; handing to 3PL search (never failing for no rider).",
+            riders.Count, deliveryRequest.Id);
 
-        deliveryRequest.MarkFailed(DeliveryFailureReason.NoRidersAvailable, "All dispatch options exhausted (ProRouting failed/timed out and Own Fleet declined)");
-        if (!await _requestRepository.TryUpdateAsync(deliveryRequest, ct))
+        // Never fail for no rider — hand to the 3PL backstop and let recovery keep it searching.
+        deliveryRequest = (await _requestRepository.GetByIdFreshAsync(deliveryRequest.Id, ct))!;
+        if (deliveryRequest is null)
+            return DispatchResult.Failed("Delivery request no longer exists");
+        if (deliveryRequest.Status >= DeliveryRequestStatus.RiderAssigned)
+            return DispatchResult.Success(deliveryRequest.FleetType ?? FleetType.OwnFleet, deliveryRequest.RiderId);
+        if (deliveryRequest.Status == DeliveryRequestStatus.SearchingOwnFleet)
         {
-            _logger.LogInformation(
-                "Delivery {DeliveryId} failure write rejected by concurrency token — a rider accepted concurrently. Honoring the assignment.",
-                deliveryRequest.Id);
-            return DispatchResult.Success(FleetType.OwnFleet, null);
+            deliveryRequest.StartSearching3PL();
+            await _requestRepository.TryUpdateAsync(deliveryRequest, ct);
         }
 
-        return DispatchResult.Failed("All riders exhausted");
+        return DispatchResult.Failed("Own fleet exhausted — staying in 3PL search");
     }
 
     private async Task<DispatchResult> AssignVia3PLAsync(
@@ -660,8 +653,9 @@ public sealed class DispatchOptions
 
     /// <summary>
     /// How long we let the 3PL provider search for an agent (after a non-blocking handoff)
-    /// before the recovery service cancels the task and retries own fleet once. Enforced
-    /// out-of-band by DeliveryDispatchRecoveryService, not by blocking the dispatch thread.
+    /// before the recovery service cancels the stale task and RE-BOOKS a fresh 3PL task. We never
+    /// give up / fail for lack of a rider — 3PL is the guaranteed backstop, it just takes time.
+    /// Enforced out-of-band by DeliveryDispatchRecoveryService, not by blocking the dispatch thread.
     /// </summary>
     public int ThirdPartySearchTimeoutMinutes { get; set; } = 15;
 
