@@ -58,4 +58,11 @@ public sealed class ProRoutingOptions
     /// Enable or disable the provider (useful for testing/fallback).
     /// </summary>
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Cancellation reason code sent to ProRouting on order cancel.
+    /// ProRouting's cancel API expects a coded reason id (e.g. "005"),
+    /// not free text. Configurable in case they change the code table.
+    /// </summary>
+    public string DefaultCancellationReasonId { get; set; } = "005";
 }
