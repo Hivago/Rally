@@ -69,7 +69,8 @@ public sealed class DeliveryPricingCalculator : IDeliveryPricingCalculator
                 distanceResult.ErrorMessage, distanceKm, straightLineKm, _options.StraightLineRoadFactor);
         }
 
-        // Calculate fee
+        // Calculate delivery fee only. Platform fee + GST are applied uniformly (both fleets)
+        // in the Delivery module's GetQuote handler, not here.
         var fee = CalculateFee(distanceKm);
 
         // Build breakdown
@@ -150,9 +151,9 @@ public sealed class DeliveryPricingOptions
     public const string SectionName = "Delivery:Pricing";
 
     /// <summary>
-    /// Base delivery fee (covers first X km).
+    /// Base delivery fee (covers first X km). Customer-facing delivery charge.
     /// </summary>
-    public decimal BaseFee { get; set; } = 30m;
+    public decimal BaseFee { get; set; } = 20m;
 
     /// <summary>
     /// Distance covered by base fee.
@@ -162,7 +163,7 @@ public sealed class DeliveryPricingOptions
     /// <summary>
     /// Rate per km beyond base distance.
     /// </summary>
-    public decimal PerKmRate { get; set; } = 10m;
+    public decimal PerKmRate { get; set; } = 15m;
 
     /// <summary>
     /// How long quotes are valid (minutes).

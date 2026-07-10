@@ -75,6 +75,21 @@ public sealed class DeliveryQuoteConfiguration : IEntityTypeConfiguration<Delive
             .HasPrecision(10, 2)
             .IsRequired();
 
+        builder.Property(q => q.PlatformFee)
+            .HasColumnName("platform_fee")
+            .HasPrecision(10, 2)
+            .HasDefaultValue(0m)
+            .IsRequired();
+
+        builder.Property(q => q.GstAmount)
+            .HasColumnName("gst_amount")
+            .HasPrecision(10, 2)
+            .HasDefaultValue(0m)
+            .IsRequired();
+
+        // Computed from FinalFee + PlatformFee + GstAmount — not persisted.
+        builder.Ignore(q => q.CustomerTotal);
+
         builder.Property(q => q.SurgeMultiplier)
             .HasColumnName("surge_multiplier")
             .HasPrecision(4, 2)

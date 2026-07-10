@@ -26,7 +26,21 @@ public sealed class DeliveryQuote : BaseEntity
     // Distance & Pricing
     public decimal DistanceKm { get; private set; }
     public decimal BaseFee { get; private set; }
+
+    /// <summary>
+    /// Delivery fee only (rider-earnings basis / 3PL order amount). Never includes platform fee or GST.
+    /// </summary>
     public decimal FinalFee { get; private set; }
+
+    /// <summary>Flat platform fee charged to the customer on top of the delivery fee.</summary>
+    public decimal PlatformFee { get; private set; }
+
+    /// <summary>GST charged on (delivery fee + platform fee).</summary>
+    public decimal GstAmount { get; private set; }
+
+    /// <summary>Total the customer pays for delivery: FinalFee + PlatformFee + GstAmount.</summary>
+    public decimal CustomerTotal => FinalFee + PlatformFee + GstAmount;
+
     public decimal SurgeMultiplier { get; private set; } = 1.0m;
     public string? SurgeReason { get; private set; }
     public int EstimatedMinutes { get; private set; }
@@ -63,7 +77,9 @@ public sealed class DeliveryQuote : BaseEntity
         DateTime expiresAt,
         string? breakdownJson = null,
         decimal surgeMultiplier = 1.0m,
-        string? surgeReason = null)
+        string? surgeReason = null,
+        decimal platformFee = 0m,
+        decimal gstAmount = 0m)
     {
         return new DeliveryQuote
         {
@@ -80,6 +96,8 @@ public sealed class DeliveryQuote : BaseEntity
             DistanceKm = distanceKm,
             BaseFee = baseFee,
             FinalFee = finalFee,
+            PlatformFee = platformFee,
+            GstAmount = gstAmount,
             EstimatedMinutes = estimatedMinutes,
             SurgeMultiplier = surgeMultiplier,
             SurgeReason = surgeReason,
@@ -102,7 +120,11 @@ public sealed class DeliveryQuote : BaseEntity
         int estimatedMinutes,
         string providerName,
         string providerQuoteId,
-        DateTime expiresAt)
+        DateTime expiresAt,
+        decimal platformFee = 0m,
+        decimal gstAmount = 0m,
+        decimal? distanceKm = null,
+        string? breakdownJson = null)
     {
         return new DeliveryQuote
         {
@@ -116,15 +138,20 @@ public sealed class DeliveryQuote : BaseEntity
             City = city,
             OrderAmount = orderAmount,
             RestaurantId = restaurantId,
-            DistanceKm = 0, // Unknown for 3PL
+            DistanceKm = distanceKm ?? 0,
+            // price is OUR customer delivery fee (we charge our price even for 3PL — the
+            // provider's price is our cost, tracked elsewhere, never the customer's fee).
             BaseFee = price,
             FinalFee = price,
+            PlatformFee = platformFee,
+            GstAmount = gstAmount,
             EstimatedMinutes = estimatedMinutes,
             FleetType = FleetType.ThirdParty,
             ProviderName = providerName,
             ProviderQuoteId = providerQuoteId,
             CreatedAt = DateTime.UtcNow,
-            ExpiresAt = NormalizeToUtc(expiresAt)
+            ExpiresAt = NormalizeToUtc(expiresAt),
+            BreakdownJson = breakdownJson
         };
     }
 

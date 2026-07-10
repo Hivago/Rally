@@ -32,6 +32,9 @@ public static class DependencyInjection
         services.Configure<DispatchOptions>(
             configuration.GetSection(DispatchOptions.SectionName));
 
+        services.Configure<RallyAPI.Delivery.Application.Commands.GetQuote.QuotePricingOptions>(
+            configuration.GetSection(RallyAPI.Delivery.Application.Commands.GetQuote.QuotePricingOptions.SectionName));
+
         // Services
         services.AddScoped<PrepTimeCalculator>();
         services.AddScoped<RiderDispatchOrchestrator>();

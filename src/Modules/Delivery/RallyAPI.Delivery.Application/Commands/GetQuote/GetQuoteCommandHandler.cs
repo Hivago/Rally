@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RallyAPI.Delivery.Application.DTOs;
 using RallyAPI.Delivery.Domain.Abstractions;
 using RallyAPI.Delivery.Domain.Entities;
@@ -23,6 +24,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
     private readonly IDeliveryQuoteRepository _quoteRepository;
     private readonly IGeocodingService _geocodingService;
     private readonly IDistanceCalculator _distanceCalculator;
+    private readonly QuotePricingOptions _quotePricing;
     private readonly ILogger<GetQuoteCommandHandler> _logger;
 
     private const double SearchRadiusKm = 5.0;
@@ -35,6 +37,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         IDeliveryQuoteRepository quoteRepository,
         IGeocodingService geocodingService,
         IDistanceCalculator distanceCalculator,
+        IOptions<QuotePricingOptions> quotePricing,
         ILogger<GetQuoteCommandHandler> logger)
     {
         _riderQueryService = riderQueryService;
@@ -43,7 +46,34 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         _quoteRepository = quoteRepository;
         _geocodingService = geocodingService;
         _distanceCalculator = distanceCalculator;
+        _quotePricing = quotePricing.Value;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Platform fee + GST on (delivery fee + platform fee). Applied uniformly to every quote —
+    /// own fleet AND 3PL — because the customer always pays OUR price. Returns the two amounts and
+    /// the breakdown (base delivery lines + Platform Fee + GST) serialized to JSON for storage.
+    /// </summary>
+    private (decimal PlatformFee, decimal GstAmount, string? BreakdownJson) BuildCustomerCharges(
+        decimal deliveryFee,
+        IReadOnlyList<PriceComponent>? deliveryBreakdown)
+    {
+        var platformFee = _quotePricing.CustomerPlatformFee;
+        var gstAmount = Math.Round((deliveryFee + platformFee) * _quotePricing.GstPercent / 100m, 2);
+
+        var lines = new List<PriceComponent>();
+        if (deliveryBreakdown is { Count: > 0 })
+            lines.AddRange(deliveryBreakdown);
+        else
+            lines.Add(new PriceComponent("Delivery Fee", "Delivery charge", deliveryFee));
+
+        if (platformFee > 0)
+            lines.Add(new PriceComponent("Platform Fee", "Platform service fee", platformFee));
+        if (gstAmount > 0)
+            lines.Add(new PriceComponent("GST", $"{_quotePricing.GstPercent}% on delivery + platform fee", gstAmount));
+
+        return (platformFee, gstAmount, JsonSerializer.Serialize(lines));
     }
 
     public async Task<Result<DeliveryQuoteDto>> Handle(
@@ -198,9 +228,8 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             return null;
         }
 
-        var breakdownJson = priceResult.Breakdown.Any()
-            ? JsonSerializer.Serialize(priceResult.Breakdown)
-            : null;
+        var (platformFee, gstAmount, breakdownJson) =
+            BuildCustomerCharges(priceResult.FinalFee, priceResult.Breakdown);
 
         return DeliveryQuote.CreateOwnFleet(
             id: Guid.NewGuid(),
@@ -220,7 +249,9 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             expiresAt: priceResult.ExpiresAt,
             breakdownJson: breakdownJson,
             surgeMultiplier: priceResult.SurgeMultiplier,
-            surgeReason: priceResult.SurgeReason);
+            surgeReason: priceResult.SurgeReason,
+            platformFee: platformFee,
+            gstAmount: gstAmount);
     }
 
     private async Task<DeliveryQuote?> CreateThirdPartyQuote(
@@ -249,8 +280,30 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             return null;
         }
 
-        // Select best quote (already sorted by price in provider)
+        // Serviceability confirmed. We IGNORE the provider's price — the customer always pays OUR
+        // tier price (the provider quote is our cost only). Compute our delivery fee + platform + GST.
         var bestQuote = quotesResult.Quotes.First();
+
+        var priceResult = await _pricingCalculator.CalculateAsync(
+            new DeliveryPriceRequest
+            {
+                PickupLatitude = request.PickupLatitude,
+                PickupLongitude = request.PickupLongitude,
+                DropLatitude = request.DropLatitude,
+                DropLongitude = request.DropLongitude,
+                City = city,
+                OrderAmount = request.OrderAmount,
+                RestaurantId = request.RestaurantId
+            }, ct);
+
+        if (!priceResult.IsSuccess)
+        {
+            _logger.LogWarning("Own-tier pricing failed for 3PL quote: {Error}", priceResult.ErrorMessage);
+            return null;
+        }
+
+        var (platformFee, gstAmount, breakdownJson) =
+            BuildCustomerCharges(priceResult.FinalFee, priceResult.Breakdown);
 
         return DeliveryQuote.CreateThirdParty(
             id: Guid.NewGuid(),
@@ -263,11 +316,15 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             city: city,
             orderAmount: request.OrderAmount,
             restaurantId: request.RestaurantId,
-            price: bestQuote.PriceForward,
-            estimatedMinutes: bestQuote.SlaMins,
+            price: priceResult.FinalFee,          // OUR delivery fee, not bestQuote.PriceForward
+            estimatedMinutes: bestQuote.SlaMins,  // provider SLA for the ETA is fine
             providerName: quotesResult.ProviderName!,
             providerQuoteId: quotesResult.QuoteId!,
-            expiresAt: quotesResult.ValidUntil ?? DateTime.UtcNow.AddMinutes(5));
+            expiresAt: priceResult.ExpiresAt,
+            platformFee: platformFee,
+            gstAmount: gstAmount,
+            distanceKm: priceResult.DistanceKm,
+            breakdownJson: breakdownJson);
     }
 
     private static DeliveryQuoteDto MapToDto(DeliveryQuote quote)
@@ -288,6 +345,9 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         {
             Id = quote.Id,
             DeliveryFee = quote.FinalFee,
+            PlatformFee = quote.PlatformFee,
+            Gst = quote.GstAmount,
+            TotalPayable = quote.CustomerTotal,
             DistanceKm = quote.DistanceKm,
             EstimatedMinutes = quote.EstimatedMinutes,
             SurgeMultiplier = quote.SurgeMultiplier,
