@@ -285,7 +285,9 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmPro
 
         try
         {
-            var request = new { order_id = taskId };
+            // ProRouting expects a nested order object: { "order": { "id": ... } }.
+            // SnakeCaseLower maps Order/Id -> order/id.
+            var request = new { Order = new { Id = taskId } };
 
             var response = await _httpClient.PostAsJsonAsync(
                 StatusEndpoint, request, JsonOptions, ct);
