@@ -58,4 +58,14 @@ public sealed class ProRoutingOptions
     /// Enable or disable the provider (useful for testing/fallback).
     /// </summary>
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Cancellation reason code sent to ProRouting on order cancel.
+    /// ProRouting's cancel API expects a coded reason id, not free text.
+    /// "010" = "Buyer wants to modify details" — the correct buyer-side,
+    /// no-fault code for our automated re-dispatch / rollback cancels
+    /// (using "005 Merchant rejected" would falsely blame the restaurant).
+    /// Configurable in case the code table changes.
+    /// </summary>
+    public string DefaultCancellationReasonId { get; set; } = "010";
 }

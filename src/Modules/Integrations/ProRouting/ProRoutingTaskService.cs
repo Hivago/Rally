@@ -238,9 +238,21 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmPro
 
         try
         {
-            var request = new { order_id = taskId, reason };
+            // ProRouting expects a nested order object with a coded reason id,
+            // NOT a flat { order_id, reason }. SnakeCaseLower policy maps these
+            // to { "order": { "id": ..., "cancellation_reason_id": ... } }.
+            var request = new
+            {
+                Order = new
+                {
+                    Id = taskId,
+                    CancellationReasonId = _options.DefaultCancellationReasonId
+                }
+            };
 
-            _logger.LogInformation("Cancelling ProRouting task: {TaskId}", taskId);
+            _logger.LogInformation(
+                "Cancelling ProRouting task {TaskId} (reason: {Reason}, code: {ReasonId})",
+                taskId, reason, _options.DefaultCancellationReasonId);
 
             var response = await _httpClient.PostAsJsonAsync(
                 CancelEndpoint, request, JsonOptions, ct);
@@ -273,7 +285,9 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmPro
 
         try
         {
-            var request = new { order_id = taskId };
+            // ProRouting expects a nested order object: { "order": { "id": ... } }.
+            // SnakeCaseLower maps Order/Id -> order/id.
+            var request = new { Order = new { Id = taskId } };
 
             var response = await _httpClient.PostAsJsonAsync(
                 StatusEndpoint, request, JsonOptions, ct);
