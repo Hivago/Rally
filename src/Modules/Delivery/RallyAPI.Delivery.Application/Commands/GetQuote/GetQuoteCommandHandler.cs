@@ -60,7 +60,11 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         IReadOnlyList<PriceComponent>? deliveryBreakdown)
     {
         var platformFee = _quotePricing.CustomerPlatformFee;
-        var gstAmount = Math.Round((deliveryFee + platformFee) * _quotePricing.GstPercent / 100m, 2);
+
+        // GST is charged per component so delivery and platform rates can differ in future.
+        var deliveryGst = Math.Round(deliveryFee * _quotePricing.DeliveryGstPercent / 100m, 2);
+        var platformGst = Math.Round(platformFee * _quotePricing.PlatformGstPercent / 100m, 2);
+        var gstAmount = deliveryGst + platformGst;
 
         var lines = new List<PriceComponent>();
         if (deliveryBreakdown is { Count: > 0 })
@@ -71,7 +75,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         if (platformFee > 0)
             lines.Add(new PriceComponent("Platform Fee", "Platform service fee", platformFee));
         if (gstAmount > 0)
-            lines.Add(new PriceComponent("GST", $"{_quotePricing.GstPercent}% on delivery + platform fee", gstAmount));
+            lines.Add(new PriceComponent("GST", "GST on delivery + platform fee", gstAmount));
 
         return (platformFee, gstAmount, JsonSerializer.Serialize(lines));
     }
