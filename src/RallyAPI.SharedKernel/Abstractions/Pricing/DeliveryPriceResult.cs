@@ -23,7 +23,9 @@ public sealed record DeliveryPriceResult
     public decimal BaseFee { get; private init; }
 
     /// <summary>
-    /// Final fee including all surges.
+    /// Final DELIVERY fee including all surges. This is the rider-earnings basis and the 3PL
+    /// order amount — it never includes the platform fee or GST (those are applied in the
+    /// Delivery module's GetQuote handler).
     /// </summary>
     public decimal FinalFee { get; private init; }
 

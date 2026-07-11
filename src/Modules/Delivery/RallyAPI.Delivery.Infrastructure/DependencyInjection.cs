@@ -42,6 +42,10 @@ public static class DependencyInjection
         // Cross-module read consumed by Orders (customer bill/label delivery OTP)
         services.AddScoped<IOrderDeliveryCodeService, OrderDeliveryCodeService>();
 
+        // Cross-module read consumed by Orders for backend-authoritative order pricing.
+        services.AddScoped<RallyAPI.SharedKernel.Abstractions.Delivery.IDeliveryQuoteReader,
+            Services.DeliveryQuoteReader>();
+
         // IRiderNotificationService is registered by the host (SignalRRiderNotificationService).
         // Do not register the stub here — it would silently mask the real implementation
         // if the host-level override were ever removed.
