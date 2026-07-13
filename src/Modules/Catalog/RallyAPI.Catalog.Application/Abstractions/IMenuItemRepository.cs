@@ -14,4 +14,11 @@ public interface IMenuItemRepository
     void Add(MenuItem item);
     void Update(MenuItem item, CancellationToken ct = default);
     void Delete(MenuItem item);
+
+    // Explicitly mark newly-created child entities as Added. Client-set Guid
+    // keys on a tracked aggregate's navigation are otherwise misdetected as
+    // Modified (→ UPDATE affecting 0 rows), so new options/groups must be
+    // added through the context directly.
+    void AddOption(MenuItemOption option);
+    void AddOptionGroup(MenuItemOptionGroup group);
 }

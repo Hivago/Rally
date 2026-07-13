@@ -66,6 +66,7 @@ internal sealed class UpdateMenuItemCommandHandler
                     optionDto.IsDefault);
 
                 menuItem.AddOption(option);
+                _menuItemRepository.AddOption(option); // force Added (INSERT)
             }
         }
 
@@ -98,6 +99,7 @@ internal sealed class UpdateMenuItemCommandHandler
                 }
 
                 menuItem.AddOptionGroup(group);
+                _menuItemRepository.AddOptionGroup(group); // force Added (INSERT), cascades to grouped options
             }
         }
 
