@@ -216,6 +216,8 @@ public static class OrderMappingExtensions
             PackagingFee = pricing.PackagingFee.Amount,
             ServiceFee = pricing.ServiceFee.Amount,
             Tip = pricing.Tip.Amount,
+            PlatformFee = pricing.PlatformFee.Amount,
+            ServiceGst = pricing.ServiceGst.Amount,
             Total = pricing.Total.Amount,
             Currency = pricing.SubTotal.Currency,
             DiscountCode = pricing.DiscountCode,
@@ -224,6 +226,8 @@ public static class OrderMappingExtensions
             SubTotalDisplay = pricing.SubTotal.ToDisplayString(),
             DeliveryFeeDisplay = pricing.DeliveryFee.ToDisplayString(),
             TaxDisplay = pricing.Tax.ToDisplayString(),
+            PlatformFeeDisplay = pricing.PlatformFee.ToDisplayString(),
+            ServiceGstDisplay = pricing.ServiceGst.ToDisplayString(),
             DiscountDisplay = pricing.Discount.ToDisplayString(),
             TotalDisplay = pricing.Total.ToDisplayString()
         };

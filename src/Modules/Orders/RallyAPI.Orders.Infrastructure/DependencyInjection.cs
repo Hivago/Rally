@@ -104,6 +104,10 @@ public static class DependencyInjection
             configuration.GetSection(RallyAPI.Orders.Application.Options.OrderPlacementOptions.SectionName));
         services.Configure<RallyAPI.Orders.Application.Options.PlatformOptions>(
             configuration.GetSection(RallyAPI.Orders.Application.Options.PlatformOptions.SectionName));
+        services.Configure<RallyAPI.Orders.Application.Options.PlatformFeeOptions>(
+            configuration.GetSection(RallyAPI.Orders.Application.Options.PlatformFeeOptions.SectionName));
+        services.Configure<RallyAPI.Orders.Application.Options.RestaurantChargeOptions>(
+            configuration.GetSection(RallyAPI.Orders.Application.Options.RestaurantChargeOptions.SectionName));
 
         return services;
     }

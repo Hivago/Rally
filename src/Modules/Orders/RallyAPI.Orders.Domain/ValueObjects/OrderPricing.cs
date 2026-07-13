@@ -18,6 +18,8 @@ public sealed class OrderPricing : ValueObject
         PackagingFee = Money.Zero();
         ServiceFee = Money.Zero();
         Tip = Money.Zero();
+        PlatformFee = Money.Zero();
+        ServiceGst = Money.Zero();
         Total = Money.Zero();
     }
     public Money SubTotal { get; private set; } = Money.Zero();
@@ -28,6 +30,13 @@ public sealed class OrderPricing : ValueObject
     public Money PackagingFee { get; private set; } = Money.Zero();
     public Money ServiceFee { get; private set; } = Money.Zero();
     public Money Tip { get; private set; } = Money.Zero();
+
+    /// <summary>Flat platform fee charged to the customer (delivery AND pickup orders).</summary>
+    public Money PlatformFee { get; private set; } = Money.Zero();
+
+    /// <summary>GST on delivery fee + platform fee (18%). Separate from <see cref="Tax"/> (food GST).</summary>
+    public Money ServiceGst { get; private set; } = Money.Zero();
+
     public string? DiscountCode { get; private set; }
     public string? DiscountDescription { get; private set; }
 
@@ -40,7 +49,9 @@ public sealed class OrderPricing : ValueObject
         Money serviceFee,
         Money tip,
         string? discountCode,
-        string? discountDescription)
+        string? discountDescription,
+        Money platformFee,
+        Money serviceGst)
     {
         SubTotal = subTotal;
         DeliveryFee = deliveryFee;
@@ -49,11 +60,13 @@ public sealed class OrderPricing : ValueObject
         PackagingFee = packagingFee;
         ServiceFee = serviceFee;
         Tip = tip;
+        PlatformFee = platformFee;
+        ServiceGst = serviceGst;
         DiscountCode = discountCode;
         DiscountDescription = discountDescription;
 
         // Calculate total
-        Total = subTotal + deliveryFee + tax + packagingFee + serviceFee + tip - discount;
+        Total = subTotal + deliveryFee + tax + platformFee + serviceGst + packagingFee + serviceFee + tip - discount;
     }
 
     public static OrderPricing Create(
@@ -65,7 +78,9 @@ public sealed class OrderPricing : ValueObject
         Money? serviceFee = null,
         Money? tip = null,
         string? discountCode = null,
-        string? discountDescription = null)
+        string? discountDescription = null,
+        Money? platformFee = null,
+        Money? serviceGst = null)
     {
         var currency = subTotal.Currency;
 
@@ -78,7 +93,9 @@ public sealed class OrderPricing : ValueObject
             serviceFee ?? Money.Zero(currency),
             tip ?? Money.Zero(currency),
             discountCode,
-            discountDescription);
+            discountDescription,
+            platformFee ?? Money.Zero(currency),
+            serviceGst ?? Money.Zero(currency));
     }
 
     /// <summary>
@@ -105,7 +122,9 @@ public sealed class OrderPricing : ValueObject
             Money.Zero(currency),
             Money.Zero(currency),
             null,
-            null);
+            null,
+            Money.Zero(currency),
+            Money.Zero(currency));
     }
 
     /// <summary>
@@ -122,7 +141,9 @@ public sealed class OrderPricing : ValueObject
             ServiceFee,
             Tip,
             DiscountCode,
-            DiscountDescription);
+            DiscountDescription,
+            PlatformFee,
+            ServiceGst);
     }
 
     /// <summary>
@@ -139,7 +160,9 @@ public sealed class OrderPricing : ValueObject
             ServiceFee,
             tip,
             DiscountCode,
-            DiscountDescription);
+            DiscountDescription,
+            PlatformFee,
+            ServiceGst);
     }
 
     /// <summary>
@@ -156,7 +179,9 @@ public sealed class OrderPricing : ValueObject
             ServiceFee,
             Tip,
             code ?? DiscountCode,
-            description ?? DiscountDescription);
+            description ?? DiscountDescription,
+            PlatformFee,
+            ServiceGst);
     }
 
     protected override IEnumerable<object> GetEqualityComponents()
@@ -168,9 +193,11 @@ public sealed class OrderPricing : ValueObject
         yield return PackagingFee;
         yield return ServiceFee;
         yield return Tip;
+        yield return PlatformFee;
+        yield return ServiceGst;
         yield return Total;
     }
 
     public override string ToString() =>
-        $"SubTotal: {SubTotal}, Delivery: {DeliveryFee}, Tax: {Tax}, Discount: {Discount}, Total: {Total}";
+        $"SubTotal: {SubTotal}, Delivery: {DeliveryFee}, Platform: {PlatformFee}, ServiceGst: {ServiceGst}, Tax: {Tax}, Discount: {Discount}, Total: {Total}";
 }

@@ -416,6 +416,13 @@ public sealed class Order : AggregateRoot
     /// </summary>
     public void MarkFailed(string? reason = null)
     {
+        // Never clobber a terminal order. A delivered/cancelled/rejected/refunded order must not
+        // flip to Failed because a late or stale delivery-failure event arrived after completion —
+        // that was showing customers "Failed" on orders they had actually received. Also makes
+        // re-fails idempotent.
+        if (Status.IsTerminal())
+            return;
+
         Status = OrderStatus.Failed;
         CancellationNotes = reason?.Trim();
         UpdatedAt = DateTime.UtcNow;

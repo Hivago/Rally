@@ -489,6 +489,29 @@ public sealed class DeliveryRequest : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Resets a 3PL search whose provider task timed out (no agent yet) so a FRESH task can be
+    /// booked. Stays in <see cref="DeliveryRequestStatus.Searching3PL"/> and clears the stale task
+    /// identifiers AND <see cref="ThirdPartyDispatchedAt"/>, so the next dispatch creates a new
+    /// provider task. We never give up on 3PL for lack of a rider — it always assigns eventually,
+    /// it just takes time. Cancelling the stale provider task is the caller's responsibility.
+    /// </summary>
+    public void ResetForThirdPartyRetry()
+    {
+        EnsureStatus(DeliveryRequestStatus.Searching3PL);
+
+        ExternalTaskId = null;
+        ExternalTrackingUrl = null;
+        ExternalLspName = null;
+        ExternalRiderName = null;
+        ExternalRiderPhone = null;
+        ThirdPartyDispatchedAt = null;
+
+        Status = DeliveryRequestStatus.Searching3PL;
+        FleetType = Enums.FleetType.ThirdParty;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     #endregion
 
     #region Rider Offers
