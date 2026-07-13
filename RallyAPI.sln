@@ -111,6 +111,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RallyAPI.Marketing.Infrastr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RallyAPI.Marketing.Endpoints", "src\Modules\Marketing\RallyAPI.Marketing.Endpoints\RallyAPI.Marketing.Endpoints.csproj", "{6834DBA2-4D9B-4FD9-903A-0BCC1C05A26B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RallyAPI.Orders.Infrastructure.Tests", "tests\Modules\Orders\RallyAPI.Orders.Infrastructure.Tests\RallyAPI.Orders.Infrastructure.Tests.csproj", "{011A061C-EC88-4918-9807-9BE5DDDC83DA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -541,6 +543,18 @@ Global
 		{6834DBA2-4D9B-4FD9-903A-0BCC1C05A26B}.Release|x64.Build.0 = Release|Any CPU
 		{6834DBA2-4D9B-4FD9-903A-0BCC1C05A26B}.Release|x86.ActiveCfg = Release|Any CPU
 		{6834DBA2-4D9B-4FD9-903A-0BCC1C05A26B}.Release|x86.Build.0 = Release|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Debug|x64.Build.0 = Debug|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Debug|x86.Build.0 = Debug|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Release|x64.ActiveCfg = Release|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Release|x64.Build.0 = Release|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Release|x86.ActiveCfg = Release|Any CPU
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -597,6 +611,7 @@ Global
 		{03F1052F-5E05-4D7E-AC3E-989537CB5E8E} = {579EE46F-5167-AEBB-918F-03560A7E36C1}
 		{90C6C2A2-9F66-4D43-B98E-C11D3A11AD1A} = {579EE46F-5167-AEBB-918F-03560A7E36C1}
 		{6834DBA2-4D9B-4FD9-903A-0BCC1C05A26B} = {579EE46F-5167-AEBB-918F-03560A7E36C1}
+		{011A061C-EC88-4918-9807-9BE5DDDC83DA} = {D6E41CD3-BAF9-3CB0-D841-5B88C8236130}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {152BBE83-99C5-41DC-A873-A4483A4FBB52}
