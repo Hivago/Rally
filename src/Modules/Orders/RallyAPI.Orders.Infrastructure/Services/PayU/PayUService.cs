@@ -33,9 +33,18 @@ public class PayUService : IPayUService
     {
         var amountStr = amount.ToString("F2");
 
+        // Normalize productinfo so the hashed value and the posted value are byte-identical.
+        // (Hashing a trimmed value while posting the untrimmed one would break the PayU hash.)
+        var productInfoNormalized = productInfo.Trim();
+
+        // PayU hosted checkout validates `phone` as a bare 10-digit Indian mobile.
+        // The stored value is E.164 (e.g. "+919876543210"); a country-code-prefixed number
+        // fails PayU's validation and silently hides the UPI option while cards/netbanking
+        // still show. Strip to the last 10 digits before sending.
+        var phoneNormalized = NormalizePhone(phone);
+
         // PayU payment hash: key|txnid|amount|productinfo|firstname|email|||||||||SALT
-       // var hashString = $"{_options.MerchantKey}|{txnId}|{amountStr}|{productInfo}|{firstName}|{email}|||||||||||{_options.MerchantSalt}";
-        var hashString = $"{_options.MerchantKey}|{txnId}|{amountStr}|{productInfo.Trim()}|{firstName}|{email}|||||||||||{_options.MerchantSalt}";
+        var hashString = $"{_options.MerchantKey}|{txnId}|{amountStr}|{productInfoNormalized}|{firstName}|{email}|||||||||||{_options.MerchantSalt}";
         var hash = ComputeSha512(hashString);
 
         return new PayUCheckoutParams
@@ -43,10 +52,10 @@ public class PayUService : IPayUService
             Key = _options.MerchantKey,
             TxnId = txnId,
             Amount = amountStr,
-            ProductInfo = productInfo,
+            ProductInfo = productInfoNormalized,
             FirstName = firstName,
             Email = email,
-            Phone = phone,
+            Phone = phoneNormalized,
             Surl = _options.SuccessUrl,
             Furl = _options.FailureUrl,
             Hash = hash,
@@ -195,6 +204,16 @@ public class PayUService : IPayUService
     }
 
     // ========== Helpers ==========
+
+    // Strip everything except digits, then keep the last 10 (drops the country code / '+').
+    private static string NormalizePhone(string phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+            return string.Empty;
+
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        return digits.Length > 10 ? digits[^10..] : digits;
+    }
 
     private string ComputeApiHash(string command, string var1)
     {
