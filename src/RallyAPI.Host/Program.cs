@@ -293,7 +293,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new RedisSlidingWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = relaxedLimits ? 100 : 3,
+                PermitLimit = relaxedLimits ? 100 : 20,
                 Window = relaxedLimits ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(10)
             }));
 
@@ -303,8 +303,8 @@ builder.Services.AddRateLimiter(options =>
             _ => new RedisSlidingWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = relaxedLimits ? 100 : 5,
-                Window = relaxedLimits ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(15)
+                PermitLimit = relaxedLimits ? 100 : 60,
+                Window = relaxedLimits ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(1)
             }));
 
     options.AddPolicy("refresh", context =>
@@ -313,7 +313,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new RedisSlidingWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = relaxedLimits ? 100 : 10,
+                PermitLimit = relaxedLimits ? 100 : 60,
                 Window = TimeSpan.FromMinutes(1)
             }));
 
@@ -325,7 +325,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new RedisSlidingWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = relaxedLimits ? 100 : 10,
+                PermitLimit = relaxedLimits ? 100 : 30,
                 Window = TimeSpan.FromMinutes(1)
             }));
 
@@ -339,7 +339,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new RedisFixedWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = relaxedLimits ? 100 : 5,
+                PermitLimit = relaxedLimits ? 100 : 30,
                 Window = TimeSpan.FromMinutes(1)
             }));
 
