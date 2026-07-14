@@ -197,26 +197,66 @@ public static class PaymentEndpoints
         .RequireAuthorization("Admin")
         .WithName("RefundPayment");
 
-        // 5. Success/Failure return URLs (PayU redirects browser here)
-        group.MapPost("/return/success", (HttpContext ctx) =>
-        {
-            // PayU redirects here after successful payment.
-            // For web: redirect to your frontend success page.
-            // The form data contains the same fields as the webhook.
-            return Results.Redirect("/payment-success");
-        })
+        // 5. Success/Failure return URLs (PayU redirects the BROWSER here via POST).
+        //
+        // PayU posts the result form (txnid, status, hash, …) to these endpoints — a static
+        // SPA cannot read that POST body, so the browser must land on the backend first. We
+        // resolve the order id from the txnid and 302-redirect (GET) to the SPA page, which
+        // then confirms status via GET /api/payments/verify. The S2S /webhook remains the
+        // source of truth for actually marking the order paid — this redirect is UX only.
+        group.MapPost("/return/success", (HttpContext ctx,
+            RallyAPI.Orders.Domain.Repositories.IPaymentRepository payments,
+            Microsoft.Extensions.Options.IOptions<RallyAPI.Orders.Infrastructure.Services.PayU.PayUOptions> payuOptions,
+            CancellationToken ct) =>
+            BuildReturnRedirect(ctx, payments, payuOptions.Value.FrontendSuccessUrl, ct))
         .AllowAnonymous()
         .WithName("PaymentReturnSuccess");
 
-        group.MapPost("/return/failure", (HttpContext ctx) =>
-        {
-            return Results.Redirect("/payment-failed");
-        })
+        group.MapPost("/return/failure", (HttpContext ctx,
+            RallyAPI.Orders.Domain.Repositories.IPaymentRepository payments,
+            Microsoft.Extensions.Options.IOptions<RallyAPI.Orders.Infrastructure.Services.PayU.PayUOptions> payuOptions,
+            CancellationToken ct) =>
+            BuildReturnRedirect(ctx, payments, payuOptions.Value.FrontendFailureUrl, ct))
         .AllowAnonymous()
         .WithName("PaymentReturnFailure");
 
 
-        return app;  
+        return app;
+    }
+
+    /// <summary>
+    /// Reads PayU's POSTed return form, maps txnid → order id, and 302-redirects the browser
+    /// to the given SPA page with ?orderId=… appended. Falls back to the bare page (or "/") when
+    /// the txnid can't be resolved, so the user is never stranded on the API host.
+    /// </summary>
+    private static async Task<IResult> BuildReturnRedirect(
+        HttpContext ctx,
+        RallyAPI.Orders.Domain.Repositories.IPaymentRepository payments,
+        string frontendUrl,
+        CancellationToken ct)
+    {
+        // Never crash the browser redirect on a missing/oversized form — worst case we send
+        // the user to the bare success/failure page without an id.
+        string txnId = string.Empty;
+        if (ctx.Request.HasFormContentType)
+        {
+            var form = await ctx.Request.ReadFormAsync(ct);
+            txnId = form["txnid"].ToString();
+        }
+
+        var target = string.IsNullOrWhiteSpace(frontendUrl) ? "/" : frontendUrl;
+
+        if (!string.IsNullOrWhiteSpace(txnId))
+        {
+            var payment = await payments.GetByTxnIdAsync(txnId, ct);
+            if (payment is not null)
+            {
+                var separator = target.Contains('?') ? '&' : '?';
+                target = $"{target}{separator}orderId={payment.OrderId}";
+            }
+        }
+
+        return Results.Redirect(target);
     }
 }
 
