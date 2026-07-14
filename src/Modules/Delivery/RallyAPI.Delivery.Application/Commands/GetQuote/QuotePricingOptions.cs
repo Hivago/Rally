@@ -19,4 +19,9 @@ public sealed class QuotePricingOptions
     /// <summary>GST percentage on the platform fee. e.g. 18 = 18%. Kept separate from
     /// <see cref="DeliveryGstPercent"/> so the two can diverge in future without a code change.</summary>
     public decimal PlatformGstPercent { get; set; } = 18m;
+
+    /// <summary>GST percentage on the food subtotal (item total). e.g. 5 = 5% — the restaurant-service
+    /// GST the platform collects under Section 9(5) CGST. Distinct from delivery/platform GST (18%).
+    /// The order bill (OrderPricing.Tax / PayoutLedger) charges this same rate at order time.</summary>
+    public decimal FoodGstPercent { get; set; } = 5m;
 }

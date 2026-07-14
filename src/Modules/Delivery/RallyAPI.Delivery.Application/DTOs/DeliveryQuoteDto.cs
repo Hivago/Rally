@@ -16,10 +16,13 @@ public sealed record DeliveryQuoteDto
     /// <summary>Flat platform fee charged to the customer.</summary>
     public decimal PlatformFee { get; init; }
 
-    /// <summary>GST on (delivery fee + platform fee).</summary>
+    /// <summary>GST on (delivery fee + platform fee) — 18%. Distinct from <see cref="FoodGst"/>.</summary>
     public decimal Gst { get; init; }
 
-    /// <summary>What the customer pays in fees = DeliveryFee + PlatformFee + Gst.</summary>
+    /// <summary>GST on the food subtotal (ItemTotal) — 5%. Restaurant-service GST the platform collects.</summary>
+    public decimal FoodGst { get; init; }
+
+    /// <summary>Everything the customer pays on top of the food = DeliveryFee + PlatformFee + Gst + FoodGst.</summary>
     public decimal TotalPayable { get; init; }
 
     /// <summary>The full amount the customer pays = ItemTotal + TotalPayable.</summary>
