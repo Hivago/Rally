@@ -349,13 +349,16 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
     {
         var platformFee = _quotePricing.CustomerPlatformFee;
         var gst = Math.Round(platformFee * _quotePricing.PlatformGstPercent / 100m, 2);
-        var totalPayable = platformFee + gst;
+        var foodGst = Math.Round(itemTotal * _quotePricing.FoodGstPercent / 100m, 2);
+        var totalPayable = platformFee + gst + foodGst;
 
         var breakdown = new List<PriceBreakdownItem>();
         if (platformFee > 0)
             breakdown.Add(new PriceBreakdownItem("Platform Fee", "Platform service fee", platformFee));
         if (gst > 0)
             breakdown.Add(new PriceBreakdownItem("GST", "GST on platform fee", gst));
+        if (foodGst > 0)
+            breakdown.Add(new PriceBreakdownItem("GST on Food", $"{_quotePricing.FoodGstPercent}% GST on food", foodGst));
 
         return new DeliveryQuoteDto
         {
@@ -365,6 +368,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             DeliveryFee = 0m,
             PlatformFee = platformFee,
             Gst = gst,
+            FoodGst = foodGst,
             TotalPayable = totalPayable,
             GrandTotal = itemTotal + totalPayable,
             DistanceKm = 0m,
@@ -376,7 +380,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         };
     }
 
-    private static DeliveryQuoteDto MapToDto(DeliveryQuote quote)
+    private DeliveryQuoteDto MapToDto(DeliveryQuote quote)
     {
         var breakdown = new List<PriceBreakdownItem>();
 
@@ -390,6 +394,15 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             catch { /* Ignore parsing errors */ }
         }
 
+        // Food GST (5%) on the item total — the stored quote only holds delivery + platform + their
+        // 18% GST (quote.CustomerTotal). Food GST is derived from OrderAmount here so the quote total
+        // matches what PlaceOrder bills (OrderPricing.Tax uses the same rate).
+        var foodGst = Math.Round(quote.OrderAmount * _quotePricing.FoodGstPercent / 100m, 2);
+        if (foodGst > 0)
+            breakdown.Add(new PriceBreakdownItem("GST on Food", $"{_quotePricing.FoodGstPercent}% GST on food", foodGst));
+
+        var totalPayable = quote.CustomerTotal + foodGst;
+
         return new DeliveryQuoteDto
         {
             Id = quote.Id,
@@ -398,8 +411,9 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             DeliveryFee = quote.FinalFee,
             PlatformFee = quote.PlatformFee,
             Gst = quote.GstAmount,
-            TotalPayable = quote.CustomerTotal,
-            GrandTotal = quote.OrderAmount + quote.CustomerTotal,
+            FoodGst = foodGst,
+            TotalPayable = totalPayable,
+            GrandTotal = quote.OrderAmount + totalPayable,
             DistanceKm = quote.DistanceKm,
             EstimatedMinutes = quote.EstimatedMinutes,
             SurgeMultiplier = quote.SurgeMultiplier,
