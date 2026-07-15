@@ -516,7 +516,7 @@ public sealed class RiderDispatchOrchestrator
                 PickupCode = deliveryRequest.PickupCode,
                 DropCode = deliveryRequest.DropCode,
                 OrderCategory = MapOrderCategory(deliveryRequest.OrderCategory),
-                CallbackUrl = _options.WebhookUrl,
+                CallbackUrl = _options.SendOrderLevelCallbackUrl ? _options.WebhookUrl : null,
                 SelectionMode = "fastest_agent"
             }, ct);
 
@@ -661,4 +661,12 @@ public sealed class DispatchOptions
 
     public decimal RiderEarningsPercentage { get; set; } = 80;
     public string WebhookUrl { get; set; } = "https://your-domain.com/api/webhooks/prorouting";
+
+    /// <summary>
+    /// When false (default), we do NOT send an order-level callback_url on createasync,
+    /// so ProRouting uses its account-level callback config (which includes the x-pro-api-key
+    /// auth header). Set to true only if account-level callbacks are unavailable — note the
+    /// order-level callback arrives WITHOUT auth and our webhook will 401 it.
+    /// </summary>
+    public bool SendOrderLevelCallbackUrl { get; set; } = false;
 }

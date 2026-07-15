@@ -19,8 +19,13 @@ public sealed class ProRoutingCreateRequest
     [JsonPropertyName("customer_promised_time")]
     public string? CustomerPromisedTime { get; init; }
 
+    // Omitted from the payload when null so ProRouting falls back to the
+    // account-level callback config (which carries the x-pro-api-key auth header).
+    // Sending an order-level callback_url overrides the account-level config and
+    // arrives WITHOUT auth → our webhook returns 401. See DispatchOptions.SendOrderLevelCallbackUrl.
     [JsonPropertyName("callback_url")]
-    public required string CallbackUrl { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CallbackUrl { get; init; }
 
     [JsonPropertyName("order_category")]
     public string OrderCategory { get; init; } = "F&B";

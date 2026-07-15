@@ -116,9 +116,10 @@ public sealed record CreateTaskRequest
     public int? MaxSlaMins { get; init; }
 
     /// <summary>
-    /// Webhook URL for status callbacks.
+    /// Optional order-level webhook URL for status callbacks. Leave null to rely on
+    /// ProRouting's account-level callback config (preferred — it carries the auth header).
     /// </summary>
-    public required string CallbackUrl { get; init; }
+    public string? CallbackUrl { get; init; }
 }
 
 /// <summary>
