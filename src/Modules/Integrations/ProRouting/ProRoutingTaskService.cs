@@ -600,7 +600,7 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmPro
                 },
                 Otp = request.DropCode
             },
-            CallbackUrl = request.CallbackUrl,
+            CallbackUrl = string.IsNullOrWhiteSpace(request.CallbackUrl) ? null : request.CallbackUrl,
             OrderCategory = request.OrderCategory,
             OrderAmount = request.OrderAmount,
             CodAmount = request.CodAmount,
