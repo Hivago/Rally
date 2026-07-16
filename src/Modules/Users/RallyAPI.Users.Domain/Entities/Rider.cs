@@ -16,6 +16,15 @@ public sealed class Rider : AggregateRoot
     public KycStatus KycStatus { get; private set; }
     public bool IsActive { get; private set; }
     public bool IsOnline { get; private set; }
+
+    /// <summary>Bank account number for weekly payout disbursement. Null until the rider sets it.</summary>
+    public string? BankAccountNumber { get; private set; }
+
+    /// <summary>IFSC code of the payout bank branch (11 chars).</summary>
+    public string? BankIfscCode { get; private set; }
+
+    /// <summary>Account holder name as per bank records.</summary>
+    public string? BankAccountName { get; private set; }
     public decimal? CurrentLatitude { get; private set; }
     public decimal? CurrentLongitude { get; private set; }
     public DateTime? LastLocationUpdate { get; private set; }
@@ -143,6 +152,36 @@ public sealed class Rider : AggregateRoot
         if (newStatus == KycStatus.Rejected)
             IsOnline = false;
 
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result UpdateBankDetails(string accountNumber, string ifscCode, string accountName)
+    {
+        if (string.IsNullOrWhiteSpace(accountNumber))
+            return Result.Failure(Error.Validation("Bank account number is required."));
+
+        if (string.IsNullOrWhiteSpace(ifscCode))
+            return Result.Failure(Error.Validation("IFSC code is required."));
+
+        if (string.IsNullOrWhiteSpace(accountName))
+            return Result.Failure(Error.Validation("Account holder name is required."));
+
+        accountNumber = accountNumber.Trim();
+        if (accountNumber.Length > 20)
+            return Result.Failure(Error.Validation("Bank account number is too long."));
+
+        ifscCode = ifscCode.Trim().ToUpperInvariant();
+        if (ifscCode.Length != 11)
+            return Result.Failure(Error.Validation("IFSC code must be exactly 11 characters."));
+
+        accountName = accountName.Trim();
+        if (accountName.Length > 255)
+            return Result.Failure(Error.Validation("Account holder name is too long."));
+
+        BankAccountNumber = accountNumber;
+        BankIfscCode = ifscCode;
+        BankAccountName = accountName;
         MarkAsUpdated();
         return Result.Success();
     }

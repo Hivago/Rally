@@ -1,6 +1,8 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RallyAPI.Orders.Application.Abstractions;
+using RallyAPI.Orders.Application.Options;
 using RallyAPI.Orders.Domain.Abstractions;
 using RallyAPI.Orders.Domain.Entities;
 using RallyAPI.Orders.Domain.Events;
@@ -19,6 +21,7 @@ public sealed class OrderDeliveredPayoutLedgerHandler : INotificationHandler<Ord
     private readonly IPayoutLedgerRepository _ledgerRepository;
     private readonly IRestaurantQueryService _restaurantQueryService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly RestaurantChargeOptions _restaurantCharge;
     private readonly ILogger<OrderDeliveredPayoutLedgerHandler> _logger;
 
     public OrderDeliveredPayoutLedgerHandler(
@@ -26,12 +29,14 @@ public sealed class OrderDeliveredPayoutLedgerHandler : INotificationHandler<Ord
         IPayoutLedgerRepository ledgerRepository,
         IRestaurantQueryService restaurantQueryService,
         IUnitOfWork unitOfWork,
+        IOptions<RestaurantChargeOptions> restaurantCharge,
         ILogger<OrderDeliveredPayoutLedgerHandler> logger)
     {
         _orderRepository = orderRepository;
         _ledgerRepository = ledgerRepository;
         _restaurantQueryService = restaurantQueryService;
         _unitOfWork = unitOfWork;
+        _restaurantCharge = restaurantCharge.Value;
         _logger = logger;
     }
 
@@ -77,19 +82,25 @@ public sealed class OrderDeliveredPayoutLedgerHandler : INotificationHandler<Ord
             // (delivery fee, tips, service fees are not part of restaurant's earnings)
             var orderAmount = order.Pricing.SubTotal.Amount;
 
+            // Restaurant charge = ₹35 delivery + ₹15 platform = ₹50 (kept separate in config for
+            // clarity), + 18% GST — REPLACES the per-restaurant commission flat fee.
+            var restaurantCharge = _restaurantCharge.TotalCharge;
+
             var ledgerEntry = PayoutLedger.Create(
                 ownerId: restaurant.OwnerId.Value,
                 outletId: restaurant.Id,
                 orderId: order.Id,
                 orderAmount: orderAmount,
-                commissionFlatFee: restaurant.CommissionFlatFee);
+                commissionFlatFee: restaurantCharge,
+                commissionGstPercent: _restaurantCharge.GstPercent);
 
             await _ledgerRepository.AddAsync(ledgerEntry, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Created payout ledger entry for order {OrderNumber}: amount={Amount}, commissionFlatFee={Commission}, net={Net}",
-                notification.OrderNumber, orderAmount, restaurant.CommissionFlatFee, ledgerEntry.NetAmount);
+                "Created payout ledger entry for order {OrderNumber}: amount={Amount}, charge=₹{Charge} (delivery ₹{Del} + platform ₹{Plat}), gst={GstPct}%, net={Net}",
+                notification.OrderNumber, orderAmount, restaurantCharge,
+                _restaurantCharge.DeliveryFee, _restaurantCharge.PlatformFee, _restaurantCharge.GstPercent, ledgerEntry.NetAmount);
         }
         catch (Exception ex)
         {

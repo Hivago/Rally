@@ -1,13 +1,16 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RallyAPI.Orders.Application.Abstractions;
 using RallyAPI.Orders.Application.Cart.Abstractions;
 using RallyAPI.Orders.Application.DTOs;
 using RallyAPI.Orders.Application.Mappings;
+using RallyAPI.Orders.Application.Options;
 using RallyAPI.Orders.Domain.Abstractions;
 using RallyAPI.Orders.Domain.Entities;
 using RallyAPI.Orders.Domain.Errors;
 using RallyAPI.Orders.Domain.ValueObjects;
+using RallyAPI.SharedKernel.Abstractions.Delivery;
 using RallyAPI.SharedKernel.Abstractions.Restaurants;
 using RallyAPI.SharedKernel.Results;
 
@@ -29,7 +32,10 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
     private readonly ICartRepository _cartRepository;
     private readonly ICartCacheService _cartCache;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDeliveryQuoteReader _quoteReader;
     private readonly ILogger<PlaceOrderCommandHandler> _logger;
+    private readonly OrderPlacementOptions _placementOptions;
+    private readonly PlatformFeeOptions _platformFee;
 
     private const string DefaultCurrency = "INR";
 
@@ -42,7 +48,10 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         ICartRepository cartRepository,
         ICartCacheService cartCache,
         IUnitOfWork unitOfWork,
-        ILogger<PlaceOrderCommandHandler> logger)
+        IDeliveryQuoteReader quoteReader,
+        ILogger<PlaceOrderCommandHandler> logger,
+        IOptions<OrderPlacementOptions> placementOptions,
+        IOptions<PlatformFeeOptions> platformFee)
     {
         _orderRepository = orderRepository;
         _orderNumberGenerator = orderNumberGenerator;
@@ -52,7 +61,10 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
         _cartRepository = cartRepository;
         _cartCache = cartCache;
         _unitOfWork = unitOfWork;
+        _quoteReader = quoteReader;
         _logger = logger;
+        _placementOptions = placementOptions.Value;
+        _platformFee = platformFee.Value;
     }
 
     public async Task<Result<OrderDto>> Handle(PlaceOrderCommand command, CancellationToken cancellationToken)
@@ -164,6 +176,23 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
             if (resolvedItems.Count == 0)
                 return Result.Failure<OrderDto>(OrderErrors.EmptyItems);
 
+            // Step 4a: Enforce minimum order value against the authoritative food subtotal
+            // (computed from resolved items, not the client-supplied Pricing.SubTotal).
+            // Threshold is configurable via the "OrderPlacement" section; 0 disables the check.
+            var minimumOrderValue = _placementOptions.MinimumOrderValue;
+            if (minimumOrderValue > 0)
+            {
+                var foodSubTotal = resolvedItems.Sum(i => i.UnitPrice * i.Quantity);
+                if (foodSubTotal < minimumOrderValue)
+                {
+                    _logger.LogWarning(
+                        "Order rejected — subtotal {SubTotal} is below minimum order value {Minimum} for Customer {CustomerId}",
+                        foodSubTotal, minimumOrderValue, command.CustomerId);
+                    return Result.Failure<OrderDto>(
+                        OrderErrors.BelowMinimumOrderValue(minimumOrderValue, DefaultCurrency));
+                }
+            }
+
             // Step 5: Generate order number
             var orderNumber = await _orderNumberGenerator.GenerateAsync(cancellationToken);
 
@@ -209,10 +238,48 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
             command.Request.Pricing.DeliveryFee,
             command.Request.Pricing.Tax);
 
-            // Step 8: Create pricing (already calculated by Cart/Delivery Module)
+            // Step 8: Backend-authoritative delivery-side pricing. We do NOT trust the frontend's
+            // deliveryFee / platform / GST — we source them from what WE quoted (delivery orders)
+            // or from config (pickup: platform fee + its GST only, no delivery). Food subtotal +
+            // food tax + optional fees (packaging/service/tip/discount) still come from the request.
+            decimal authoritativeDeliveryFee;
+            decimal platformFee;
+            decimal serviceGst;
+
+            if (fulfillmentType == Domain.Enums.FulfillmentType.Delivery)
+            {
+                if (string.IsNullOrWhiteSpace(command.DeliveryQuoteId)
+                    || !Guid.TryParse(command.DeliveryQuoteId, out var quoteGuid))
+                {
+                    return Result.Failure<OrderDto>(Error.Validation(
+                        "A delivery quote is required. Please refresh your quote and try again."));
+                }
+
+                var quotePricing = await _quoteReader.GetPricingAsync(quoteGuid, cancellationToken);
+                if (quotePricing is null)
+                {
+                    return Result.Failure<OrderDto>(Error.Validation(
+                        "Delivery quote not found. Please refresh your quote and try again."));
+                }
+
+                authoritativeDeliveryFee = quotePricing.DeliveryFee;
+                platformFee = quotePricing.PlatformFee;
+                serviceGst = quotePricing.Gst;
+            }
+            else // Pickup — platform fee + its GST only.
+            {
+                authoritativeDeliveryFee = 0m;
+                platformFee = _platformFee.CustomerPlatformFee;
+                serviceGst = Math.Round(platformFee * _platformFee.PlatformGstPercent / 100m, 2);
+            }
+
+            _logger.LogInformation(
+                "Authoritative pricing — Fulfillment: {Type}, DeliveryFee: {Del}, PlatformFee: {Plat}, ServiceGst: {Gst}",
+                fulfillmentType, authoritativeDeliveryFee, platformFee, serviceGst);
+
             var pricing = OrderPricing.Create(
                 Money.FromDecimal(command.Request.Pricing.SubTotal, DefaultCurrency),
-                Money.FromDecimal(command.Request.Pricing.DeliveryFee, DefaultCurrency),
+                Money.FromDecimal(authoritativeDeliveryFee, DefaultCurrency),
                 Money.FromDecimal(command.Request.Pricing.Tax, DefaultCurrency),
                 Money.FromDecimal(command.Request.Pricing.Discount, DefaultCurrency),
                 command.Request.Pricing.PackagingFee > 0
@@ -225,7 +292,9 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
                     ? Money.FromDecimal(command.Request.Pricing.Tip, DefaultCurrency)
                     : null,
                 command.Request.Pricing.DiscountCode,
-                command.Request.Pricing.DiscountDescription);
+                command.Request.Pricing.DiscountDescription,
+                platformFee: Money.FromDecimal(platformFee, DefaultCurrency),
+                serviceGst: Money.FromDecimal(serviceGst, DefaultCurrency));
 
 
             _logger.LogInformation("OrderPricing created - SubTotal: {Sub}, Total: {Total}",
@@ -245,7 +314,8 @@ public sealed class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand
                 customerPhone: command.CustomerPhone,
                 customerEmail: command.CustomerEmail,
                 restaurantPhone: restaurantDetails?.Phone ?? command.Request.RestaurantPhone,
-                specialInstructions: command.Request.SpecialInstructions);
+                specialInstructions: command.Request.SpecialInstructions,
+                cutleryRequested: command.Request.CutleryRequested);
 
             // Step 10: Add items
             order.AddItems(orderItems);

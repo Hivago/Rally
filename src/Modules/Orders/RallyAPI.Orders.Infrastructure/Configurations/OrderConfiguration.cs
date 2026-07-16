@@ -202,6 +202,16 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
                 money.Property(m => m.Amount).HasColumnName("tip").HasPrecision(10, 2).IsRequired();
                 money.Property(m => m.Currency).HasColumnName("tip_currency").HasMaxLength(3).HasDefaultValue("INR");
             });
+            pricing.OwnsOne(p => p.PlatformFee, money =>
+            {
+                money.Property(m => m.Amount).HasColumnName("platform_fee").HasPrecision(10, 2).HasDefaultValue(0m).IsRequired();
+                money.Property(m => m.Currency).HasColumnName("platform_fee_currency").HasMaxLength(3).HasDefaultValue("INR");
+            });
+            pricing.OwnsOne(p => p.ServiceGst, money =>
+            {
+                money.Property(m => m.Amount).HasColumnName("service_gst").HasPrecision(10, 2).HasDefaultValue(0m).IsRequired();
+                money.Property(m => m.Currency).HasColumnName("service_gst_currency").HasMaxLength(3).HasDefaultValue("INR");
+            });
             pricing.OwnsOne(p => p.Total, money =>
             {
                 money.Property(m => m.Amount).HasColumnName("total").HasPrecision(10, 2).IsRequired();
@@ -276,6 +286,10 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.SpecialInstructions)
             .HasColumnName("special_instructions")
             .HasMaxLength(1000);
+
+        builder.Property(o => o.CutleryRequested)
+            .HasColumnName("cutlery_requested")
+            .HasDefaultValue(false);
 
         builder.Property(o => o.InternalNotes)
             .HasColumnName("internal_notes")

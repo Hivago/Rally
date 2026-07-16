@@ -52,11 +52,14 @@ public static class DeliveryEndpoints
             PickupLatitude = request.PickupLatitude,
             PickupLongitude = request.PickupLongitude,
             PickupPincode = request.PickupPincode,
-            DropLatitude = request.DropLatitude,
-            DropLongitude = request.DropLongitude,
+            // Pickup orders carry no drop; fall back to pickup coords so downstream
+            // distance/geocoding never sees a (0,0) location.
+            DropLatitude = request.DropLatitude ?? request.PickupLatitude,
+            DropLongitude = request.DropLongitude ?? request.PickupLongitude,
             DropPincode = request.DropPincode,
             City = request.City,
-            OrderAmount = request.OrderAmount
+            OrderAmount = request.OrderAmount,
+            FulfillmentType = request.FulfillmentType
         };
 
         var result = await mediator.Send(command, ct);

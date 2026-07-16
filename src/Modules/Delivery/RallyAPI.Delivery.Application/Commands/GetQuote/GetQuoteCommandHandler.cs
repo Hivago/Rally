@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RallyAPI.Delivery.Application.DTOs;
 using RallyAPI.Delivery.Domain.Abstractions;
 using RallyAPI.Delivery.Domain.Entities;
@@ -23,6 +24,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
     private readonly IDeliveryQuoteRepository _quoteRepository;
     private readonly IGeocodingService _geocodingService;
     private readonly IDistanceCalculator _distanceCalculator;
+    private readonly QuotePricingOptions _quotePricing;
     private readonly ILogger<GetQuoteCommandHandler> _logger;
 
     private const double SearchRadiusKm = 5.0;
@@ -35,6 +37,7 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         IDeliveryQuoteRepository quoteRepository,
         IGeocodingService geocodingService,
         IDistanceCalculator distanceCalculator,
+        IOptions<QuotePricingOptions> quotePricing,
         ILogger<GetQuoteCommandHandler> logger)
     {
         _riderQueryService = riderQueryService;
@@ -43,7 +46,38 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         _quoteRepository = quoteRepository;
         _geocodingService = geocodingService;
         _distanceCalculator = distanceCalculator;
+        _quotePricing = quotePricing.Value;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Platform fee + GST on (delivery fee + platform fee). Applied uniformly to every quote —
+    /// own fleet AND 3PL — because the customer always pays OUR price. Returns the two amounts and
+    /// the breakdown (base delivery lines + Platform Fee + GST) serialized to JSON for storage.
+    /// </summary>
+    private (decimal PlatformFee, decimal GstAmount, string? BreakdownJson) BuildCustomerCharges(
+        decimal deliveryFee,
+        IReadOnlyList<PriceComponent>? deliveryBreakdown)
+    {
+        var platformFee = _quotePricing.CustomerPlatformFee;
+
+        // GST is charged per component so delivery and platform rates can differ in future.
+        var deliveryGst = Math.Round(deliveryFee * _quotePricing.DeliveryGstPercent / 100m, 2);
+        var platformGst = Math.Round(platformFee * _quotePricing.PlatformGstPercent / 100m, 2);
+        var gstAmount = deliveryGst + platformGst;
+
+        var lines = new List<PriceComponent>();
+        if (deliveryBreakdown is { Count: > 0 })
+            lines.AddRange(deliveryBreakdown);
+        else
+            lines.Add(new PriceComponent("Delivery Fee", "Delivery charge", deliveryFee));
+
+        if (platformFee > 0)
+            lines.Add(new PriceComponent("Platform Fee", "Platform service fee", platformFee));
+        if (gstAmount > 0)
+            lines.Add(new PriceComponent("GST", "GST on delivery + platform fee", gstAmount));
+
+        return (platformFee, gstAmount, JsonSerializer.Serialize(lines));
     }
 
     public async Task<Result<DeliveryQuoteDto>> Handle(
@@ -51,8 +85,18 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
         CancellationToken cancellationToken)
     {
         _logger.LogInformation(
-            "Getting delivery quote for restaurant {RestaurantId}, City: {City}",
-            request.RestaurantId, request.City);
+            "Getting quote for restaurant {RestaurantId}, City: {City}, Fulfillment: {Fulfillment}",
+            request.RestaurantId, request.City, request.IsPickup ? "Pickup" : "Delivery");
+
+        // Pickup: no delivery leg. Skip distance/rider/3PL entirely and charge only the platform
+        // fee + its GST on top of the item total — exactly what PlaceOrder bills a pickup order
+        // (both read the same "Delivery:Quote" config, so quote and order stay in lockstep).
+        // Nothing is persisted: PlaceOrder recomputes pickup pricing from config, not from a quote.
+        if (request.IsPickup)
+        {
+            _logger.LogDebug("Pickup quote — pricing from config, no delivery leg");
+            return Result.Success(BuildPickupDto(request.OrderAmount));
+        }
 
         // Fail fast when the drop is outside our service area. Without this guard,
         // a 12km drop hits ProRouting and waits up to 30s for a guaranteed rejection.
@@ -198,9 +242,8 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             return null;
         }
 
-        var breakdownJson = priceResult.Breakdown.Any()
-            ? JsonSerializer.Serialize(priceResult.Breakdown)
-            : null;
+        var (platformFee, gstAmount, breakdownJson) =
+            BuildCustomerCharges(priceResult.FinalFee, priceResult.Breakdown);
 
         return DeliveryQuote.CreateOwnFleet(
             id: Guid.NewGuid(),
@@ -220,7 +263,9 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             expiresAt: priceResult.ExpiresAt,
             breakdownJson: breakdownJson,
             surgeMultiplier: priceResult.SurgeMultiplier,
-            surgeReason: priceResult.SurgeReason);
+            surgeReason: priceResult.SurgeReason,
+            platformFee: platformFee,
+            gstAmount: gstAmount);
     }
 
     private async Task<DeliveryQuote?> CreateThirdPartyQuote(
@@ -249,8 +294,30 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             return null;
         }
 
-        // Select best quote (already sorted by price in provider)
+        // Serviceability confirmed. We IGNORE the provider's price — the customer always pays OUR
+        // tier price (the provider quote is our cost only). Compute our delivery fee + platform + GST.
         var bestQuote = quotesResult.Quotes.First();
+
+        var priceResult = await _pricingCalculator.CalculateAsync(
+            new DeliveryPriceRequest
+            {
+                PickupLatitude = request.PickupLatitude,
+                PickupLongitude = request.PickupLongitude,
+                DropLatitude = request.DropLatitude,
+                DropLongitude = request.DropLongitude,
+                City = city,
+                OrderAmount = request.OrderAmount,
+                RestaurantId = request.RestaurantId
+            }, ct);
+
+        if (!priceResult.IsSuccess)
+        {
+            _logger.LogWarning("Own-tier pricing failed for 3PL quote: {Error}", priceResult.ErrorMessage);
+            return null;
+        }
+
+        var (platformFee, gstAmount, breakdownJson) =
+            BuildCustomerCharges(priceResult.FinalFee, priceResult.Breakdown);
 
         return DeliveryQuote.CreateThirdParty(
             id: Guid.NewGuid(),
@@ -263,14 +330,57 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             city: city,
             orderAmount: request.OrderAmount,
             restaurantId: request.RestaurantId,
-            price: bestQuote.PriceForward,
-            estimatedMinutes: bestQuote.SlaMins,
+            price: priceResult.FinalFee,          // OUR delivery fee, not bestQuote.PriceForward
+            estimatedMinutes: bestQuote.SlaMins,  // provider SLA for the ETA is fine
             providerName: quotesResult.ProviderName!,
             providerQuoteId: quotesResult.QuoteId!,
-            expiresAt: quotesResult.ValidUntil ?? DateTime.UtcNow.AddMinutes(5));
+            expiresAt: priceResult.ExpiresAt,
+            platformFee: platformFee,
+            gstAmount: gstAmount,
+            distanceKm: priceResult.DistanceKm,
+            breakdownJson: breakdownJson);
     }
 
-    private static DeliveryQuoteDto MapToDto(DeliveryQuote quote)
+    /// <summary>
+    /// Builds a pickup quote entirely from config: no delivery fee, no distance/ETA, just the flat
+    /// platform fee + its GST charged on top of the item total. Not persisted.
+    /// </summary>
+    private DeliveryQuoteDto BuildPickupDto(decimal itemTotal)
+    {
+        var platformFee = _quotePricing.CustomerPlatformFee;
+        var gst = Math.Round(platformFee * _quotePricing.PlatformGstPercent / 100m, 2);
+        var foodGst = Math.Round(itemTotal * _quotePricing.FoodGstPercent / 100m, 2);
+        var totalPayable = platformFee + gst + foodGst;
+
+        var breakdown = new List<PriceBreakdownItem>();
+        if (platformFee > 0)
+            breakdown.Add(new PriceBreakdownItem("Platform Fee", "Platform service fee", platformFee));
+        if (gst > 0)
+            breakdown.Add(new PriceBreakdownItem("GST", "GST on platform fee", gst));
+        if (foodGst > 0)
+            breakdown.Add(new PriceBreakdownItem("GST on Food", $"{_quotePricing.FoodGstPercent}% GST on food", foodGst));
+
+        return new DeliveryQuoteDto
+        {
+            Id = Guid.Empty, // no stored quote — pickup pricing is recomputed from config at order time
+            FulfillmentType = "Pickup",
+            ItemTotal = itemTotal,
+            DeliveryFee = 0m,
+            PlatformFee = platformFee,
+            Gst = gst,
+            FoodGst = foodGst,
+            TotalPayable = totalPayable,
+            GrandTotal = itemTotal + totalPayable,
+            DistanceKm = 0m,
+            EstimatedMinutes = 0,
+            SurgeMultiplier = 1.0m,
+            SurgeReason = null,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(15),
+            Breakdown = breakdown
+        };
+    }
+
+    private DeliveryQuoteDto MapToDto(DeliveryQuote quote)
     {
         var breakdown = new List<PriceBreakdownItem>();
 
@@ -284,10 +394,26 @@ public sealed class GetQuoteCommandHandler : IRequestHandler<GetQuoteCommand, Re
             catch { /* Ignore parsing errors */ }
         }
 
+        // Food GST (5%) on the item total — the stored quote only holds delivery + platform + their
+        // 18% GST (quote.CustomerTotal). Food GST is derived from OrderAmount here so the quote total
+        // matches what PlaceOrder bills (OrderPricing.Tax uses the same rate).
+        var foodGst = Math.Round(quote.OrderAmount * _quotePricing.FoodGstPercent / 100m, 2);
+        if (foodGst > 0)
+            breakdown.Add(new PriceBreakdownItem("GST on Food", $"{_quotePricing.FoodGstPercent}% GST on food", foodGst));
+
+        var totalPayable = quote.CustomerTotal + foodGst;
+
         return new DeliveryQuoteDto
         {
             Id = quote.Id,
+            FulfillmentType = "Delivery",
+            ItemTotal = quote.OrderAmount,
             DeliveryFee = quote.FinalFee,
+            PlatformFee = quote.PlatformFee,
+            Gst = quote.GstAmount,
+            FoodGst = foodGst,
+            TotalPayable = totalPayable,
+            GrandTotal = quote.OrderAmount + totalPayable,
             DistanceKm = quote.DistanceKm,
             EstimatedMinutes = quote.EstimatedMinutes,
             SurgeMultiplier = quote.SurgeMultiplier,

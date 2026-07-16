@@ -117,6 +117,19 @@ public class ProcessPayuWebhookCommandHandler
         {
             payment.MarkFailed(payuId, errorMessage);
 
+            // Immediately reflect the failure on the order. Otherwise the customer stays on
+            // "Pending Payment" until the OrderAutoCancelService sweep (up to
+            // PaymentTimeoutMinutes later). Only Pending orders are transitioned — a failure
+            // webhook arriving after the order is already Paid/terminal is ignored here.
+            var failedOrder = await _orderRepository.GetByIdAsync(payment.OrderId, ct);
+            if (failedOrder is not null && failedOrder.Status == Domain.Enums.OrderStatus.Pending)
+            {
+                failedOrder.MarkFailed($"Payment failed: {errorMessage}");
+                _logger.LogInformation(
+                    "Order {OrderId} transitioned Pending → Failed via webhook for TxnId {TxnId}",
+                    payment.OrderId, txnId);
+            }
+
             try
             {
                 await _unitOfWork.SaveChangesAsync(ct);

@@ -80,6 +80,15 @@ public sealed class AcceptDeliveryOfferCommandHandler
             return Result.Failure<DeliveryRequestDto>(DeliveryErrors.OfferAlreadyResponded);
         }
 
+        // Broadcast race guard: under own-fleet broadcast several riders hold pending
+        // offers for the same delivery at once. If another rider already won it (or the
+        // dispatcher already moved on to 3PL), stop before we clobber that assignment.
+        if (deliveryRequest.Status != DeliveryRequestStatus.SearchingOwnFleet)
+        {
+            return Result.Failure<DeliveryRequestDto>(
+                Error.Validation("This delivery has already been assigned to another rider."));
+        }
+
         // Get rider details
         var rider = await _riderQueryService.GetRiderByIdAsync(request.RiderId, cancellationToken);
         if (rider is null)
@@ -99,7 +108,19 @@ public sealed class AcceptDeliveryOfferCommandHandler
             rider.Name,
             rider.Phone);
 
-        // Assign delivery to rider (in Users module)
+        // Win the assignment on the delivery row FIRST (xmin-guarded). If a concurrent
+        // accept beat us, this returns false and we must NOT bind the rider — otherwise the
+        // losing rider is left stuck on a CurrentDeliveryId they never actually got.
+        if (!await _requestRepository.TryUpdateAsync(deliveryRequest, cancellationToken))
+        {
+            _logger.LogInformation(
+                "Rider {RiderId} lost the race for delivery {DeliveryId} (concurrent accept).",
+                request.RiderId, deliveryRequest.Id);
+            return Result.Failure<DeliveryRequestDto>(
+                Error.Validation("This delivery has already been assigned to another rider."));
+        }
+
+        // Only now bind the delivery to the rider in the Users module.
         var assignResult = await _riderCommandService.AssignDeliveryToRiderAsync(
             request.RiderId,
             deliveryRequest.Id,
@@ -112,9 +133,6 @@ public sealed class AcceptDeliveryOfferCommandHandler
                 assignResult.Error.Message);
             return Result.Failure<DeliveryRequestDto>(assignResult.Error);
         }
-
-        // Save
-        await _requestRepository.UpdateAsync(deliveryRequest, cancellationToken);
 
         _logger.LogInformation(
             "Rider {RiderId} assigned to delivery {DeliveryId}",

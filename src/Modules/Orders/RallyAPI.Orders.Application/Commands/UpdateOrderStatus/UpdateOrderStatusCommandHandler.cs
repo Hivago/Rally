@@ -117,8 +117,13 @@ public sealed class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrde
             OrderStatus.Preparing or OrderStatus.ReadyForPickup =>
                 actorRole == "Restaurant" && order.RestaurantId == actorId,
 
+            // Pickup orders are collected by the customer and completed by the
+            // owning restaurant (no rider, no DeliveryInfo).
+            OrderStatus.Delivered when order.FulfillmentType == FulfillmentType.Pickup =>
+                actorRole == "Restaurant" && order.RestaurantId == actorId,
+
             OrderStatus.PickedUp or OrderStatus.Delivered =>
-                actorRole == "Rider" && order.DeliveryInfo.RiderId == actorId,
+                actorRole == "Rider" && order.DeliveryInfo?.RiderId == actorId,
 
             _ => false
         };

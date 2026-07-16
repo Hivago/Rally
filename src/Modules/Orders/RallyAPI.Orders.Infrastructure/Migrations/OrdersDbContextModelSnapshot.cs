@@ -280,6 +280,12 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("customer_phone");
 
+                    b.Property<bool>("CutleryRequested")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("cutlery_requested");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -616,9 +622,6 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<decimal>("GrossOrderAmount")
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)")
@@ -687,9 +690,6 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
-                    b.Property<int>("Version")
-                        .HasColumnType("integer");
-
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerId")
@@ -741,9 +741,6 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasColumnType("character varying(3)")
                         .HasDefaultValue("INR")
                         .HasColumnName("currency");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("GstAmount")
                         .HasPrecision(10, 2)
@@ -808,6 +805,41 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasDatabaseName("ix_payout_ledger_owner_status");
 
                     b.ToTable("payout_ledger", "orders");
+                });
+
+            modelBuilder.Entity("RallyAPI.Orders.Infrastructure.Outbox.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("OccurredOn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ProcessedOn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredOn")
+                        .HasDatabaseName("IX_OutboxMessages_Unprocessed")
+                        .HasFilter("\"ProcessedOn\" IS NULL");
+
+                    b.ToTable("OutboxMessages", "orders");
                 });
 
             modelBuilder.Entity("RallyAPI.Orders.Domain.Entities.CartItem", b =>
@@ -1048,6 +1080,34 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                                         .HasForeignKey("OrderPricingOrderId");
                                 });
 
+                            b1.OwnsOne("RallyAPI.Orders.Domain.ValueObjects.Money", "PlatformFee", b2 =>
+                                {
+                                    b2.Property<Guid>("OrderPricingOrderId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<decimal>("Amount")
+                                        .ValueGeneratedOnAdd()
+                                        .HasPrecision(10, 2)
+                                        .HasColumnType("numeric(10,2)")
+                                        .HasDefaultValue(0m)
+                                        .HasColumnName("platform_fee");
+
+                                    b2.Property<string>("Currency")
+                                        .IsRequired()
+                                        .ValueGeneratedOnAdd()
+                                        .HasMaxLength(3)
+                                        .HasColumnType("character varying(3)")
+                                        .HasDefaultValue("INR")
+                                        .HasColumnName("platform_fee_currency");
+
+                                    b2.HasKey("OrderPricingOrderId");
+
+                                    b2.ToTable("orders", "orders");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("OrderPricingOrderId");
+                                });
+
                             b1.OwnsOne("RallyAPI.Orders.Domain.ValueObjects.Money", "ServiceFee", b2 =>
                                 {
                                     b2.Property<Guid>("OrderPricingOrderId")
@@ -1065,6 +1125,34 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                                         .HasColumnType("character varying(3)")
                                         .HasDefaultValue("INR")
                                         .HasColumnName("service_fee_currency");
+
+                                    b2.HasKey("OrderPricingOrderId");
+
+                                    b2.ToTable("orders", "orders");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("OrderPricingOrderId");
+                                });
+
+                            b1.OwnsOne("RallyAPI.Orders.Domain.ValueObjects.Money", "ServiceGst", b2 =>
+                                {
+                                    b2.Property<Guid>("OrderPricingOrderId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<decimal>("Amount")
+                                        .ValueGeneratedOnAdd()
+                                        .HasPrecision(10, 2)
+                                        .HasColumnType("numeric(10,2)")
+                                        .HasDefaultValue(0m)
+                                        .HasColumnName("service_gst");
+
+                                    b2.Property<string>("Currency")
+                                        .IsRequired()
+                                        .ValueGeneratedOnAdd()
+                                        .HasMaxLength(3)
+                                        .HasColumnType("character varying(3)")
+                                        .HasDefaultValue("INR")
+                                        .HasColumnName("service_gst_currency");
 
                                     b2.HasKey("OrderPricingOrderId");
 
@@ -1185,7 +1273,13 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                             b1.Navigation("PackagingFee")
                                 .IsRequired();
 
+                            b1.Navigation("PlatformFee")
+                                .IsRequired();
+
                             b1.Navigation("ServiceFee")
+                                .IsRequired();
+
+                            b1.Navigation("ServiceGst")
                                 .IsRequired();
 
                             b1.Navigation("SubTotal")

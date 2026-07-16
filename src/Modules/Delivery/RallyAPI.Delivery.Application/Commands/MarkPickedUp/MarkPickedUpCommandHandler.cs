@@ -55,7 +55,8 @@ public sealed class MarkPickedUpCommandHandler : IRequestHandler<MarkPickedUpCom
         }
     }
 
-    private static bool CodeMatches(string? expected, string submitted) =>
+    private static bool CodeMatches(string? expected, string? submitted) =>
         !string.IsNullOrWhiteSpace(expected) &&
+        !string.IsNullOrWhiteSpace(submitted) &&
         string.Equals(expected.Trim(), submitted.Trim(), StringComparison.Ordinal);
 }

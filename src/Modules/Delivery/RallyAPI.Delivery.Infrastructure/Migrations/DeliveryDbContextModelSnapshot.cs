@@ -87,6 +87,13 @@ namespace RallyAPI.Delivery.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("fleet_type");
 
+                    b.Property<decimal>("GstAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("gst_amount");
+
                     b.Property<bool>("IsUsed")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -111,6 +118,13 @@ namespace RallyAPI.Delivery.Infrastructure.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)")
                         .HasColumnName("pickup_pincode");
+
+                    b.Property<decimal>("PlatformFee")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("platform_fee");
 
                     b.Property<string>("ProviderName")
                         .IsRequired()
@@ -464,6 +478,10 @@ namespace RallyAPI.Delivery.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("status");
 
+                    b.Property<DateTime?>("ThirdPartyDispatchedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("third_party_dispatched_at");
+
                     b.Property<decimal?>("TotalAmount")
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)")
@@ -475,6 +493,12 @@ namespace RallyAPI.Delivery.Infrastructure.Migrations
 
                     b.Property<int>("Version")
                         .HasColumnType("integer");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 

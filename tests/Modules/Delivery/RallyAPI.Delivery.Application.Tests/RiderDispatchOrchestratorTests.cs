@@ -22,9 +22,12 @@ public class RiderDispatchOrchestratorTests
     private readonly IDeliveryRequestRepository _repository;
     private readonly ILogger<RiderDispatchOrchestrator> _logger;
 
-    // AcceptanceTimeoutSeconds = 0 skips Task.Delay
+    // Legacy 3PL-first path (OwnFleetFirst = false). AcceptanceTimeoutSeconds = 0 skips Task.Delay.
+    // The own-fleet-first broadcast path is covered by the OwnFleetFirst_* tests below, which
+    // build their own orchestrator via BuildOwnFirstOrchestrator().
     private readonly DispatchOptions _options = new()
     {
+        OwnFleetFirst = false,
         AcceptanceTimeoutSeconds = 0,
         SearchRadiusKm = 5,
         MaxRidersToTry = 5,
@@ -58,6 +61,13 @@ public class RiderDispatchOrchestratorTests
         _thirdPartyProvider
             .UpdateOrderAsync(Arg.Any<UpdateOrderRequest>(), Arg.Any<CancellationToken>())
             .Returns(UpdateOrderResult.Success("searching", "ProRouting"));
+
+        // Terminal failure writes go through TryUpdateAsync; true = the Failed write
+        // committed (no concurrent accept). Tests that simulate a lost concurrency race
+        // override this to false.
+        _repository
+            .TryUpdateAsync(Arg.Any<DeliveryRequest>(), Arg.Any<CancellationToken>())
+            .Returns(true);
     }
 
     [Fact]
@@ -69,14 +79,16 @@ public class RiderDispatchOrchestratorTests
             .CreateTaskAsync(Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>())
             .Returns(CreateTaskResult.Success("TASK-001", deliveryRequest.OrderId.ToString(), "assigned", null, "ProRouting"));
 
-        // Reload after timeout: webhook has fired, status = Assigned3PL
+        // After the 3PL wait the webhook has assigned the task. The orchestrator reads the
+        // TRUE status via GetCurrentStatusAsync (a fresh DB read), not a stale tracking reload.
         _repository
-            .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(_ =>
             {
                 // Status is Searching3PL when we get here (set by orchestrator before 3PL call)
-                deliveryRequest.Assign3PLRider("TASK-001", "ProRouting", "Rahul", "+91999", null, 95m);
-                return deliveryRequest;
+                if (deliveryRequest.Status == DeliveryRequestStatus.Searching3PL)
+                    deliveryRequest.Assign3PLRider("TASK-001", "ProRouting", "Rahul", "+91999", null, 95m);
+                return (DeliveryRequestStatus?)deliveryRequest.Status;
             });
 
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
@@ -87,40 +99,28 @@ public class RiderDispatchOrchestratorTests
     }
 
     [Fact]
-    public async Task DispatchAsync_When3PLTimesOut_ShouldCancelTaskAndFallBackToOwnFleet()
+    public async Task DispatchAsync_ThirdPartyFirst_WhenTaskCreated_HandsOffNonBlockingWithoutCancelling()
     {
-        var riderId = Guid.NewGuid();
+        // Legacy 3PL-first path: the orchestrator no longer blocks 30s then cancels. It creates
+        // the task, records the handoff (ThirdPartyDispatchedAt), and returns — the provider
+        // webhook assigns an agent and the recovery service enforces the search timeout.
         var deliveryRequest = BuildCreatedRequest();
-        var callCount = 0;
 
         _thirdPartyProvider
             .CreateTaskAsync(Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>())
             .Returns(CreateTaskResult.Success("TASK-002", deliveryRequest.OrderId.ToString(), "searching", null, "ProRouting"));
 
-        _riderQueryService
-            .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new[] { BuildRider(riderId) });
-
-        _repository
-            .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                callCount++;
-                if (callCount == 1)
-                {
-                    // First reload: still Searching3PL → orchestrator detects timeout
-                    return deliveryRequest;
-                }
-                // Second reload (own fleet): rider accepted
-                deliveryRequest.AssignOwnFleetRider(riderId, "Suresh", "+919876543210");
-                return deliveryRequest;
-            });
-
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
 
         result.IsSuccess.Should().BeTrue();
-        result.FleetType.Should().Be(FleetType.OwnFleet);
-        await _thirdPartyProvider.Received(1).CancelTaskAsync("TASK-002", Arg.Any<string>(), Arg.Any<CancellationToken>());
+        result.FleetType.Should().Be(FleetType.ThirdParty);
+        result.ExternalTaskId.Should().Be("TASK-002");
+        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Searching3PL);
+        deliveryRequest.ThirdPartyDispatchedAt.Should().NotBeNull();
+        // Non-blocking: no cancel, and own fleet was not touched.
+        await _thirdPartyProvider.DidNotReceive().CancelTaskAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _riderQueryService.DidNotReceive().GetAvailableRidersAsync(
+            Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -139,10 +139,16 @@ public class RiderDispatchOrchestratorTests
 
         _repository
             .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(_ =>
             {
-                deliveryRequest.AssignOwnFleetRider(riderId, "Suresh", "+919876543210");
-                return deliveryRequest;
+                // Rider accepts during the offer window.
+                if (deliveryRequest.Status == DeliveryRequestStatus.SearchingOwnFleet)
+                    deliveryRequest.AssignOwnFleetRider(riderId, "Suresh", "+919876543210");
+                return (DeliveryRequestStatus?)deliveryRequest.Status;
             });
 
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
@@ -153,7 +159,7 @@ public class RiderDispatchOrchestratorTests
     }
 
     [Fact]
-    public async Task DispatchAsync_When3PLFailsAndNoRidersAvailable_ShouldMarkFailedAndReturnFailure()
+    public async Task DispatchAsync_When3PLFailsAndNoRidersAvailable_ShouldStayInThirdPartySearchNotFail()
     {
         var deliveryRequest = BuildCreatedRequest();
 
@@ -167,12 +173,14 @@ public class RiderDispatchOrchestratorTests
 
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
 
+        // We never fail an order for lack of a rider — it stays in 3PL search so recovery re-books.
         result.IsSuccess.Should().BeFalse();
-        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Failed);
+        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Searching3PL);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
     }
 
     [Fact]
-    public async Task DispatchAsync_When3PLFailsAndAllRidersDecline_ShouldMarkFailedAfterExhaustingRiders()
+    public async Task DispatchAsync_When3PLFailsAndAllRidersDecline_ShouldStayInThirdPartySearchNotFail()
     {
         var riderId = Guid.NewGuid();
         var deliveryRequest = BuildCreatedRequest();
@@ -185,15 +193,69 @@ public class RiderDispatchOrchestratorTests
             .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new[] { BuildRider(riderId) });
 
-        // Reload: rider did not accept, status stays SearchingOwnFleet
+        // Rider did not accept, status stays SearchingOwnFleet across both the reload
+        // (offer expiry) and the fresh status probes.
         _repository
             .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
             .Returns(_ => deliveryRequest);
 
+        _repository
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => (DeliveryRequestStatus?)deliveryRequest.Status);
+
         var result = await _orchestrator.DispatchAsync(deliveryRequest);
 
+        // No rider accepted, but we never fail — the delivery is handed back to 3PL search.
         result.IsSuccess.Should().BeFalse();
-        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Failed);
+        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Searching3PL);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_WhenRiderAcceptsBeforeTerminal_ShouldHonorAssignmentNotFail()
+    {
+        // A rider's acceptance commits on another connection just as own fleet is exhausted.
+        // The loop's stale probes still read SearchingOwnFleet, but the terminal fresh reload
+        // sees the assignment and honors it — the delivery is never failed nor overwritten.
+        var riderId = Guid.NewGuid();
+        var deliveryRequest = BuildCreatedRequest();
+
+        _thirdPartyProvider
+            .CreateTaskAsync(Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>())
+            .Returns(CreateTaskResult.Failure("Service unavailable", "ProRouting"));
+
+        _riderQueryService
+            .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new[] { BuildRider(riderId) });
+
+        _repository
+            .GetByIdWithOffersAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        // Probes never see the accept (stale identity-map symptom the fresh reload defends against).
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => (DeliveryRequestStatus?)deliveryRequest.Status);
+
+        // The terminal fresh reload sees the concurrent acceptance.
+        _repository
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                if (deliveryRequest.Status == DeliveryRequestStatus.SearchingOwnFleet)
+                    deliveryRequest.AssignOwnFleetRider(riderId, "Rider", "+91999");
+                return deliveryRequest;
+            });
+
+        var result = await _orchestrator.DispatchAsync(deliveryRequest);
+
+        result.IsSuccess.Should().BeTrue();
+        result.FleetType.Should().Be(FleetType.OwnFleet);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
     }
 
     [Fact]
@@ -213,6 +275,283 @@ public class RiderDispatchOrchestratorTests
         await _orchestrator.DispatchAsync(deliveryRequest);
 
         await _thirdPartyProvider.DidNotReceive().CancelTaskAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // ----------------------------------------------------------------------------
+    // Own-fleet-first broadcast path (OwnFleetFirst = true)
+    // ----------------------------------------------------------------------------
+
+    private RiderDispatchOrchestrator BuildOwnFirstOrchestrator(int acceptanceTimeoutSeconds = 0) =>
+        new(
+            _riderQueryService,
+            _notificationService,
+            _thirdPartyProvider,
+            _repository,
+            Options.Create(new DispatchOptions
+            {
+                OwnFleetFirst = true,
+                AcceptanceTimeoutSeconds = acceptanceTimeoutSeconds,
+                OfferPollIntervalSeconds = 1,
+                SearchRadiusKm = 5,
+                MaxRidersToTry = 5,
+                RiderEarningsPercentage = 80
+            }),
+            _logger);
+
+    [Fact]
+    public async Task OwnFleetFirst_ShouldBroadcastToAllEligibleRiders_AndAssignWithout3PL()
+    {
+        var riderA = Guid.NewGuid();
+        var riderB = Guid.NewGuid();
+        var deliveryRequest = BuildCreatedRequest();
+
+        _riderQueryService
+            .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new[] { BuildRider(riderA), BuildRider(riderB) });
+
+        // Window (0s) elapses; the fresh status read reflects that riderA accepted mid-broadcast.
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                if (deliveryRequest.Status == DeliveryRequestStatus.SearchingOwnFleet)
+                    deliveryRequest.AssignOwnFleetRider(riderA, "Suresh", "+919876543210");
+                return (DeliveryRequestStatus?)deliveryRequest.Status;
+            });
+        _repository
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        var orchestrator = BuildOwnFirstOrchestrator();
+
+        var result = await orchestrator.DispatchAsync(deliveryRequest);
+
+        result.IsSuccess.Should().BeTrue();
+        result.FleetType.Should().Be(FleetType.OwnFleet);
+        // Broadcast: an offer notification went to BOTH eligible riders.
+        await _notificationService.Received(2).SendDeliveryOfferAsync(
+            Arg.Any<Guid>(), Arg.Any<DeliveryOfferNotification>(), Arg.Any<CancellationToken>());
+        // 3PL was never touched — own fleet took it first.
+        await _thirdPartyProvider.DidNotReceive().CreateTaskAsync(
+            Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OwnFleetFirst_WhenRiderAcceptsDuringPollWindow_ShouldAssignOwnFleet()
+    {
+        var riderId = Guid.NewGuid();
+        var deliveryRequest = BuildCreatedRequest();
+
+        _riderQueryService
+            .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new[] { BuildRider(riderId) });
+
+        // The poll reads a fresh accept committed on another connection.
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                if (deliveryRequest.Status == DeliveryRequestStatus.SearchingOwnFleet)
+                    deliveryRequest.AssignOwnFleetRider(riderId, "Suresh", "+919876543210");
+                return (DeliveryRequestStatus?)deliveryRequest.Status;
+            });
+        _repository
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        // 1s window so the poll loop actually runs one iteration.
+        var orchestrator = BuildOwnFirstOrchestrator(acceptanceTimeoutSeconds: 1);
+
+        var result = await orchestrator.DispatchAsync(deliveryRequest);
+
+        result.IsSuccess.Should().BeTrue();
+        result.FleetType.Should().Be(FleetType.OwnFleet);
+        result.RiderId.Should().Be(riderId);
+        await _thirdPartyProvider.DidNotReceive().CreateTaskAsync(
+            Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OwnFleetFirst_WhenNoOwnRiders_ShouldFallBackTo3PLImmediately()
+    {
+        var deliveryRequest = BuildCreatedRequest();
+
+        _riderQueryService
+            .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<AvailableRider>());
+
+        _repository
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        _thirdPartyProvider
+            .CreateTaskAsync(Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>())
+            .Returns(CreateTaskResult.Success("TASK-9", deliveryRequest.OrderId.ToString(), "searching", null, "ProRouting"));
+
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                if (deliveryRequest.Status == DeliveryRequestStatus.Searching3PL)
+                    deliveryRequest.Assign3PLRider("TASK-9", "ProRouting", "Rahul", "+91999", null, 95m);
+                return (DeliveryRequestStatus?)deliveryRequest.Status;
+            });
+
+        var orchestrator = BuildOwnFirstOrchestrator();
+
+        var result = await orchestrator.DispatchAsync(deliveryRequest);
+
+        result.IsSuccess.Should().BeTrue();
+        result.FleetType.Should().Be(FleetType.ThirdParty);
+        // No riders → no offers broadcast.
+        await _notificationService.DidNotReceive().SendDeliveryOfferAsync(
+            Arg.Any<Guid>(), Arg.Any<DeliveryOfferNotification>(), Arg.Any<CancellationToken>());
+        await _thirdPartyProvider.Received(1).CreateTaskAsync(
+            Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OwnFleetFirst_WhenNoOwnRiderAccepts_ShouldFallBackTo3PLAndSucceed()
+    {
+        var riderId = Guid.NewGuid();
+        var deliveryRequest = BuildCreatedRequest();
+
+        _riderQueryService
+            .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new[] { BuildRider(riderId) });
+
+        // Nobody accepts: reload after the window still shows SearchingOwnFleet.
+        _repository
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        _thirdPartyProvider
+            .CreateTaskAsync(Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>())
+            .Returns(CreateTaskResult.Success("TASK-7", deliveryRequest.OrderId.ToString(), "searching", null, "ProRouting"));
+
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                if (deliveryRequest.Status == DeliveryRequestStatus.Searching3PL)
+                    deliveryRequest.Assign3PLRider("TASK-7", "ProRouting", "Rahul", "+91999", null, 95m);
+                return (DeliveryRequestStatus?)deliveryRequest.Status;
+            });
+
+        var orchestrator = BuildOwnFirstOrchestrator();
+
+        var result = await orchestrator.DispatchAsync(deliveryRequest);
+
+        result.IsSuccess.Should().BeTrue();
+        result.FleetType.Should().Be(FleetType.ThirdParty);
+        result.ExternalTaskId.Should().Be("TASK-7");
+    }
+
+    [Fact]
+    public async Task OwnFleetFirst_WhenOwnFleetAnd3PLBothFail_ShouldStayInThirdPartySearchNeverFail()
+    {
+        var deliveryRequest = BuildCreatedRequest();
+
+        _riderQueryService
+            .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<AvailableRider>());
+
+        _repository
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        _thirdPartyProvider
+            .CreateTaskAsync(Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>())
+            .Returns(CreateTaskResult.Failure("Service unavailable", "ProRouting"));
+
+        var orchestrator = BuildOwnFirstOrchestrator();
+
+        var result = await orchestrator.DispatchAsync(deliveryRequest);
+
+        // Own fleet empty and 3PL booking failed this round — the order must NOT fail. It stays
+        // in 3PL search so the recovery service keeps re-booking the provider.
+        result.IsSuccess.Should().BeFalse();
+        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Searching3PL);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
+    }
+
+    [Fact]
+    public async Task OwnFleetFirst_WhenRiderRejects_ShouldFallBackTo3PL_NotSucceedAsOwnFleetOrCrash()
+    {
+        // Regression: a rider REJECTING an offer bumps the delivery's xmin from another
+        // connection. The dispatcher's own-fleet writes (expire offers / move to 3PL) then lose
+        // the concurrency race while status is still SearchingOwnFleet. The orchestrator must
+        // re-read the real status and fall back to 3PL — NOT misread the token change as an
+        // acceptance (return OwnFleet) and NOT throw a concurrency exception.
+        var riderId = Guid.NewGuid();
+        var deliveryRequest = BuildCreatedRequest();
+
+        _riderQueryService
+            .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new[] { BuildRider(riderId) });
+
+        _repository
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        // No rider accepts (the one rider rejected) — every fresh status probe still reads
+        // SearchingOwnFleet until we successfully transition to 3PL.
+        _repository
+            .GetCurrentStatusAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                if (deliveryRequest.Status == DeliveryRequestStatus.Searching3PL)
+                    deliveryRequest.Assign3PLRider("TASK-R", "ProRouting", "Rahul", "+91999", null, 95m);
+                return (DeliveryRequestStatus?)deliveryRequest.Status;
+            });
+
+        // The decline bumped xmin: any write attempted WHILE still SearchingOwnFleet loses the
+        // race (returns false). Writes made after transitioning off SearchingOwnFleet commit.
+        _repository
+            .TryUpdateAsync(Arg.Any<DeliveryRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ((DeliveryRequest)ci[0]!).Status != DeliveryRequestStatus.SearchingOwnFleet);
+
+        _thirdPartyProvider
+            .CreateTaskAsync(Arg.Any<CreateTaskRequest>(), Arg.Any<CancellationToken>())
+            .Returns(CreateTaskResult.Success("TASK-R", deliveryRequest.OrderId.ToString(), "searching", null, "ProRouting"));
+
+        var orchestrator = BuildOwnFirstOrchestrator();
+
+        var result = await orchestrator.DispatchAsync(deliveryRequest);
+
+        result.IsSuccess.Should().BeTrue();
+        result.FleetType.Should().Be(FleetType.ThirdParty);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
+    }
+
+    [Fact]
+    public async Task OwnFleetFirst_WhenOwnFleetEmptyAfterPriorThirdParty_ShouldStayInThirdPartySearchNeverFail()
+    {
+        // Even in the legacy post-3PL state (ThirdPartyDispatchedAt set, handed to own fleet),
+        // an empty own fleet must NOT fail the order — it goes back to 3PL search so recovery
+        // keeps re-booking the provider. 3PL is the guaranteed backstop; we never give up.
+        var deliveryRequest = BuildCreatedRequest();
+        deliveryRequest.StartSearchingOwnFleet();
+        deliveryRequest.StartSearching3PL();
+        deliveryRequest.MarkThirdPartyDispatched("TASK-OLD");
+        deliveryRequest.TransitionToOwnFleetSearch(); // back to own fleet, keeps ThirdPartyDispatchedAt
+        deliveryRequest.ThirdPartyDispatchedAt.Should().NotBeNull();
+
+        _riderQueryService
+            .GetAvailableRidersAsync(Arg.Any<double>(), Arg.Any<double>(), Arg.Any<double>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<AvailableRider>());
+
+        _repository
+            .GetByIdFreshAsync(deliveryRequest.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => deliveryRequest);
+
+        var orchestrator = BuildOwnFirstOrchestrator();
+
+        var result = await orchestrator.DispatchAsync(deliveryRequest);
+
+        result.IsSuccess.Should().BeFalse();
+        deliveryRequest.Status.Should().Be(DeliveryRequestStatus.Searching3PL);
+        deliveryRequest.Status.Should().NotBe(DeliveryRequestStatus.Failed);
     }
 
     #region Helpers
