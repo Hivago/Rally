@@ -199,81 +199,85 @@ public static class PaymentEndpoints
         .RequireAuthorization("Admin")
         .WithName("RefundPayment");
 
-        // 5. Success/Failure return URLs (PayU POSTs the full signed result here
-        //    via the customer's browser on EVERY transaction — surl/furl).
-        //    This is the primary, always-delivered confirmation path. We process
-        //    the payment here (hash-verified, idempotent) BEFORE redirecting the
-        //    browser to the frontend, so an order can never be left in Pending
-        //    just because the S2S webhook is not configured or the frontend
-        //    forgot to call /verify.
+                // 5. Success/Failure return URLs (PayU POSTs the signed result to the BROWSER here
+        //    on every transaction). A static SPA can't read that POST body, so the browser
+        //    lands here first. We (a) reprocess the payment now — hash-verified, idempotent —
+        //    so an order is never left Pending just because the S2S /webhook wasn't configured
+        //    or arrived late, and (b) resolve txnid -> orderId so the redirect carries the id
+        //    the SPA's /verify flow actually expects.
         group.MapPost("/return/success", async (
-            HttpContext httpContext,
-            IConfiguration config,
-            ISender sender) =>
-        {
-            var formData = await ReadPayuFormAsync(httpContext);
-            var txnId = formData.GetValueOrDefault("txnid", "");
-
-            // Same handler as the webhook: verifies hash, marks payment Paid,
-            // transitions order Pending → Paid. Safe to run multiple times.
-            var result = await sender.Send(new ProcessPayuWebhookCommand(formData));
-            if (!result.IsSuccess)
-            {
-                httpContext.RequestServices
-                    .GetRequiredService<ILoggerFactory>()
-                    .CreateLogger("PaymentReturn")
-                    .LogError("PayU return/success processing failed for TxnId {TxnId}: {Error}",
-                        txnId, result.Error.Message);
-            }
-
-            return Results.Redirect(BuildFrontendRedirect(config, "PayU:FrontendSuccessUrl", "/payment-success", txnId));
-        })
+            HttpContext ctx,
+            RallyAPI.Orders.Domain.Repositories.IPaymentRepository payments,
+            Microsoft.Extensions.Options.IOptions<RallyAPI.Orders.Infrastructure.Services.PayU.PayUOptions> payuOptions,
+            ISender sender,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+            await ProcessAndRedirectAsync(ctx, payments, sender, payuOptions.Value.FrontendSuccessUrl, loggerFactory, ct))
         .AllowAnonymous()
         .WithName("PaymentReturnSuccess");
 
         group.MapPost("/return/failure", async (
-            HttpContext httpContext,
-            IConfiguration config,
-            ISender sender) =>
-        {
-            var formData = await ReadPayuFormAsync(httpContext);
-            var txnId = formData.GetValueOrDefault("txnid", "");
-
-            // Record the failure/cancellation so the payment isn't left dangling.
-            await sender.Send(new ProcessPayuWebhookCommand(formData));
-
-            return Results.Redirect(BuildFrontendRedirect(config, "PayU:FrontendFailureUrl", "/payment-failed", txnId));
-        })
+            HttpContext ctx,
+            RallyAPI.Orders.Domain.Repositories.IPaymentRepository payments,
+            Microsoft.Extensions.Options.IOptions<RallyAPI.Orders.Infrastructure.Services.PayU.PayUOptions> payuOptions,
+            ISender sender,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+            await ProcessAndRedirectAsync(ctx, payments, sender, payuOptions.Value.FrontendFailureUrl, loggerFactory, ct))
         .AllowAnonymous()
         .WithName("PaymentReturnFailure");
-
 
         return app;
     }
 
-    /// <summary>Reads PayU's form-urlencoded POST body into a dictionary.</summary>
+      /// <summary>Reads PayU's form-urlencoded return POST into a dictionary. Never throws on a
+    /// missing/oversized form — worst case the caller gets an empty dictionary.</summary>
     private static async Task<Dictionary<string, string>> ReadPayuFormAsync(HttpContext httpContext)
     {
+        if (!httpContext.Request.HasFormContentType)
+            return new Dictionary<string, string>();
+
         var form = await httpContext.Request.ReadFormAsync();
         return form.ToDictionary(x => x.Key, x => x.Value.ToString());
     }
 
     /// <summary>
-    /// Builds the browser redirect target after processing a PayU return POST.
-    /// Uses the configured frontend URL when present (append txnid so the SPA can
-    /// look up / verify the order), otherwise falls back to a relative path.
+    /// Reprocesses the PayU return POST (idempotent — safe to run alongside /webhook),
+    /// then 302-redirects the browser to the SPA with ?orderId=... so the frontend can
+    /// call GET /api/payments/verify. Falls back to the bare frontend URL (or "/") if
+    /// txnid is missing or unresolvable, so the user is never stranded on the API host.
     /// </summary>
-    private static string BuildFrontendRedirect(
-        IConfiguration config, string configKey, string fallback, string txnId)
+    private static async Task<IResult> ProcessAndRedirectAsync(
+        HttpContext ctx,
+        RallyAPI.Orders.Domain.Repositories.IPaymentRepository payments,
+        ISender sender,
+        string frontendUrl,
+        ILoggerFactory loggerFactory,
+        CancellationToken ct)
     {
-        var baseUrl = config[configKey];
-        if (string.IsNullOrWhiteSpace(baseUrl))
-            return fallback;
+        var formData = await ReadPayuFormAsync(ctx);
+        var txnId = formData.GetValueOrDefault("txnid", "");
 
-        var separator = baseUrl.Contains('?') ? "&" : "?";
-        return string.IsNullOrEmpty(txnId)
-            ? baseUrl
-            : $"{baseUrl}{separator}txnid={Uri.EscapeDataString(txnId)}";
+        var result = await sender.Send(new ProcessPayuWebhookCommand(formData));
+        if (!result.IsSuccess)
+        {
+            loggerFactory.CreateLogger("PaymentReturn")
+                .LogError("PayU return processing failed for TxnId {TxnId}: {Error}", txnId, result.Error.Message);
+        }
+
+        var target = string.IsNullOrWhiteSpace(frontendUrl) ? "/" : frontendUrl;
+
+        if (!string.IsNullOrWhiteSpace(txnId))
+        {
+            var payment = await payments.GetByTxnIdAsync(txnId, ct);
+            if (payment is not null)
+            {
+                var separator = target.Contains('?') ? '&' : '?';
+                target = $"{target}{separator}orderId={payment.OrderId}";
+            }
+        }
+
+        return Results.Redirect(target);
     }
 }
 
