@@ -96,14 +96,19 @@ public sealed class DeliveryInfo : BaseEntity
     }
 
     /// <summary>
-    /// Assigns a rider to the delivery
+    /// Assigns a rider to the delivery.
+    /// Own-fleet riders carry an internal <paramref name="riderId"/>; third-party (3PL)
+    /// riders have no internal GUID and are identified only by name/phone. At least one
+    /// form of identity is required. <see cref="AssignedAt"/> is the canonical
+    /// "a rider has been assigned" signal for both fleet types.
     /// </summary>
-    public void AssignRider(Guid riderId, string? riderName = null, string? riderPhone = null)
+    public void AssignRider(Guid? riderId, string? riderName = null, string? riderPhone = null)
     {
-        if (riderId == Guid.Empty)
-            throw new ArgumentException("Rider ID is required", nameof(riderId));
+        var hasInternalId = riderId.HasValue && riderId.Value != Guid.Empty;
+        if (!hasInternalId && string.IsNullOrWhiteSpace(riderName))
+            throw new ArgumentException("A rider identity (id or name) is required", nameof(riderId));
 
-        RiderId = riderId;
+        RiderId = hasInternalId ? riderId : null;
         RiderName = riderName;
         RiderPhone = riderPhone;
         AssignedAt = DateTime.UtcNow;

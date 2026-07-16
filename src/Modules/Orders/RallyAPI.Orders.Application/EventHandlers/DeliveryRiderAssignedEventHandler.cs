@@ -40,15 +40,27 @@ public sealed class DeliveryRiderAssignedEventHandler : INotificationHandler<Del
             return;
         }
 
-        order.AssignRider(
-            notification.RiderId,
-            notification.RiderName,
-            notification.RiderPhone,
-            notification.TrackingUrl);
+        try
+        {
+            order.AssignRider(
+                notification.RiderId,
+                notification.RiderName,
+                notification.RiderPhone,
+                notification.TrackingUrl);
 
-        _orderRepository.Update(order);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _orderRepository.Update(order);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Updated Order {OrderNumber} with rider information", order.OrderNumber.Value);
+            _logger.LogInformation("Updated Order {OrderNumber} with rider information", order.OrderNumber.Value);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            // Never let a rider-assignment hiccup bubble up and fail the whole caller
+            // (e.g. a ProRouting webhook or the manual refresh-status reconcile). The
+            // order simply keeps its current rider info; reconcile can be retried.
+            _logger.LogWarning(ex,
+                "Failed to apply rider assignment to Order {OrderId} (rider {RiderId}, name '{RiderName}')",
+                notification.OrderId, notification.RiderId, notification.RiderName);
+        }
     }
 }
