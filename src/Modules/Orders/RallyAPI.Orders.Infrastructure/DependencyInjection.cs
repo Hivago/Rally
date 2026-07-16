@@ -54,6 +54,10 @@ public static class DependencyInjection
             configuration.GetSection(AutoCancelOptions.SectionName));
         services.AddHostedService<OrderAutoCancelService>();
 
+        // Payment reconciliation — backstop that confirms Pending orders whose
+        // PayU payment actually succeeded but whose callbacks never reached us.
+        services.AddHostedService<PendingPaymentReconciliationService>();
+
         // Repositories
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<ICartRepository, CartRepository>();

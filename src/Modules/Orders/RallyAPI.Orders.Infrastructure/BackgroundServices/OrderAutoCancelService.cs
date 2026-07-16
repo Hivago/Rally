@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using RallyAPI.Orders.Application.Abstractions;
 using RallyAPI.Orders.Domain.Abstractions;
 using RallyAPI.Orders.Domain.Enums;
+using RallyAPI.Orders.Domain.Repositories;
 using RallyAPI.SharedKernel.Abstractions.Restaurants;
 
 namespace RallyAPI.Orders.Infrastructure.BackgroundServices;
@@ -63,6 +64,8 @@ public sealed class OrderAutoCancelService : BackgroundService
     {
         using var scope = _scopeFactory.CreateScope();
         var orderRepository = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+        var paymentRepository = scope.ServiceProvider.GetRequiredService<IPaymentRepository>();
+        var payUService = scope.ServiceProvider.GetRequiredService<IPayUService>();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         var now = DateTime.UtcNow;
@@ -79,6 +82,32 @@ public sealed class OrderAutoCancelService : BackgroundService
         {
             try
             {
+                // SAFETY: never cancel an order whose payment actually succeeded.
+                // If a payment record exists and isn't already Failed, ask PayU
+                // directly before cancelling — a lost webhook/return can leave a
+                // truly-paid order in Pending, and cancelling it would charge the
+                // customer for a cancelled order.
+                var payment = await paymentRepository.GetByOrderIdAsync(pending.Id, cancellationToken);
+                if (payment is not null && payment.Status != Domain.Enums.PaymentStatus.Failed)
+                {
+                    var verify = await payUService.VerifyPaymentAsync(payment.TxnId);
+                    if (verify is not null &&
+                        string.Equals(verify.Status, "success", StringComparison.OrdinalIgnoreCase))
+                    {
+                        payment.MarkSuccess(verify.PayuId, verify.Mode ?? "", verify.BankRefNum);
+                        if (pending.Status == OrderStatus.Pending)
+                            pending.ConfirmPayment(payment.TxnId, verify.PayuId);
+
+                        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+                        _logger.LogWarning(
+                            "RECOVERED order {OrderId} ({OrderNumber}) at payment-timeout: PayU " +
+                            "reported success but order was still Pending. Confirmed instead of cancelling.",
+                            pending.Id, pending.OrderNumber);
+                        continue; // do not cancel
+                    }
+                }
+
                 pending.Cancel(CancellationReason.PaymentTimeout, notes: "Auto-cancelled: payment not received within time limit");
                 paymentTimeoutCount++;
 
