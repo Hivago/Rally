@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using RallyAPI.Orders.Application.Commands.InitiatePayment;
 using RallyAPI.Orders.Application.Commands.ProcessPayuWebhook;
 using RallyAPI.Orders.Application.Commands.RefundPayment;
@@ -73,42 +75,34 @@ public static class PaymentEndpoints
             
             auditLog.EventId = $"payu:{txnId}:{mihpayid}:{status}";
 
-            // 2. Time Drift logic
-            // Extract `addedon` via precise IST parsing and convert to UTC.
+            // 2. Timestamp check — FOR AUDIT ONLY, never rejects.
+            // `addedon` is PayU's transaction-creation time, NOT the webhook send
+            // time. PayU retries a failed/undelivered webhook for hours/days and
+            // every retry carries the ORIGINAL `addedon`, so a drift check here
+            // would silently discard legitimate, successful payments (and leave the
+            // order stuck in Pending). Payment authenticity is guaranteed by the
+            // reverse-hash verification inside the handler — that is the real
+            // security control, not this timestamp.
             var addedOn = formData.GetValueOrDefault("addedon", "");
-            if (string.IsNullOrWhiteSpace(addedOn))
+            try
             {
-                auditLog.ProcessingStatus = "rejected_timestamp_missing";
-                auditDb.WebhookAuditLogs.Add(auditLog);
-                await auditDb.SaveChangesAsync();
-                return Results.Ok(); // PayU requires OK to stop retries
-            }
-
-            try 
-            {
-                var istZone = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
-                var istTime = DateTime.ParseExact(addedOn, "yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
-                var utcTime = TimeZoneInfo.ConvertTimeToUtc(istTime, istZone);
-                
-                // 10-minute time drift checking vs UTC.
-                var toleranceSecs = config.GetValue<int>("WEBHOOK_PAYU_TIMESTAMP_TOLERANCE_SECONDS", 600);
-                if (Math.Abs((DateTime.UtcNow - utcTime).TotalSeconds) > toleranceSecs)
+                if (!string.IsNullOrWhiteSpace(addedOn))
                 {
-                    auditLog.ProcessingStatus = "rejected_timestamp_drift";
-                    auditLog.TimestampValid = false;
-                    auditDb.WebhookAuditLogs.Add(auditLog);
-                    await auditDb.SaveChangesAsync();
-                    return Results.Ok();
+                    var istZone = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+                    var istTime = DateTime.ParseExact(addedOn, "yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+                    var utcTime = TimeZoneInfo.ConvertTimeToUtc(istTime, istZone);
+
+                    var toleranceSecs = config.GetValue<int>("WEBHOOK_PAYU_TIMESTAMP_TOLERANCE_SECONDS", 600);
+                    auditLog.TimestampValid = Math.Abs((DateTime.UtcNow - utcTime).TotalSeconds) <= toleranceSecs;
                 }
-                auditLog.TimestampValid = true;
+                else
+                {
+                    auditLog.TimestampValid = false;
+                }
             }
             catch
             {
-                auditLog.ProcessingStatus = "rejected_timestamp_invalid";
                 auditLog.TimestampValid = false;
-                auditDb.WebhookAuditLogs.Add(auditLog);
-                await auditDb.SaveChangesAsync();
-                return Results.Ok();
             }
 
             // 3. Idempotency Check using Redis
@@ -125,35 +119,43 @@ public static class PaymentEndpoints
                 return Results.Ok(); 
             }
 
-            // 4. Send to MediatR 
-            // Note: signature verification happens inside the handler 
+            // 4. Send to MediatR
+            // Note: signature verification happens inside the handler.
             var result = await sender.Send(new ProcessPayuWebhookCommand(formData));
 
             if (result.IsSuccess)
             {
                 auditLog.ProcessingStatus = "accepted";
-            }
-            else
-            {
-                auditLog.ProcessingStatus = "failed";
-                auditLog.ErrorMessage = result.Error.Message;
-            }
-            
-            // HMAC is verified inside handler, assuming valid if it reaches here and succeeds
-            if (result.Error.Code == "Payment.InvalidHash") 
-            {
-                auditLog.SignatureValid = false;
-                auditLog.ProcessingStatus = "rejected_signature";
-            }
-            else
-            {
                 auditLog.SignatureValid = true;
+            }
+            else
+            {
+                auditLog.ErrorMessage = result.Error.Message;
+
+                if (result.Error.Code == "Payment.InvalidHash")
+                {
+                    // Genuinely bad signature — reject and keep the lock (real duplicate/forgery).
+                    auditLog.SignatureValid = false;
+                    auditLog.ProcessingStatus = "rejected_signature";
+                }
+                else
+                {
+                    // Transient/processing failure (DB blip, etc.). Release the Redis
+                    // lock so PayU's next retry is NOT rejected as a duplicate and can
+                    // actually be reprocessed — otherwise the payment would be lost for
+                    // the full 24h lock TTL and the order would stay stuck in Pending.
+                    auditLog.SignatureValid = true;
+                    auditLog.ProcessingStatus = "failed";
+                    await idempotencyService.ReleaseLockAsync(redisKey);
+                }
             }
 
             auditDb.WebhookAuditLogs.Add(auditLog);
             await auditDb.SaveChangesAsync();
 
             // Always return 200 to PayU — even on failure, to prevent retries
+            // hammering us; genuine retries will still reprocess because the lock
+            // was released above.
             return Results.Ok();
         })
         .AllowAnonymous()  // PayU server-to-server, no JWT
@@ -197,26 +199,81 @@ public static class PaymentEndpoints
         .RequireAuthorization("Admin")
         .WithName("RefundPayment");
 
-        // 5. Success/Failure return URLs (PayU redirects browser here)
-        group.MapPost("/return/success", (HttpContext ctx) =>
+        // 5. Success/Failure return URLs (PayU POSTs the full signed result here
+        //    via the customer's browser on EVERY transaction — surl/furl).
+        //    This is the primary, always-delivered confirmation path. We process
+        //    the payment here (hash-verified, idempotent) BEFORE redirecting the
+        //    browser to the frontend, so an order can never be left in Pending
+        //    just because the S2S webhook is not configured or the frontend
+        //    forgot to call /verify.
+        group.MapPost("/return/success", async (
+            HttpContext httpContext,
+            IConfiguration config,
+            ISender sender) =>
         {
-            // PayU redirects here after successful payment.
-            // For web: redirect to your frontend success page.
-            // The form data contains the same fields as the webhook.
-            return Results.Redirect("/payment-success");
+            var formData = await ReadPayuFormAsync(httpContext);
+            var txnId = formData.GetValueOrDefault("txnid", "");
+
+            // Same handler as the webhook: verifies hash, marks payment Paid,
+            // transitions order Pending → Paid. Safe to run multiple times.
+            var result = await sender.Send(new ProcessPayuWebhookCommand(formData));
+            if (!result.IsSuccess)
+            {
+                httpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("PaymentReturn")
+                    .LogError("PayU return/success processing failed for TxnId {TxnId}: {Error}",
+                        txnId, result.Error.Message);
+            }
+
+            return Results.Redirect(BuildFrontendRedirect(config, "PayU:FrontendSuccessUrl", "/payment-success", txnId));
         })
         .AllowAnonymous()
         .WithName("PaymentReturnSuccess");
 
-        group.MapPost("/return/failure", (HttpContext ctx) =>
+        group.MapPost("/return/failure", async (
+            HttpContext httpContext,
+            IConfiguration config,
+            ISender sender) =>
         {
-            return Results.Redirect("/payment-failed");
+            var formData = await ReadPayuFormAsync(httpContext);
+            var txnId = formData.GetValueOrDefault("txnid", "");
+
+            // Record the failure/cancellation so the payment isn't left dangling.
+            await sender.Send(new ProcessPayuWebhookCommand(formData));
+
+            return Results.Redirect(BuildFrontendRedirect(config, "PayU:FrontendFailureUrl", "/payment-failed", txnId));
         })
         .AllowAnonymous()
         .WithName("PaymentReturnFailure");
 
 
-        return app;  
+        return app;
+    }
+
+    /// <summary>Reads PayU's form-urlencoded POST body into a dictionary.</summary>
+    private static async Task<Dictionary<string, string>> ReadPayuFormAsync(HttpContext httpContext)
+    {
+        var form = await httpContext.Request.ReadFormAsync();
+        return form.ToDictionary(x => x.Key, x => x.Value.ToString());
+    }
+
+    /// <summary>
+    /// Builds the browser redirect target after processing a PayU return POST.
+    /// Uses the configured frontend URL when present (append txnid so the SPA can
+    /// look up / verify the order), otherwise falls back to a relative path.
+    /// </summary>
+    private static string BuildFrontendRedirect(
+        IConfiguration config, string configKey, string fallback, string txnId)
+    {
+        var baseUrl = config[configKey];
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            return fallback;
+
+        var separator = baseUrl.Contains('?') ? "&" : "?";
+        return string.IsNullOrEmpty(txnId)
+            ? baseUrl
+            : $"{baseUrl}{separator}txnid={Uri.EscapeDataString(txnId)}";
     }
 }
 
