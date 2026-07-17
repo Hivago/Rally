@@ -97,18 +97,30 @@ public sealed class DeliveryInfo : BaseEntity
 
     /// <summary>
     /// Assigns a rider to the delivery.
-    /// Own-fleet riders carry an internal <paramref name="riderId"/>; third-party (3PL)
-    /// riders have no internal GUID and are identified only by name/phone. At least one
-    /// form of identity is required. <see cref="AssignedAt"/> is the canonical
-    /// "a rider has been assigned" signal for both fleet types.
+    /// <paramref name="isOwnFleet"/> is the authoritative fleet discriminator and must come from
+    /// the Delivery module's FleetType — never infer it from whether an id happens to be present.
+    /// An own-fleet rider always has an internal <paramref name="riderId"/>; a third-party (3PL)
+    /// rider never does, and may not even have a name yet (the provider can report an assignment
+    /// before it reports the agent). <see cref="RiderId"/> staying null for 3PL is what keeps
+    /// own-rider queries — earnings, stats, order auth — from ever matching a 3PL rider.
+    /// <see cref="AssignedAt"/> is the canonical "a rider has been assigned" signal for both fleets.
     /// </summary>
-    public void AssignRider(Guid? riderId, string? riderName = null, string? riderPhone = null)
+    public void AssignRider(Guid? riderId, bool isOwnFleet, string? riderName = null, string? riderPhone = null)
     {
-        var hasInternalId = riderId.HasValue && riderId.Value != Guid.Empty;
-        if (!hasInternalId && string.IsNullOrWhiteSpace(riderName))
-            throw new ArgumentException("A rider identity (id or name) is required", nameof(riderId));
+        if (isOwnFleet)
+        {
+            if (!riderId.HasValue || riderId.Value == Guid.Empty)
+                throw new ArgumentException("An own-fleet rider requires an internal rider id", nameof(riderId));
 
-        RiderId = hasInternalId ? riderId : null;
+            RiderId = riderId;
+        }
+        else
+        {
+            // A 3PL rider has no Rally account, so never keep an id for one even if a caller
+            // passes a stray value — that id would make them look like own fleet downstream.
+            RiderId = null;
+        }
+
         RiderName = riderName;
         RiderPhone = riderPhone;
         AssignedAt = DateTime.UtcNow;

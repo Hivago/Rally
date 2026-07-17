@@ -44,6 +44,7 @@ public sealed class DeliveryRiderAssignedEventHandler : INotificationHandler<Del
         {
             order.AssignRider(
                 notification.RiderId,
+                notification.IsOwnFleet,
                 notification.RiderName,
                 notification.RiderPhone,
                 notification.TrackingUrl);
@@ -51,7 +52,9 @@ public sealed class DeliveryRiderAssignedEventHandler : INotificationHandler<Del
             _orderRepository.Update(order);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            _logger.LogInformation("Updated Order {OrderNumber} with rider information", order.OrderNumber.Value);
+            _logger.LogInformation(
+                "Updated Order {OrderNumber} with rider information (ownFleet: {IsOwnFleet})",
+                order.OrderNumber.Value, notification.IsOwnFleet);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
         {
@@ -59,8 +62,8 @@ public sealed class DeliveryRiderAssignedEventHandler : INotificationHandler<Del
             // (e.g. a ProRouting webhook or the manual refresh-status reconcile). The
             // order simply keeps its current rider info; reconcile can be retried.
             _logger.LogWarning(ex,
-                "Failed to apply rider assignment to Order {OrderId} (rider {RiderId}, name '{RiderName}')",
-                notification.OrderId, notification.RiderId, notification.RiderName);
+                "Failed to apply rider assignment to Order {OrderId} (ownFleet: {IsOwnFleet}, rider {RiderId}, name '{RiderName}')",
+                notification.OrderId, notification.IsOwnFleet, notification.RiderId, notification.RiderName);
         }
     }
 }
