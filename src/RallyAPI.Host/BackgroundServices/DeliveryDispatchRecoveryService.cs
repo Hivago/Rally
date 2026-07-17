@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
 using MediatR;
 using RallyAPI.Delivery.Application.Commands.TriggerDispatch;
 using RallyAPI.Delivery.Application.Services;
@@ -21,12 +21,20 @@ namespace RallyAPI.Host.BackgroundServices;
 /// in a pre-assignment state (Created / PendingDispatch / SearchingOwnFleet) and never retry.
 /// This service re-triggers dispatch for any such request idle longer than <see cref="StuckThreshold"/>.
 ///
-/// (2) 3PL search timeout: after own fleet finds no rider we hand off to the 3PL provider
+/// (2) 3PL reconciliation: after own fleet finds no rider we hand off to the 3PL provider
 /// NON-BLOCKING (status Searching3PL). The provider's webhook flips us to Assigned3PL when an
-/// agent accepts. If a Searching3PL delivery's provider search runs past
-/// <see cref="DispatchOptions.ThirdPartySearchTimeoutMinutes"/> with no agent, this service
-/// cancels the stale task and RE-BOOKS a fresh 3PL task (never gives up / never fails for lack
-/// of a rider — 3PL is the guaranteed backstop, it just takes time).
+/// agent accepts. Once a task is booked the provider OWNS the delivery — they see it through and
+/// an agent always turns up eventually, it just takes time. So a long search is not a failure and
+/// this service never cancels one. Past <see cref="DispatchOptions.ThirdPartySearchTimeoutMinutes"/>
+/// it simply ASKS the provider what happened and reconciles:
+///   - agent assigned (our webhook was lost) -> adopt the assignment
+///   - still searching / unknown / no answer -> leave the booking with them, re-check next tick
+///   - dead at the provider (cancelled/failed) -> the only case that re-books a fresh task
+///
+/// It must never cancel a live task on our own status alone: Searching3PL only means no webhook
+/// reached us, never that the provider found nobody. Doing so cancels a rider mid-delivery and
+/// pays for a duplicate booking (incident 2026-07-17, staging ORD-20260717-00279 / task
+/// mfnb_fx6fsryz — cancelled and re-booked while it was already "Order-delivered").
 ///
 /// Re-dispatch is safe: TriggerDispatch is idempotent per state, and the xmin concurrency token
 /// rejects a losing write (skipped, retried next tick).
@@ -61,7 +69,7 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation(
-            "DeliveryDispatchRecoveryService started (poll every {Seconds}s, re-dispatch idle >{Minutes}min, 3PL search timeout {ThirdPartyMinutes}min)",
+            "DeliveryDispatchRecoveryService started (poll every {Seconds}s, re-dispatch idle >{Minutes}min, 3PL reconcile after {ThirdPartyMinutes}min)",
             PollInterval.TotalSeconds, StuckThreshold.TotalMinutes, _dispatchOptions.ThirdPartySearchTimeoutMinutes);
 
         using var timer = new PeriodicTimer(PollInterval);
@@ -190,7 +198,7 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
 
         var batch = timedOut.Take(BatchSize).ToList();
         _logger.LogWarning(
-            "3PL search timeout: {Total} delivery(ies) past {Minutes}min with no agent, re-booking a fresh 3PL task for {Batch}",
+            "3PL reconcile: {Total} delivery(ies) still searching past {Minutes}min; asking the provider what happened to {Batch}",
             timedOut.Count, _dispatchOptions.ThirdPartySearchTimeoutMinutes, batch.Count);
 
         foreach (var request in batch)
@@ -205,73 +213,65 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
 
                 var taskId = fresh.ExternalTaskId;
 
-                // Our status saying Searching3PL only means no webhook reached us — it is NOT
-                // evidence that the provider found nobody. Ask the provider before touching a
-                // live booking: cancelling here would strand a real rider mid-delivery and book
-                // a second one we also pay for. Anything short of "the provider confirms it is
-                // still searching" means hands off.
+                // A booked ProRouting task is a commitment: once they accept the order they see it
+                // through, and an agent always turns up eventually — it can just take a while. So a
+                // long search is NOT a failure and must never be "rescued" by cancelling. Our status
+                // saying Searching3PL only means no webhook reached us; it is not evidence about the
+                // provider at all. Ask them, then act:
+                //
+                //   assigned/beyond  -> adopt the assignment (webhook was lost), nothing to re-book
+                //   still searching  -> LEAVE IT ALONE, they are still working the order
+                //   unknown / no answer -> leave it alone; silence is not evidence
+                //   dead at provider -> the only case that earns a fresh booking, handled below
                 if (!string.IsNullOrEmpty(taskId))
                 {
                     var progress = await ResolveProviderProgressAsync(provider, repository, fresh, taskId, ct);
-
-                    // Assigned → adopted above, nothing to re-book. Unknown → we don't know, so we
-                    // must not touch it. Only a confirmed "still searching" or a dead task earns a
-                    // cancel + re-book below.
-                    if (progress is ThirdPartyTaskProgress.AssignedOrBeyond or ThirdPartyTaskProgress.Unknown)
+                    if (progress != ThirdPartyTaskProgress.CancelledOrFailed)
                         continue;
                 }
 
-                // Reset the 3PL search FIRST (xmin-guarded), clearing the stale task so the next
-                // dispatch books a FRESH one. If a concurrent webhook assigned an agent, this loses
-                // the race — skip, don't cancel the live task. We never give up on 3PL for lack of
-                // a rider; it always assigns eventually, it just takes time.
+                // Only reached when the provider itself says the task is dead (cancelled/failed), so
+                // nobody is coming and re-booking is the correct repair. Reset the 3PL search
+                // (xmin-guarded) to clear the dead task so dispatch books a FRESH one. If a
+                // concurrent webhook assigned an agent, this loses the race — skip.
                 fresh.ResetForThirdPartyRetry();
                 if (!await repository.TryUpdateAsync(fresh, ct))
                 {
                     _logger.LogInformation(
-                        "3PL timeout re-book of delivery {DeliveryId} lost the race to a webhook assignment; skipping.",
+                        "3PL re-book of delivery {DeliveryId} lost the race to a webhook assignment; skipping.",
                         request.Id);
                     continue;
                 }
 
                 _logger.LogWarning(
-                    "3PL search timed out for delivery {DeliveryId} (Order {OrderId}, task {TaskId}); cancelling stale task and re-booking 3PL.",
-                    fresh.Id, fresh.OrderId, taskId);
-
-                if (!string.IsNullOrEmpty(taskId))
-                {
-                    var cancel = await provider.CancelTaskAsync(taskId, "3PL search timeout — re-booking a fresh task", ct);
-                    if (!cancel.IsSuccess)
-                        _logger.LogWarning(
-                            "Failed to cancel timed-out 3PL task {TaskId} for delivery {DeliveryId}: {Error}",
-                            taskId, fresh.Id, cancel.ErrorMessage);
-                }
+                    "3PL task {TaskId} is dead at the provider for delivery {DeliveryId} (Order {OrderId}); re-booking a fresh task.",
+                    taskId, fresh.Id, fresh.OrderId);
 
                 // Re-dispatch: the delivery is Searching3PL with no live task, so dispatch books a
                 // fresh 3PL task and keeps searching. The order is never failed for lack of a rider.
                 var result = await sender.Send(new TriggerDispatchCommand { DeliveryRequestId = fresh.Id }, ct);
                 if (result.IsFailure)
                     _logger.LogWarning(
-                        "3PL re-book after timeout for delivery {DeliveryId} returned failure: {Error}",
+                        "3PL re-book of dead task for delivery {DeliveryId} returned failure: {Error}",
                         fresh.Id, result.Error);
 
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "3PL timeout handling for delivery {DeliveryId} threw", request.Id);
+                _logger.LogError(ex, "3PL reconcile for delivery {DeliveryId} threw", request.Id);
             }
         }
     }
 
     /// <summary>
-    /// Asks the provider what actually happened to <paramref name="taskId"/> before we consider
-    /// cancelling it, and adopts an assignment we never got a webhook for.
+    /// Asks the provider what actually happened to <paramref name="taskId"/>, and adopts an
+    /// assignment we never got a webhook for.
     /// </summary>
     /// <returns>
-    /// <see cref="ThirdPartyTaskProgress.Searching"/> ONLY when the provider positively confirms it
-    /// is still hunting for an agent — the one case where cancelling and re-booking is correct.
-    /// Every other outcome (assigned, dead, unrecognised, or the status call failing) returns
-    /// something else, which the caller must treat as "leave this booking alone".
+    /// <see cref="ThirdPartyTaskProgress.CancelledOrFailed"/> ONLY when the provider itself says the
+    /// task is dead — the one case where re-booking is correct, because nobody is coming on it.
+    /// Every other outcome (assigned, still searching, unrecognised, or the status call failing)
+    /// means the provider still owns the delivery and the caller must leave the booking alone.
     /// </returns>
     private async Task<ThirdPartyTaskProgress> ResolveProviderProgressAsync(
         IThirdPartyDeliveryProvider provider,
@@ -288,7 +288,7 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
             // assumed it was, we cancelled a live rider and double-booked. Leave the task alone
             // and re-check on the next sweep.
             _logger.LogError(
-                "3PL timeout: could not read provider status for task {TaskId} (delivery {DeliveryId}): {Error}. " +
+                "3PL reconcile: could not read provider status for task {TaskId} (delivery {DeliveryId}): {Error}. " +
                 "Leaving the booking untouched rather than risk cancelling a live rider.",
                 taskId, fresh.Id, status.ErrorMessage);
             return ThirdPartyTaskProgress.Unknown;
@@ -302,7 +302,7 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
                 // The provider DID assign an agent — we simply never received the webhook.
                 // Adopt it instead of cancelling. This is the missed-webhook self-heal.
                 _logger.LogWarning(
-                    "3PL timeout: provider reports task {TaskId} is at '{State}' (rider '{RiderName}') for delivery " +
+                    "3PL reconcile: provider reports task {TaskId} is at '{State}' (rider '{RiderName}') for delivery " +
                     "{DeliveryId} — the assignment webhook never arrived. Adopting it instead of re-booking.",
                     taskId, status.State, status.RiderName, fresh.Id);
 
@@ -316,30 +316,32 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
 
                 if (!await repository.TryUpdateAsync(fresh, ct))
                     _logger.LogInformation(
-                        "3PL timeout: adopting assignment for delivery {DeliveryId} lost a concurrency race; " +
+                        "3PL reconcile: adopting assignment for delivery {DeliveryId} lost a concurrency race; " +
                         "the winning write already moved it on.",
                         fresh.Id);
                 break;
 
             case ThirdPartyTaskProgress.CancelledOrFailed:
                 _logger.LogWarning(
-                    "3PL timeout: provider reports task {TaskId} is dead ('{State}') for delivery {DeliveryId}; " +
-                    "re-booking without cancelling.",
+                    "3PL: provider reports task {TaskId} is dead ('{State}') for delivery {DeliveryId}; " +
+                    "nobody is coming on this task, so a fresh booking is needed.",
                     taskId, status.State, fresh.Id);
                 break;
 
             case ThirdPartyTaskProgress.Unknown:
                 _logger.LogError(
-                    "3PL timeout: unrecognised provider state '{State}' for task {TaskId} (delivery {DeliveryId}). " +
+                    "3PL reconcile: unrecognised provider state '{State}' for task {TaskId} (delivery {DeliveryId}). " +
                     "Leaving the booking untouched — treating an unknown state as 'no rider' risks cancelling a live one.",
                     status.State, taskId, fresh.Id);
                 break;
 
             case ThirdPartyTaskProgress.Searching:
-                _logger.LogWarning(
-                    "3PL timeout: provider confirms task {TaskId} is still searching ('{State}') for delivery " +
-                    "{DeliveryId}; cancelling and re-booking a fresh task.",
-                    taskId, status.State, fresh.Id);
+                // Not a problem to fix — the provider is still working the order and will deliver it.
+                // Re-booking here would throw away a live commitment and pay for a second one.
+                _logger.LogInformation(
+                    "3PL: provider is still searching for an agent on task {TaskId} ('{State}') for delivery " +
+                    "{DeliveryId} after {Minutes}min. Leaving it with them.",
+                    taskId, status.State, fresh.Id, _dispatchOptions.ThirdPartySearchTimeoutMinutes);
                 break;
         }
 
