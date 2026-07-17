@@ -263,7 +263,7 @@ public class OrderAggregateTests
         order.Confirm();
         order.StartPreparing();
         order.MarkReadyForPickup();
-        order.AssignRider(riderId);
+        order.AssignRider(riderId, isOwnFleet: true);
         order.MarkPickedUp();
         order.MarkDelivered();
 
@@ -293,7 +293,7 @@ public class OrderAggregateTests
         order.MarkReadyForPickup();
         order.Status.Should().Be(OrderStatus.ReadyForPickup);
 
-        order.AssignRider(riderId, "Suresh", "+919876543210");
+        order.AssignRider(riderId, isOwnFleet: true, "Suresh", "+919876543210");
         order.MarkPickedUp();
         order.Status.Should().Be(OrderStatus.PickedUp);
 
@@ -311,7 +311,7 @@ public class OrderAggregateTests
         order.Confirm();
         order.StartPreparing();
         order.MarkReadyForPickup();
-        order.AssignRider(Guid.NewGuid());
+        order.AssignRider(Guid.NewGuid(), isOwnFleet: true);
         order.MarkPickedUp();
         order.MarkDelivered();
 

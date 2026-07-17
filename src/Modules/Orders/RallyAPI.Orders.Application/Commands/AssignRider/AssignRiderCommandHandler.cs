@@ -53,7 +53,8 @@ public sealed class AssignRiderCommandHandler : IRequestHandler<AssignRiderComma
 
         try
         {
-            order.UpdateRiderInfo(command.RiderId, command.RiderName, command.RiderPhone);
+            // Admin/restaurant manual assignment names a Rally rider by id — never a 3PL agent.
+            order.UpdateRiderInfo(command.RiderId, isOwnFleet: true, command.RiderName, command.RiderPhone);
 
             _orderRepository.Update(order);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

@@ -361,8 +361,9 @@ public sealed class Order : AggregateRoot
 
     /// <summary>
     /// Assigns a rider to the order. Only valid for delivery orders.
+    /// <paramref name="isOwnFleet"/> must reflect the Delivery module's FleetType for this delivery.
     /// </summary>
-    public void AssignRider(Guid? riderId, string? riderName = null, string? riderPhone = null, string? trackingUrl = null)
+    public void AssignRider(Guid? riderId, bool isOwnFleet, string? riderName = null, string? riderPhone = null, string? trackingUrl = null)
     {
         if (FulfillmentType == FulfillmentType.Pickup)
             throw new InvalidOperationException("Cannot assign rider to a pickup order");
@@ -370,7 +371,7 @@ public sealed class Order : AggregateRoot
         if (DeliveryInfo is null)
             throw new InvalidOperationException("Cannot assign rider: no delivery info");
 
-        DeliveryInfo.AssignRider(riderId, riderName, riderPhone);
+        DeliveryInfo.AssignRider(riderId, isOwnFleet, riderName, riderPhone);
 
         if (!string.IsNullOrWhiteSpace(trackingUrl))
         {
@@ -499,8 +500,9 @@ public sealed class Order : AggregateRoot
 
     /// <summary>
     /// Updates rider info (called when Delivery Module assigns rider).
+    /// <paramref name="isOwnFleet"/> must reflect the Delivery module's FleetType for this delivery.
     /// </summary>
-    public void UpdateRiderInfo(Guid? riderId, string? riderName = null, string? riderPhone = null)
+    public void UpdateRiderInfo(Guid? riderId, bool isOwnFleet, string? riderName = null, string? riderPhone = null)
     {
         if (Status.IsTerminal())
             throw new InvalidOperationException("Cannot update rider for completed order");
@@ -508,7 +510,7 @@ public sealed class Order : AggregateRoot
         if (FulfillmentType == FulfillmentType.Pickup || DeliveryInfo is null)
             throw new InvalidOperationException("Cannot update rider for a pickup order");
 
-        DeliveryInfo.AssignRider(riderId, riderName, riderPhone);
+        DeliveryInfo.AssignRider(riderId, isOwnFleet, riderName, riderPhone);
         UpdatedAt = DateTime.UtcNow;
     }
 
