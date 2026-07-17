@@ -205,6 +205,22 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
 
                 var taskId = fresh.ExternalTaskId;
 
+                // Our status saying Searching3PL only means no webhook reached us — it is NOT
+                // evidence that the provider found nobody. Ask the provider before touching a
+                // live booking: cancelling here would strand a real rider mid-delivery and book
+                // a second one we also pay for. Anything short of "the provider confirms it is
+                // still searching" means hands off.
+                if (!string.IsNullOrEmpty(taskId))
+                {
+                    var progress = await ResolveProviderProgressAsync(provider, repository, fresh, taskId, ct);
+
+                    // Assigned → adopted above, nothing to re-book. Unknown → we don't know, so we
+                    // must not touch it. Only a confirmed "still searching" or a dead task earns a
+                    // cancel + re-book below.
+                    if (progress is ThirdPartyTaskProgress.AssignedOrBeyond or ThirdPartyTaskProgress.Unknown)
+                        continue;
+                }
+
                 // Reset the 3PL search FIRST (xmin-guarded), clearing the stale task so the next
                 // dispatch books a FRESH one. If a concurrent webhook assigned an agent, this loses
                 // the race — skip, don't cancel the live task. We never give up on 3PL for lack of
@@ -238,11 +254,95 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
                     _logger.LogWarning(
                         "3PL re-book after timeout for delivery {DeliveryId} returned failure: {Error}",
                         fresh.Id, result.Error);
+
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "3PL timeout handling for delivery {DeliveryId} threw", request.Id);
             }
         }
+    }
+
+    /// <summary>
+    /// Asks the provider what actually happened to <paramref name="taskId"/> before we consider
+    /// cancelling it, and adopts an assignment we never got a webhook for.
+    /// </summary>
+    /// <returns>
+    /// <see cref="ThirdPartyTaskProgress.Searching"/> ONLY when the provider positively confirms it
+    /// is still hunting for an agent — the one case where cancelling and re-booking is correct.
+    /// Every other outcome (assigned, dead, unrecognised, or the status call failing) returns
+    /// something else, which the caller must treat as "leave this booking alone".
+    /// </returns>
+    private async Task<ThirdPartyTaskProgress> ResolveProviderProgressAsync(
+        IThirdPartyDeliveryProvider provider,
+        IDeliveryRequestRepository repository,
+        DeliveryRequest fresh,
+        string taskId,
+        CancellationToken ct)
+    {
+        var status = await provider.GetTaskStatusAsync(taskId, ct);
+
+        if (!status.IsSuccess)
+        {
+            // We could not find out. Silence is not evidence of "no rider" — the last time we
+            // assumed it was, we cancelled a live rider and double-booked. Leave the task alone
+            // and re-check on the next sweep.
+            _logger.LogError(
+                "3PL timeout: could not read provider status for task {TaskId} (delivery {DeliveryId}): {Error}. " +
+                "Leaving the booking untouched rather than risk cancelling a live rider.",
+                taskId, fresh.Id, status.ErrorMessage);
+            return ThirdPartyTaskProgress.Unknown;
+        }
+
+        var progress = ThirdPartyTaskStateClassifier.Classify(status.State);
+
+        switch (progress)
+        {
+            case ThirdPartyTaskProgress.AssignedOrBeyond:
+                // The provider DID assign an agent — we simply never received the webhook.
+                // Adopt it instead of cancelling. This is the missed-webhook self-heal.
+                _logger.LogWarning(
+                    "3PL timeout: provider reports task {TaskId} is at '{State}' (rider '{RiderName}') for delivery " +
+                    "{DeliveryId} — the assignment webhook never arrived. Adopting it instead of re-booking.",
+                    taskId, status.State, status.RiderName, fresh.Id);
+
+                fresh.Assign3PLRider(
+                    taskId,
+                    fresh.ExternalLspName ?? "ProRouting",
+                    status.RiderName,
+                    status.RiderPhone,
+                    status.TrackingUrl ?? fresh.ExternalTrackingUrl,
+                    fresh.QuotedPrice);
+
+                if (!await repository.TryUpdateAsync(fresh, ct))
+                    _logger.LogInformation(
+                        "3PL timeout: adopting assignment for delivery {DeliveryId} lost a concurrency race; " +
+                        "the winning write already moved it on.",
+                        fresh.Id);
+                break;
+
+            case ThirdPartyTaskProgress.CancelledOrFailed:
+                _logger.LogWarning(
+                    "3PL timeout: provider reports task {TaskId} is dead ('{State}') for delivery {DeliveryId}; " +
+                    "re-booking without cancelling.",
+                    taskId, status.State, fresh.Id);
+                break;
+
+            case ThirdPartyTaskProgress.Unknown:
+                _logger.LogError(
+                    "3PL timeout: unrecognised provider state '{State}' for task {TaskId} (delivery {DeliveryId}). " +
+                    "Leaving the booking untouched — treating an unknown state as 'no rider' risks cancelling a live one.",
+                    status.State, taskId, fresh.Id);
+                break;
+
+            case ThirdPartyTaskProgress.Searching:
+                _logger.LogWarning(
+                    "3PL timeout: provider confirms task {TaskId} is still searching ('{State}') for delivery " +
+                    "{DeliveryId}; cancelling and re-booking a fresh task.",
+                    taskId, status.State, fresh.Id);
+                break;
+        }
+
+        return progress;
     }
 }
