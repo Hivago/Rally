@@ -331,7 +331,9 @@ public sealed class Order : AggregateRoot
 
         EnsureValidTransition(OrderStatus.PickedUp);
 
-        if (DeliveryInfo is null || !DeliveryInfo.RiderId.HasValue || DeliveryInfo.RiderId == Guid.Empty)
+        // A rider is "assigned" once DeliveryInfo.AssignedAt is set — true for both
+        // own-fleet riders (internal RiderId) and 3PL riders (external, no internal GUID).
+        if (DeliveryInfo is null || DeliveryInfo.AssignedAt is null)
             throw new InvalidOperationException("Cannot mark order as picked up: no rider has been assigned.");
 
         Status = OrderStatus.PickedUp;
@@ -368,7 +370,7 @@ public sealed class Order : AggregateRoot
         if (DeliveryInfo is null)
             throw new InvalidOperationException("Cannot assign rider: no delivery info");
 
-        DeliveryInfo.AssignRider(riderId ?? Guid.Empty, riderName, riderPhone);
+        DeliveryInfo.AssignRider(riderId, riderName, riderPhone);
 
         if (!string.IsNullOrWhiteSpace(trackingUrl))
         {
@@ -506,7 +508,7 @@ public sealed class Order : AggregateRoot
         if (FulfillmentType == FulfillmentType.Pickup || DeliveryInfo is null)
             throw new InvalidOperationException("Cannot update rider for a pickup order");
 
-        DeliveryInfo.AssignRider(riderId ?? Guid.Empty, riderName, riderPhone);
+        DeliveryInfo.AssignRider(riderId, riderName, riderPhone);
         UpdatedAt = DateTime.UtcNow;
     }
 
