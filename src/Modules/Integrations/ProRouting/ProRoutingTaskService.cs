@@ -302,19 +302,38 @@ public sealed class ProRoutingTaskService : IThirdPartyDeliveryProvider, IIgmPro
                 return TaskStatusResult.Failure($"API error: {response.StatusCode}", ProviderName);
             }
 
-            var payload = JsonSerializer.Deserialize<ProRoutingWebhookPayload>(content, JsonOptions);
+            var payload = JsonSerializer.Deserialize<ProRoutingStatusResponse>(content, JsonOptions);
 
             if (payload is null)
             {
                 return TaskStatusResult.Failure("Empty response", ProviderName);
             }
 
+            // ProRouting reports failure as {"status":0,"message":"..."} with HTTP 200, so the
+            // HTTP code above is not enough — a bad request here would otherwise parse to an
+            // empty state and be reported as a successful "no news" status.
+            if (payload.Status != 1 || payload.Order is null)
+            {
+                _logger.LogWarning(
+                    "ProRouting status for task {TaskId} returned status={Status}: {Message}",
+                    taskId, payload.Status, payload.Message);
+                return TaskStatusResult.Failure(
+                    payload.Message ?? "Provider reported a non-success status", ProviderName);
+            }
+
+            var order = payload.Order;
+
+            if (string.IsNullOrWhiteSpace(order.State))
+            {
+                return TaskStatusResult.Failure("Provider returned no state", ProviderName);
+            }
+
             return TaskStatusResult.Success(
-                taskId: payload.OrderId,
-                state: payload.State,
-                riderName: payload.Agent?.Name,
-                riderPhone: payload.Agent?.Phone,
-                trackingUrl: payload.TrackingUrl,
+                taskId: string.IsNullOrWhiteSpace(order.Id) ? taskId : order.Id,
+                state: order.State,
+                riderName: order.Rider?.Name,
+                riderPhone: order.Rider?.Phone,
+                trackingUrl: order.TrackingUrl,
                 providerName: ProviderName);
         }
         catch (Exception ex)

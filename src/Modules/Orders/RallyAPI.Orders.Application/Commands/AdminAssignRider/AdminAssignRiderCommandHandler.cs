@@ -49,7 +49,8 @@ public sealed class AdminAssignRiderCommandHandler : IRequestHandler<AdminAssign
 
         try
         {
-            order.AssignRider(rider.RiderId, rider.Name, rider.Phone);
+            // Admin manual assignment always targets a Rally rider looked up above, never a 3PL agent.
+            order.AssignRider(rider.RiderId, isOwnFleet: true, rider.Name, rider.Phone);
 
             _orderRepository.Update(order);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

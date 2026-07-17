@@ -96,14 +96,31 @@ public sealed class DeliveryInfo : BaseEntity
     }
 
     /// <summary>
-    /// Assigns a rider to the delivery
+    /// Assigns a rider to the delivery.
+    /// <paramref name="isOwnFleet"/> is the authoritative fleet discriminator and must come from
+    /// the Delivery module's FleetType — never infer it from whether an id happens to be present.
+    /// An own-fleet rider always has an internal <paramref name="riderId"/>; a third-party (3PL)
+    /// rider never does, and may not even have a name yet (the provider can report an assignment
+    /// before it reports the agent). <see cref="RiderId"/> staying null for 3PL is what keeps
+    /// own-rider queries — earnings, stats, order auth — from ever matching a 3PL rider.
+    /// <see cref="AssignedAt"/> is the canonical "a rider has been assigned" signal for both fleets.
     /// </summary>
-    public void AssignRider(Guid riderId, string? riderName = null, string? riderPhone = null)
+    public void AssignRider(Guid? riderId, bool isOwnFleet, string? riderName = null, string? riderPhone = null)
     {
-        if (riderId == Guid.Empty)
-            throw new ArgumentException("Rider ID is required", nameof(riderId));
+        if (isOwnFleet)
+        {
+            if (!riderId.HasValue || riderId.Value == Guid.Empty)
+                throw new ArgumentException("An own-fleet rider requires an internal rider id", nameof(riderId));
 
-        RiderId = riderId;
+            RiderId = riderId;
+        }
+        else
+        {
+            // A 3PL rider has no Rally account, so never keep an id for one even if a caller
+            // passes a stray value — that id would make them look like own fleet downstream.
+            RiderId = null;
+        }
+
         RiderName = riderName;
         RiderPhone = riderPhone;
         AssignedAt = DateTime.UtcNow;
