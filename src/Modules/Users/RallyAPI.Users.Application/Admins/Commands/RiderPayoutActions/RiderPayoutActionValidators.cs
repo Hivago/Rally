@@ -2,14 +2,6 @@ using FluentValidation;
 
 namespace RallyAPI.Users.Application.Admins.Commands.RiderPayoutActions;
 
-public sealed class PayNowRiderPayoutCommandValidator : AbstractValidator<PayNowRiderPayoutCommand>
-{
-    public PayNowRiderPayoutCommandValidator()
-    {
-        RuleFor(x => x.PayoutId).NotEmpty();
-    }
-}
-
 public sealed class HoldRiderPayoutCommandValidator : AbstractValidator<HoldRiderPayoutCommand>
 {
     public HoldRiderPayoutCommandValidator()

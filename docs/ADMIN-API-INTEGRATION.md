@@ -665,22 +665,26 @@ The restaurant tab on the payouts page. Rider tab (Page 4B) coming soon.
 
 ### Status semantics
 
-A restaurant payout transitions through:
+Restaurant payouts are settled **manually via ICICI bulk bank transfer**, not an automated
+gateway. A payout transitions through:
 
 ```
-Pending → Processing → Paid     (normal weekly auto-run path)
+Pending → Processing → Paid     (exported into the weekly ICICI file, then bank-reconciled)
 Pending → OnHold → Pending      (admin pause + release)
-Pending → Paid                  (admin pay-now, skips Processing)
-Pending → Failed → Pending      (admin retry after gateway failure)
+Processing → Failed → Pending   (ICICI rejected the row; admin fixes bank details, retries)
 ```
 
 | Value | Meaning |
 |---|---|
-| `Pending` | Awaiting next auto-run or admin action |
-| `Processing` | Auto-run is currently transferring funds |
-| `Paid` | Transfer complete, has `transactionReference` and `paidAt` |
-| `Failed` | Gateway returned an error |
-| `OnHold` | Admin paused — auto-run skips this row |
+| `Pending` | Awaiting the next weekly export or admin action |
+| `Processing` | Included in an exported ICICI file, awaiting the bank statement upload that reconciles it |
+| `Paid` | Reconciled against the ICICI bank statement — has a real `transactionReference` (UTR) and `paidAt` |
+| `Failed` | ICICI rejected this row (e.g. bad account) — reason recorded, fixable via retry |
+| `OnHold` | Admin paused — excluded from export until released |
+
+There is no "pay-now" action — a payout can only become `Paid` by reconciling an actual
+ICICI bank statement (`POST /api/admin/payouts/restaurant/reconcile`, see below), so
+`transactionReference` is always a real bank-issued UTR, never a synthetic value.
 
 ### `GET /api/admin/payouts/restaurant/summary` — stats card
 
@@ -752,24 +756,14 @@ Pending → Failed → Pending      (admin retry after gateway failure)
 - 1 outlet: that restaurant's name (e.g. `"Pizza Paradise"`)
 - N outlets: `"Owner Name (N outlets)"` (e.g. `"Yash Vishwakarma (3 outlets)"`)
 
-### `POST /api/admin/payouts/restaurant/{payoutId}/pay-now` — trigger immediate payout
+### Export & reconcile — ICICI manual payout flow
 
-No body. Calls the gateway (currently `StubPayoutGateway` returning a synthetic
-`STUB-RESTAURANT-...` reference) and marks the payout as `Paid`.
-
-**Response 200:**
-```json
-{
-  "transactionReference": "STUB-RESTAURANT-20260429092616598-6c4d6607",
-  "status": "Paid"
-}
-```
-
-**Errors:**
-- `404 Payout.NotFound`
-- `409 Conflict.Error` — already `Paid`
-- `409 Conflict.Error` — not in `Pending` or `OnHold` (e.g. trying to pay-now a `Failed` payout — use retry first)
-- `400 Payout.GatewayFailed` — gateway returned failure
+Replaces the old gateway-based "pay-now" button. Endpoints documented separately once built
+(see `specs/icici-manual-payout-export.md`):
+- `POST /api/admin/payouts/restaurant/export` — generates the weekly ICICI bulk-transfer
+  `.xlsx`, flips included payouts `Pending → Processing`.
+- `POST /api/admin/payouts/restaurant/reconcile` — upload the ICICI bank statement;
+  matches rows by amount, applies `Processing → Paid` (with UTR) or `→ Failed` (with reason).
 
 ### `POST /api/admin/payouts/restaurant/{payoutId}/hold` — pause payout
 
@@ -799,8 +793,7 @@ No body.
 ### `POST /api/admin/payouts/restaurant/{payoutId}/retry` — retry failed payout
 
 No body. Moves a `Failed` payout back to `Pending` and clears `failureReason`.
-Next auto-run picks it up. (Combine with `pay-now` if the admin wants to retry
-immediately.)
+Picked up by the next weekly ICICI export.
 
 **Response 204** on success.
 

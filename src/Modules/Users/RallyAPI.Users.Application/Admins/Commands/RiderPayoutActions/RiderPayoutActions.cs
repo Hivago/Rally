@@ -1,90 +1,14 @@
 using MediatR;
-using Microsoft.Extensions.Logging;
-using RallyAPI.SharedKernel.Abstractions.Payouts;
 using RallyAPI.SharedKernel.Results;
 using RallyAPI.Users.Application.Abstractions;
 using RallyAPI.Users.Domain.Enums;
 
 namespace RallyAPI.Users.Application.Admins.Commands.RiderPayoutActions;
 
-public sealed record RiderPayNowResponse(string TransactionReference, string Status);
-
-public sealed record PayNowRiderPayoutCommand(Guid PayoutId)
-    : IRequest<Result<RiderPayNowResponse>>;
-
-public sealed class PayNowRiderPayoutCommandHandler
-    : IRequestHandler<PayNowRiderPayoutCommand, Result<RiderPayNowResponse>>
-{
-    private readonly IRiderPayoutLedgerRepository _payouts;
-    private readonly IPayoutGateway _gateway;
-    private readonly IUnitOfWork _uow;
-    private readonly ILogger<PayNowRiderPayoutCommandHandler> _log;
-
-    public PayNowRiderPayoutCommandHandler(
-        IRiderPayoutLedgerRepository payouts,
-        IPayoutGateway gateway,
-        IUnitOfWork uow,
-        ILogger<PayNowRiderPayoutCommandHandler> log)
-    {
-        _payouts = payouts;
-        _gateway = gateway;
-        _uow = uow;
-        _log = log;
-    }
-
-    public async Task<Result<RiderPayNowResponse>> Handle(
-        PayNowRiderPayoutCommand cmd,
-        CancellationToken ct)
-    {
-        var payout = await _payouts.GetByIdAsync(cmd.PayoutId, ct);
-        if (payout is null)
-            return Result.Failure<RiderPayNowResponse>(Error.NotFound("RiderPayout", cmd.PayoutId));
-
-        if (payout.Status == RiderPayoutStatus.Paid)
-            return Result.Failure<RiderPayNowResponse>(Error.Conflict("Rider payout has already been paid."));
-
-        if (payout.Status != RiderPayoutStatus.Pending && payout.Status != RiderPayoutStatus.OnHold)
-            return Result.Failure<RiderPayNowResponse>(
-                Error.Conflict($"Cannot pay-now from {payout.Status} status."));
-
-        PayoutResult gatewayResult = await _gateway.TriggerAsync(
-            payout.RiderId,
-            payout.NetPayable,
-            "Rider",
-            ct);
-
-        if (!gatewayResult.IsSuccess)
-        {
-            _log.LogWarning("Rider payout gateway failure for {PayoutId}: {Reason}",
-                cmd.PayoutId,
-                gatewayResult.FailureReason);
-
-            return Result.Failure<RiderPayNowResponse>(
-                Error.Create("RiderPayout.GatewayFailed", gatewayResult.FailureReason ?? "Gateway returned failure."));
-        }
-
-        string transactionReference = $"STUB-RIDER-{Guid.NewGuid():N}";
-
-        try
-        {
-            payout.MarkPaidImmediate(transactionReference);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<RiderPayNowResponse>(Error.Conflict(ex.Message));
-        }
-
-        _payouts.Update(payout);
-        await _uow.SaveChangesAsync(ct);
-
-        _log.LogInformation(
-            "Admin pay-now: rider payout {PayoutId} paid via gateway txn {TxnRef}",
-            cmd.PayoutId,
-            transactionReference);
-
-        return Result.Success(new RiderPayNowResponse(transactionReference, payout.Status.ToString()));
-    }
-}
+// Pay-now (gateway-triggered) is intentionally not implemented. Rider payouts are settled
+// manually via ICICI bulk transfer — "Paid" is only ever set by reconciling the bank
+// statement (see ReconcileRiderPayoutsCommand), never by an admin button that claims money
+// moved without a real bank-issued UTR.
 
 public sealed record HoldRiderPayoutCommand(Guid PayoutId, string? Reason) : IRequest<Result>;
 
