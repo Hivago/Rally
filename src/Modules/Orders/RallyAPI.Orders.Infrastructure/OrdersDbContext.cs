@@ -22,6 +22,7 @@ public sealed class OrdersDbContext : DbContext
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Payout> Payouts => Set<Payout>();
     public DbSet<PayoutLedger> PayoutLedgers => Set<PayoutLedger>();
+    public DbSet<RestaurantPayoutExportBatch> RestaurantPayoutExportBatches => Set<RestaurantPayoutExportBatch>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

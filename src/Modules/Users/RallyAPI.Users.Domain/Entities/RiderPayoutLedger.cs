@@ -5,8 +5,9 @@ namespace RallyAPI.Users.Domain.Entities;
 
 /// <summary>
 /// Per-rider weekly payout cycle. Aggregated by RiderPayoutAggregationJob from
-/// delivered orders in the cycle. Admin can hold / release / retry / pay-now via
-/// the methods below — same lifecycle as the restaurant-side Payout aggregate.
+/// delivered orders in the cycle. Admin can hold / release / retry via the methods
+/// below; Paid is reached only by reconciling the ICICI bank statement — same
+/// lifecycle as the restaurant-side Payout aggregate.
 /// </summary>
 public sealed class RiderPayoutLedger : AggregateRoot
 {
@@ -30,6 +31,10 @@ public sealed class RiderPayoutLedger : AggregateRoot
     public DateTime? PaidAtUtc { get; private set; }
     public string? FailureReason { get; private set; }
     public string? TransactionReference { get; private set; }
+
+    /// <summary>Batch this payout was included in when last exported to the ICICI bulk-transfer file.</summary>
+    public Guid? ExportBatchId { get; private set; }
+    public DateTime? ExportedAtUtc { get; private set; }
 
     // EF Core
     private RiderPayoutLedger() { }
@@ -133,10 +138,33 @@ public sealed class RiderPayoutLedger : AggregateRoot
         MarkAsUpdated();
     }
 
-    public void MarkPaidImmediate(string transactionReference)
+    /// <summary>
+    /// Marks this payout as included in an exported ICICI bulk-transfer file. Only a Pending
+    /// payout can be exported — Processing/OnHold/Paid/Failed payouts are never re-included
+    /// in a later export, which is what makes double-export (and so double-pay) impossible.
+    /// </summary>
+    public void MarkProcessing(Guid exportBatchId)
     {
-        if (Status != RiderPayoutStatus.Pending && Status != RiderPayoutStatus.OnHold)
-            throw new InvalidOperationException($"Cannot pay-now from {Status} status.");
+        if (Status != RiderPayoutStatus.Pending)
+            throw new InvalidOperationException($"Cannot process payout in {Status} status.");
+
+        if (exportBatchId == Guid.Empty)
+            throw new ArgumentException("Export batch ID is required.", nameof(exportBatchId));
+
+        Status = RiderPayoutStatus.Processing;
+        ExportBatchId = exportBatchId;
+        ExportedAtUtc = DateTime.UtcNow;
+        MarkAsUpdated();
+    }
+
+    /// <summary>
+    /// Marks this payout as Paid after reconciling the ICICI bank statement. Requires the
+    /// real bank-issued UTR — this is the only path to Paid (see ReconcileRiderPayoutsCommand).
+    /// </summary>
+    public void MarkPaid(string transactionReference)
+    {
+        if (Status != RiderPayoutStatus.Processing)
+            throw new InvalidOperationException($"Cannot mark as paid from {Status} status.");
 
         if (string.IsNullOrWhiteSpace(transactionReference))
             throw new ArgumentException("Transaction reference is required.", nameof(transactionReference));

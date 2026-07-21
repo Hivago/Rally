@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RallyAPI.Orders.Infrastructure;
@@ -11,9 +12,11 @@ using RallyAPI.Orders.Infrastructure;
 namespace RallyAPI.Orders.Infrastructure.Migrations
 {
     [DbContext(typeof(OrdersDbContext))]
-    partial class OrdersDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260720154736_AddRestaurantPayoutExportBatch")]
+    partial class AddRestaurantPayoutExportBatch
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -698,12 +701,6 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
-                    b.Property<uint>("xmin")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ExportBatchId")
@@ -716,7 +713,6 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasDatabaseName("ix_payouts_status");
 
                     b.HasIndex("OwnerId", "PeriodStart", "PeriodEnd")
-                        .IsUnique()
                         .HasDatabaseName("ix_payouts_owner_period");
 
                     b.ToTable("payouts", "orders");

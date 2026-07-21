@@ -24,6 +24,7 @@ namespace RallyAPI.Users.Infrastructure.Persistence
         public DbSet<Admin> Admins => Set<Admin>();
         public DbSet<RestaurantOwner> RestaurantOwners => Set<RestaurantOwner>();
         public DbSet<RiderPayoutLedger> RiderPayoutLedger => Set<RiderPayoutLedger>();
+        public DbSet<RiderPayoutExportBatch> RiderPayoutExportBatches => Set<RiderPayoutExportBatch>();
 
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
         public DbSet<RestaurantTimeOff> RestaurantTimeOffs => Set<RestaurantTimeOff>();

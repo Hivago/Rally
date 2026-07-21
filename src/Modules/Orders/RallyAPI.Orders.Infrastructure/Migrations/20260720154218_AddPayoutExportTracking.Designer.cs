@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RallyAPI.Orders.Infrastructure;
@@ -11,9 +12,11 @@ using RallyAPI.Orders.Infrastructure;
 namespace RallyAPI.Orders.Infrastructure.Migrations
 {
     [DbContext(typeof(OrdersDbContext))]
-    partial class OrdersDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260720154218_AddPayoutExportTracking")]
+    partial class AddPayoutExportTracking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -698,12 +701,6 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
-                    b.Property<uint>("xmin")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ExportBatchId")
@@ -716,7 +713,6 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasDatabaseName("ix_payouts_status");
 
                     b.HasIndex("OwnerId", "PeriodStart", "PeriodEnd")
-                        .IsUnique()
                         .HasDatabaseName("ix_payouts_owner_period");
 
                     b.ToTable("payouts", "orders");
@@ -823,79 +819,6 @@ namespace RallyAPI.Orders.Infrastructure.Migrations
                         .HasDatabaseName("ix_payout_ledger_owner_status");
 
                     b.ToTable("payout_ledger", "orders");
-                });
-
-            modelBuilder.Entity("RallyAPI.Orders.Domain.Entities.RestaurantPayoutExportBatch", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<decimal>("ControlSumTotal")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)")
-                        .HasColumnName("control_sum_total");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime>("GeneratedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("generated_at_utc");
-
-                    b.Property<Guid>("GeneratedByAdminId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("generated_by_admin_id");
-
-                    b.Property<string>("GeneratedFileHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("generated_file_hash");
-
-                    b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("date")
-                        .HasColumnName("period_end");
-
-                    b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("date")
-                        .HasColumnName("period_start");
-
-                    b.Property<DateTime?>("ReconciledAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("reconciled_at_utc");
-
-                    b.Property<Guid?>("ReconciledByAdminId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reconciled_by_admin_id");
-
-                    b.Property<string>("ReconciliationFileHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("reconciliation_file_hash");
-
-                    b.Property<int>("RowCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("row_count");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer")
-                        .HasColumnName("status");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Status")
-                        .HasDatabaseName("ix_restaurant_payout_export_batches_status");
-
-                    b.HasIndex("PeriodStart", "PeriodEnd")
-                        .HasDatabaseName("ix_restaurant_payout_export_batches_period");
-
-                    b.ToTable("restaurant_payout_export_batches", "orders");
                 });
 
             modelBuilder.Entity("RallyAPI.Orders.Infrastructure.Outbox.OutboxMessage", b =>

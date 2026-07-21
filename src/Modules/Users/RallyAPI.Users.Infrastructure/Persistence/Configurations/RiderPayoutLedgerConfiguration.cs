@@ -12,6 +12,12 @@ public sealed class RiderPayoutLedgerConfiguration : IEntityTypeConfiguration<Ri
         builder.ToTable("rider_payout_ledger", "users");
 
         builder.HasKey(r => r.Id);
+
+        // Optimistic concurrency via Postgres' system xmin column — see
+        // RallyAPI.Orders.Infrastructure.Configurations.PayoutConfiguration for the full
+        // rationale (same race: two admins exporting the same cycle at once). No DDL.
+        builder.UseXminAsConcurrencyToken();
+
         builder.Property(r => r.Id).HasColumnName("id").ValueGeneratedNever();
 
         builder.Property(r => r.RiderId).HasColumnName("rider_id").IsRequired();
@@ -54,6 +60,9 @@ public sealed class RiderPayoutLedgerConfiguration : IEntityTypeConfiguration<Ri
         builder.Property(r => r.FailureReason).HasColumnName("failure_reason").HasMaxLength(500);
         builder.Property(r => r.TransactionReference).HasColumnName("transaction_reference").HasMaxLength(100);
 
+        builder.Property(r => r.ExportBatchId).HasColumnName("export_batch_id");
+        builder.Property(r => r.ExportedAtUtc).HasColumnName("exported_at_utc");
+
         builder.Property(r => r.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(r => r.UpdatedAt).HasColumnName("updated_at").IsRequired();
 
@@ -63,8 +72,12 @@ public sealed class RiderPayoutLedgerConfiguration : IEntityTypeConfiguration<Ri
         builder.HasIndex(r => new { r.RiderId, r.CycleStartUtc, r.CycleEndUtc })
             .IsUnique()
             .HasDatabaseName("idx_rider_payout_ledger_rider_cycle");
+        builder.HasIndex(r => r.ExportBatchId)
+            .HasDatabaseName("idx_rider_payout_ledger_export_batch_id");
 
         // Same Ignore pattern as Payout / Cart — table doesn't carry these inherited columns.
+        // Concurrency is handled via xmin above rather than the app-managed Version counter
+        // (which nothing here increments).
         builder.Ignore(r => r.DeletedAt);
         builder.Ignore(r => r.Version);
         builder.Ignore(r => r.DomainEvents);

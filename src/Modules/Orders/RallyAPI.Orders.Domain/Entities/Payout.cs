@@ -26,6 +26,10 @@ public sealed class Payout : AggregateRoot
     public DateTime? PaidAt { get; private set; }
     public string? Notes { get; private set; }
 
+    /// <summary>Batch this payout was included in when last exported to the ICICI bulk-transfer file.</summary>
+    public Guid? ExportBatchId { get; private set; }
+    public DateTime? ExportedAtUtc { get; private set; }
+
     // EF Core
     private Payout() { }
 
@@ -67,12 +71,22 @@ public sealed class Payout : AggregateRoot
         };
     }
 
-    public void MarkProcessing()
+    /// <summary>
+    /// Marks this payout as included in an exported ICICI bulk-transfer file. Only a Pending
+    /// payout can be exported — Processing/OnHold/Paid/Failed payouts are never re-included
+    /// in a later export, which is what makes double-export (and so double-pay) impossible.
+    /// </summary>
+    public void MarkProcessing(Guid exportBatchId)
     {
         if (Status != PayoutStatus.Pending)
             throw new InvalidOperationException($"Cannot process payout in {Status} status.");
 
+        if (exportBatchId == Guid.Empty)
+            throw new ArgumentException("Export batch ID is required.", nameof(exportBatchId));
+
         Status = PayoutStatus.Processing;
+        ExportBatchId = exportBatchId;
+        ExportedAtUtc = DateTime.UtcNow;
         MarkAsUpdated();
     }
 
@@ -143,24 +157,6 @@ public sealed class Payout : AggregateRoot
 
         Status = PayoutStatus.Pending;
         Notes = null;
-        MarkAsUpdated();
-    }
-
-    /// <summary>
-    /// Admin pay-now: marks a Pending or OnHold payout as Paid via the gateway result.
-    /// Skips the Processing intermediate step that the scheduler uses.
-    /// </summary>
-    public void MarkPaidImmediate(string transactionReference)
-    {
-        if (Status != PayoutStatus.Pending && Status != PayoutStatus.OnHold)
-            throw new InvalidOperationException($"Cannot pay-now from {Status} status.");
-
-        if (string.IsNullOrWhiteSpace(transactionReference))
-            throw new ArgumentException("Transaction reference is required.", nameof(transactionReference));
-
-        Status = PayoutStatus.Paid;
-        TransactionReference = transactionReference.Trim();
-        PaidAt = DateTime.UtcNow;
         MarkAsUpdated();
     }
 }
