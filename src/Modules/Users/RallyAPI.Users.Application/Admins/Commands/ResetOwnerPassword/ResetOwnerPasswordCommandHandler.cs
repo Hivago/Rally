@@ -47,7 +47,7 @@ internal sealed class ResetOwnerPasswordCommandHandler
         var temporaryPassword = TemporaryPasswordGenerator.Generate();
         var newHash = _passwordHasher.Hash(temporaryPassword);
 
-        var updateResult = owner.UpdatePassword(newHash);
+        var updateResult = owner.ResetPassword(newHash);
         if (updateResult.IsFailure)
             return Result.Failure<ResetOwnerPasswordResponse>(updateResult.Error);
 

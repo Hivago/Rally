@@ -13,4 +13,5 @@ public sealed record LoginOwnerResponse(
     string Email,
     string AccessToken,
     string RefreshToken,
-    DateTime AccessTokenExpiresAt);
+    DateTime AccessTokenExpiresAt,
+    bool MustChangePassword);

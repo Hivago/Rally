@@ -47,7 +47,7 @@ internal sealed class ResetRestaurantPasswordCommandHandler
         var temporaryPassword = TemporaryPasswordGenerator.Generate();
         var newHash = _passwordHasher.Hash(temporaryPassword);
 
-        var updateResult = restaurant.UpdatePassword(newHash);
+        var updateResult = restaurant.ResetPassword(newHash);
         if (updateResult.IsFailure)
             return Result.Failure<ResetRestaurantPasswordResponse>(updateResult.Error);
 

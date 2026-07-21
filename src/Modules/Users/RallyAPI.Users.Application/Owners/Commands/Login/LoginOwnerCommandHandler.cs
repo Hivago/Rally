@@ -70,7 +70,8 @@ internal sealed class LoginOwnerCommandHandler
             owner.Email.Value,
             tokenPair.AccessToken,
             tokenPair.RefreshToken,
-            tokenPair.AccessTokenExpiresAt);
+            tokenPair.AccessTokenExpiresAt,
+            owner.MustChangePassword);
     }
 
     private static string HashToken(string token)
