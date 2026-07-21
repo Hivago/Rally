@@ -104,4 +104,21 @@ public class RiderRepository : IRiderRepository
         _context.Set<RiderKycDocument>().Remove(document);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, RiderBankDetails>> GetBankDetailsByIdsAsync(
+        IReadOnlyCollection<Guid> riderIds, CancellationToken cancellationToken = default)
+    {
+        if (riderIds.Count == 0)
+            return new Dictionary<Guid, RiderBankDetails>();
+
+        var riders = await _context.Riders
+            .AsNoTracking()
+            .Where(r => riderIds.Contains(r.Id))
+            .Select(r => new { r.Id, r.BankAccountNumber, r.BankIfscCode, r.BankAccountName })
+            .ToListAsync(cancellationToken);
+
+        return riders.ToDictionary(
+            r => r.Id,
+            r => new RiderBankDetails(r.Id, r.BankAccountNumber, r.BankIfscCode, r.BankAccountName));
+    }
+
 }

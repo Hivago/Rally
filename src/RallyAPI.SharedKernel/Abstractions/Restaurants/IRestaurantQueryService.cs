@@ -39,6 +39,16 @@ public interface IRestaurantQueryService
     Task<IReadOnlyDictionary<Guid, OwnerPayoutDisplay>> GetOwnerPayoutDisplaysAsync(
         IReadOnlyCollection<Guid> ownerIds,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// For each given owner id, returns the owner's current bank details, read live at call
+    /// time (not a stored snapshot). An owner missing from the result — or present with a
+    /// null field — has no usable bank details and must be excluded from an ICICI export,
+    /// never silently included with a blank account number.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, OwnerBankDetails>> GetOwnerBankDetailsAsync(
+        IReadOnlyCollection<Guid> ownerIds,
+        CancellationToken ct = default);
 }
 
 public sealed record OwnerPayoutDisplay(
@@ -46,4 +56,10 @@ public sealed record OwnerPayoutDisplay(
     string OwnerName,
     int OutletCount,
     string? FirstRestaurantName);
+
+public sealed record OwnerBankDetails(
+    Guid OwnerId,
+    string? BankAccountNumber,
+    string? BankIfscCode,
+    string? BankAccountName);
 

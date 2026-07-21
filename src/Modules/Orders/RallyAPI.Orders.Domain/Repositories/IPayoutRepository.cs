@@ -17,4 +17,11 @@ public interface IPayoutRepository
 
     Task<Payout?> GetCurrentPeriodPayoutAsync(
         Guid ownerId, DateOnly periodStart, DateOnly periodEnd, CancellationToken ct = default);
+
+    /// <summary>
+    /// All Pending payouts for an exact period. Used by the weekly ICICI export — only
+    /// Pending rows are ever eligible, which is what makes double-export impossible.
+    /// </summary>
+    Task<IReadOnlyList<Payout>> GetPendingByPeriodAsync(
+        DateOnly periodStart, DateOnly periodEnd, CancellationToken ct = default);
 }

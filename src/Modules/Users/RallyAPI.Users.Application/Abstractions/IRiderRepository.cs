@@ -22,4 +22,18 @@ public interface IRiderRepository
     // Version token). See ConfirmRiderKycDocumentCommandHandler.
     void AddKycDocument(RiderKycDocument document);
     void RemoveKycDocument(RiderKycDocument document);
+
+    /// <summary>
+    /// For each given rider id, returns current bank details, read live at call time (not a
+    /// stored snapshot). A rider missing from the result — or present with a null field — has
+    /// no usable bank details and must be excluded from an ICICI export.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, RiderBankDetails>> GetBankDetailsByIdsAsync(
+        IReadOnlyCollection<Guid> riderIds, CancellationToken cancellationToken = default);
 }
+
+public sealed record RiderBankDetails(
+    Guid RiderId,
+    string? BankAccountNumber,
+    string? BankIfscCode,
+    string? BankAccountName);
