@@ -58,4 +58,5 @@ public sealed record RestaurantPayoutRow(
     DateOnly CycleEnd,
     DateTime CreatedAtUtc,
     DateTime? PaidAtUtc,
+    DateTime? ExportedAtUtc,
     string? TransactionReference);

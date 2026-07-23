@@ -19,7 +19,8 @@ public sealed record RiderPayoutExportResult(
     string FileName,
     int RowCount,
     decimal ControlSumTotal,
-    IReadOnlyList<ExcludedRiderPayoutDto> Excluded);
+    IReadOnlyList<ExcludedRiderPayoutDto> Excluded,
+    DateTime GeneratedAtUtc);
 
 /// <summary>A Pending payout that could not be included in the export because the rider has no usable bank details.</summary>
 public sealed record ExcludedRiderPayoutDto(

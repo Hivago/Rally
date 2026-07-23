@@ -112,6 +112,6 @@ public sealed class GenerateRiderPayoutExportCommandHandler
         var fileName = $"rider-payouts-{request.CycleStartUtc:yyyyMMdd}-{request.CycleEndUtc:yyyyMMdd}.xlsx";
 
         return Result.Success(new RiderPayoutExportResult(
-            batch.Id, fileBytes, fileName, rows.Count, controlSum, excluded));
+            batch.Id, fileBytes, fileName, rows.Count, controlSum, excluded, batch.GeneratedAtUtc));
     }
 }

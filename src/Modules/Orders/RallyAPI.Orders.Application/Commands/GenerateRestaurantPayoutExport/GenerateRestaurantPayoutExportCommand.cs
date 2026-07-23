@@ -19,7 +19,8 @@ public sealed record RestaurantPayoutExportResult(
     string FileName,
     int RowCount,
     decimal ControlSumTotal,
-    IReadOnlyList<ExcludedRestaurantPayoutDto> Excluded);
+    IReadOnlyList<ExcludedRestaurantPayoutDto> Excluded,
+    DateTime GeneratedAtUtc);
 
 /// <summary>A Pending payout that could not be included in the export because its owner has no usable bank details.</summary>
 public sealed record ExcludedRestaurantPayoutDto(

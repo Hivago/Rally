@@ -153,4 +153,32 @@ public class GenerateRestaurantPayoutExportCommandHandlerTests
         result.Value.ControlSumTotal.Should().Be(payout1.NetPayoutAmount + payout2.NetPayoutAmount);
         result.Value.FileContent.Should().NotBeEmpty();
     }
+
+    [Fact]
+    public async Task Handle_ReturnsGeneratedAtUtc_MatchingThePersistedBatch()
+    {
+        var owner = Guid.NewGuid();
+        var payout = PendingPayout(owner, 500m, 30m);
+
+        _payoutRepository.GetPendingByPeriodAsync(PeriodStart, PeriodEnd, Arg.Any<CancellationToken>())
+            .Returns(new[] { payout });
+        _restaurantQueryService.GetOwnerBankDetailsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, OwnerBankDetails>
+            {
+                [owner] = new OwnerBankDetails(owner, "111", "ICIC0000001", "Owner One")
+            });
+
+        RestaurantPayoutExportBatch? savedBatch = null;
+        await _batchRepository.AddAsync(
+            Arg.Do<RestaurantPayoutExportBatch>(b => savedBatch = b), Arg.Any<CancellationToken>());
+
+        var result = await _handler.Handle(
+            new GenerateRestaurantPayoutExportCommand(PeriodStart, PeriodEnd, AdminId), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.GeneratedAtUtc.Should().NotBe(default);
+        savedBatch.Should().NotBeNull();
+        result.Value.GeneratedAtUtc.Should().Be(savedBatch!.GeneratedAtUtc);
+        result.Value.ExportBatchId.Should().Be(savedBatch.Id);
+    }
 }

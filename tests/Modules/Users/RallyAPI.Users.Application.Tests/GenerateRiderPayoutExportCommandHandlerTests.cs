@@ -118,4 +118,32 @@ public class GenerateRiderPayoutExportCommandHandlerTests
         result.Value.Excluded.Should().ContainSingle(e => e.PayoutId == zeroNetPayout.Id);
         zeroNetPayout.Status.Should().Be(RiderPayoutStatus.Pending);
     }
+
+    [Fact]
+    public async Task Handle_ReturnsGeneratedAtUtc_MatchingThePersistedBatch()
+    {
+        var rider = Guid.NewGuid();
+        var payout = PendingLedger(rider, 500m);
+
+        _ledgerRepository.GetPendingByCycleAsync(CycleStart, CycleEnd, Arg.Any<CancellationToken>())
+            .Returns(new[] { payout });
+        _riderRepository.GetBankDetailsByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, RiderBankDetails>
+            {
+                [rider] = new RiderBankDetails(rider, "111", "ICIC0000001", "Rider One")
+            });
+
+        RiderPayoutExportBatch? savedBatch = null;
+        await _batchRepository.AddAsync(
+            Arg.Do<RiderPayoutExportBatch>(b => savedBatch = b), Arg.Any<CancellationToken>());
+
+        var result = await _handler.Handle(
+            new GenerateRiderPayoutExportCommand(CycleStart, CycleEnd, AdminId), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.GeneratedAtUtc.Should().NotBe(default);
+        savedBatch.Should().NotBeNull();
+        result.Value.GeneratedAtUtc.Should().Be(savedBatch!.GeneratedAtUtc);
+        result.Value.ExportBatchId.Should().Be(savedBatch.Id);
+    }
 }

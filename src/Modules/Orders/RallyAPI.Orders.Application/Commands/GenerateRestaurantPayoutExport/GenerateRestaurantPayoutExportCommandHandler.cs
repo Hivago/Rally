@@ -114,6 +114,6 @@ public sealed class GenerateRestaurantPayoutExportCommandHandler
         var fileName = $"restaurant-payouts-{request.PeriodStart:yyyyMMdd}-{request.PeriodEnd:yyyyMMdd}.xlsx";
 
         return Result.Success(new RestaurantPayoutExportResult(
-            batch.Id, fileBytes, fileName, rows.Count, controlSum, excluded));
+            batch.Id, fileBytes, fileName, rows.Count, controlSum, excluded, batch.GeneratedAtUtc));
     }
 }

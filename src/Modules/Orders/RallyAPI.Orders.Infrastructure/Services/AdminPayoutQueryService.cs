@@ -118,6 +118,7 @@ public sealed class AdminPayoutQueryService : IAdminPayoutQueryService
                 p.PeriodEnd,
                 p.CreatedAt,
                 p.PaidAt,
+                p.ExportedAtUtc,
                 p.TransactionReference
             })
             .ToListAsync(cancellationToken);
@@ -140,6 +141,7 @@ public sealed class AdminPayoutQueryService : IAdminPayoutQueryService
                 r.PeriodEnd,
                 r.CreatedAt,
                 r.PaidAt,
+                r.ExportedAtUtc,
                 r.TransactionReference))
             .ToList();
 

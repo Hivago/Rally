@@ -49,7 +49,8 @@ public class ExportRestaurantPayouts : IEndpoint
             exportBatchId = result.Value.ExportBatchId,
             rowCount = result.Value.RowCount,
             controlSumTotal = result.Value.ControlSumTotal,
-            excluded = result.Value.Excluded
+            excluded = result.Value.Excluded,
+            generatedAtUtc = result.Value.GeneratedAtUtc
         });
         httpContext.Response.Headers["X-Payout-Export-Meta"] = meta;
         httpContext.Response.Headers["Access-Control-Expose-Headers"] = "X-Payout-Export-Meta";
