@@ -53,4 +53,14 @@ public class PayoutRepository : IPayoutRepository
                                    && p.PeriodStart == periodStart
                                    && p.PeriodEnd == periodEnd, ct);
     }
+
+    public async Task<IReadOnlyList<Payout>> GetPendingByPeriodAsync(
+        DateOnly periodStart, DateOnly periodEnd, CancellationToken ct = default)
+    {
+        return await _context.Payouts
+            .Where(p => p.Status == PayoutStatus.Pending
+                     && p.PeriodStart == periodStart
+                     && p.PeriodEnd == periodEnd)
+            .ToListAsync(ct);
+    }
 }

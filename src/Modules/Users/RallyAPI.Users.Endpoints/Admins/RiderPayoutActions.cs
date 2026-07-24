@@ -7,28 +7,8 @@ using RallyAPI.Users.Application.Admins.Commands.RiderPayoutActions;
 
 namespace RallyAPI.Users.Endpoints.Admins;
 
-public class PayNowRiderPayout : IEndpoint
-{
-    public void MapEndpoint(IEndpointRouteBuilder app)
-    {
-        app.MapPost("/api/admin/payouts/rider/{payoutId:guid}/pay-now", HandleAsync)
-            .WithName("PayNowRiderPayout")
-            .WithTags("Admins")
-            .WithSummary("Trigger immediate rider payout via gateway (admin panel)")
-            .RequireAuthorization("Admin");
-    }
-
-    private static async Task<IResult> HandleAsync(
-        Guid payoutId,
-        ISender sender,
-        CancellationToken ct)
-    {
-        var result = await sender.Send(new PayNowRiderPayoutCommand(payoutId), ct);
-        return result.IsSuccess
-            ? Results.Ok(result.Value)
-            : result.Error.ToErrorResult();
-    }
-}
+// Pay-now is intentionally removed — rider payouts are settled manually via ICICI bulk
+// transfer and reconciled by uploading the bank statement, never by a gateway button.
 
 public class HoldRiderPayout : IEndpoint
 {

@@ -12,6 +12,16 @@ public interface IRiderPayoutLedgerRepository
         DateTime cycleEndUtc,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// All Pending payouts for an exact cycle, across all riders. Used by the weekly ICICI
+    /// export — only Pending rows are ever eligible, which is what makes double-export
+    /// impossible.
+    /// </summary>
+    Task<IReadOnlyList<RiderPayoutLedger>> GetPendingByCycleAsync(
+        DateTime cycleStartUtc,
+        DateTime cycleEndUtc,
+        CancellationToken ct = default);
+
     Task<RiderEarningsBreakdown> GetEarningsBreakdownAsync(
         Guid riderId,
         DateTime nowUtc,

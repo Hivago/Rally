@@ -28,6 +28,18 @@ public sealed class RiderPayoutLedgerRepository : IRiderPayoutLedgerRepository
             && p.CycleEndUtc == cycleEndUtc,
             ct);
 
+    public async Task<IReadOnlyList<RiderPayoutLedger>> GetPendingByCycleAsync(
+        DateTime cycleStartUtc,
+        DateTime cycleEndUtc,
+        CancellationToken ct = default)
+    {
+        return await _context.RiderPayoutLedger
+            .Where(p => p.Status == RiderPayoutStatus.Pending
+                     && p.CycleStartUtc == cycleStartUtc
+                     && p.CycleEndUtc == cycleEndUtc)
+            .ToListAsync(ct);
+    }
+
     public async Task<RiderEarningsBreakdown> GetEarningsBreakdownAsync(
         Guid riderId,
         DateTime nowUtc,

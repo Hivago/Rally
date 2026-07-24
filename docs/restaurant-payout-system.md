@@ -363,16 +363,12 @@ Creates a new `Restaurant` entity linked to the owner. The new outlet gets its o
 #### 7. GET `/api/admin/payouts/pending?page=1&pageSize=50`
 **Purpose:** Admin dashboard — see all payouts awaiting bank transfer.
 
-#### 8. PUT `/api/admin/payouts/{payoutId}/process`
-**Purpose:** Mark a payout as processed after completing bank transfer.
+#### 8. ~~PUT `/api/admin/payouts/{payoutId}/process`~~ — REMOVED (2026-07-20)
 
-```json
-// Request
-{
-  "transactionReference": "UTR123456789",
-  "notes": "Processed via NEFT batch"
-}
-```
+Let an admin mark any single payout Paid by typing in a transaction reference by hand — no
+statement, no amount verification. Removed in favor of the ICICI manual-payout export +
+bank-statement reconciliation flow: see `specs/icici-manual-payout-export.md`. "Paid" is now
+only ever reached by reconciling a real ICICI bank statement against the exported batch.
 
 ---
 
@@ -409,10 +405,11 @@ Creates a new `Restaurant` entity linked to the owner. The new outlet gets its o
 
 2. Payout now shows in admin's pending queue
 
-3. Admin reviews and triggers bank transfer manually
-   └─> PUT /api/admin/payouts/{id}/process with UTR reference
-       ├─> Payout status: Pending → Processing → Paid
-       └─> PaidAt timestamp recorded
+3. Admin exports the weekly ICICI bulk-transfer file (Pending → Processing, per payout)
+   ├─> Owner uploads the file to the ICICI corporate portal, funds move bank-side
+   └─> Admin uploads the resulting ICICI bank statement to reconcile
+       ├─> Payout status: Processing → Paid (amount-matched, real UTR) or → Failed
+       └─> PaidAt timestamp recorded only on a verified statement match
 ```
 
 ### GST/TDS Summary Query

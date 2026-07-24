@@ -120,7 +120,10 @@ public sealed class RiderPayoutQueryService : IRiderPayoutQueryService
                     payout.Status.ToString(),
                     payout.StatusNote,
                     payout.CycleStartUtc,
-                    payout.CycleEndUtc))
+                    payout.CycleEndUtc,
+                    payout.CreatedAt,
+                    payout.PaidAtUtc,
+                    payout.ExportedAtUtc))
             .ToListAsync(ct);
 
         return new RiderPayoutsPagedResult(rows, total, page, pageSize);

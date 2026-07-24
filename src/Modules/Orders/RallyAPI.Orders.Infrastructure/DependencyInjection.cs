@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<IPayoutRepository, PayoutRepository>();
         services.AddScoped<IPayoutLedgerRepository, PayoutLedgerRepository>();
+        services.AddScoped<IRestaurantPayoutExportBatchRepository, RestaurantPayoutExportBatchRepository>();
 
         // Cart Cache (Redis write-through)
         services.AddScoped<ICartCacheService, RedisCartCacheService>();
@@ -91,7 +92,6 @@ public static class DependencyInjection
         services.AddScoped<IAdminOrderQueryService, AdminOrderQueryService>();
         services.AddScoped<IDeliveryEarningsQueryService, DeliveryEarningsQueryService>();
         services.AddScoped<IRiderOrderStatsService, RiderOrderStatsService>();
-        services.AddScoped<RallyAPI.SharedKernel.Abstractions.Payouts.IPayoutGateway, StubPayoutGateway>();
         services.AddScoped<RallyAPI.SharedKernel.Abstractions.Payouts.IAdminPayoutQueryService, AdminPayoutQueryService>();
 
         // Services

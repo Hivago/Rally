@@ -291,4 +291,28 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
                     info?.FirstName);
             });
     }
+
+    public async Task<IReadOnlyDictionary<Guid, OwnerBankDetails>> GetOwnerBankDetailsAsync(
+        IReadOnlyCollection<Guid> ownerIds,
+        CancellationToken ct = default)
+    {
+        if (ownerIds.Count == 0)
+            return new Dictionary<Guid, OwnerBankDetails>();
+
+        var owners = await _context.RestaurantOwners
+            .AsNoTracking()
+            .Where(o => ownerIds.Contains(o.Id))
+            .Select(o => new
+            {
+                o.Id,
+                o.BankAccountNumber,
+                o.BankIfscCode,
+                o.BankAccountName
+            })
+            .ToListAsync(ct);
+
+        return owners.ToDictionary(
+            o => o.Id,
+            o => new OwnerBankDetails(o.Id, o.BankAccountNumber, o.BankIfscCode, o.BankAccountName));
+    }
 }
