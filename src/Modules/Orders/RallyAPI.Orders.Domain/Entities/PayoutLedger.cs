@@ -12,6 +12,7 @@ public sealed class PayoutLedger : BaseEntity
     public Guid OwnerId { get; private set; }
     public Guid OutletId { get; private set; }
     public Guid OrderId { get; private set; }
+    public string OrderNumber { get; private set; } = null!;
     public decimal OrderAmount { get; private set; }
     public decimal GstAmount { get; private set; }
 
@@ -41,6 +42,7 @@ public sealed class PayoutLedger : BaseEntity
         Guid ownerId,
         Guid outletId,
         Guid orderId,
+        string orderNumber,
         decimal orderAmount,
         decimal commissionFlatFee,
         decimal commissionGstPercent = 18m)
@@ -53,6 +55,9 @@ public sealed class PayoutLedger : BaseEntity
 
         if (orderId == Guid.Empty)
             throw new ArgumentException("Order ID is required.", nameof(orderId));
+
+        if (string.IsNullOrWhiteSpace(orderNumber))
+            throw new ArgumentException("Order number is required.", nameof(orderNumber));
 
         if (orderAmount <= 0)
             throw new ArgumentException("Order amount must be positive.", nameof(orderAmount));
@@ -73,6 +78,7 @@ public sealed class PayoutLedger : BaseEntity
             OwnerId = ownerId,
             OutletId = outletId,
             OrderId = orderId,
+            OrderNumber = orderNumber.Trim(),
             OrderAmount = orderAmount,
             GstAmount = gstAmount,
             CommissionPercentage = 0m,

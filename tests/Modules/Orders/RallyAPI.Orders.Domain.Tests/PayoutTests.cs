@@ -17,7 +17,7 @@ public class PayoutTests
     private static readonly DateOnly PeriodEnd = new(2026, 7, 19);
 
     private static PayoutLedger Ledger(decimal orderAmount, decimal commissionFlatFee) =>
-        PayoutLedger.Create(OwnerId, Guid.NewGuid(), Guid.NewGuid(), orderAmount, commissionFlatFee);
+        PayoutLedger.Create(OwnerId, Guid.NewGuid(), Guid.NewGuid(), "ORD-20260713-00001", orderAmount, commissionFlatFee);
 
     [Fact]
     public void CreateFromLedger_NetPayout_EqualsSumOfLedgerNets_Exactly()

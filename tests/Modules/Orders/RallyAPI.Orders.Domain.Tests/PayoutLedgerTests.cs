@@ -10,6 +10,7 @@ public class PayoutLedgerTests
     private static readonly Guid OwnerId = Guid.NewGuid();
     private static readonly Guid OutletId = Guid.NewGuid();
     private static readonly Guid OrderId = Guid.NewGuid();
+    private const string OrderNumber = "ORD-20260713-00001";
 
     [Fact]
     public void Create_WithFlatFee_ComputesPhase2Formula()
@@ -24,6 +25,7 @@ public class PayoutLedgerTests
             ownerId: OwnerId,
             outletId: OutletId,
             orderId: OrderId,
+            orderNumber: OrderNumber,
             orderAmount: 500m,
             commissionFlatFee: 30m);
 
@@ -47,7 +49,7 @@ public class PayoutLedgerTests
         // pick a value that requires rounding: 35 * 0.18 = 6.30 (exact too)
         // Use 27.50 → commissionGst = 27.50 * 0.18 = 4.95 (exact)
         // Use 33.33 → commissionGst = 33.33 * 0.18 = 5.9994 → 6.00
-        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, 500m, 33.33m);
+        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, OrderNumber, 500m, 33.33m);
 
         ledger.CommissionAmount.Should().Be(33.33m);
         ledger.CommissionGst.Should().Be(6.00m);
@@ -56,7 +58,7 @@ public class PayoutLedgerTests
     [Fact]
     public void Create_WithZeroFlatFee_ProducesZeroCommissionAndCommissionGst()
     {
-        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, 500m, 0m);
+        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, OrderNumber, 500m, 0m);
 
         ledger.CommissionAmount.Should().Be(0m);
         ledger.CommissionGst.Should().Be(0m);
@@ -67,42 +69,49 @@ public class PayoutLedgerTests
     [Fact]
     public void Create_WithEmptyOwnerId_Throws()
     {
-        var act = () => PayoutLedger.Create(Guid.Empty, OutletId, OrderId, 500m, 30m);
+        var act = () => PayoutLedger.Create(Guid.Empty, OutletId, OrderId, OrderNumber, 500m, 30m);
         act.Should().Throw<ArgumentException>().WithParameterName("ownerId");
     }
 
     [Fact]
     public void Create_WithEmptyOutletId_Throws()
     {
-        var act = () => PayoutLedger.Create(OwnerId, Guid.Empty, OrderId, 500m, 30m);
+        var act = () => PayoutLedger.Create(OwnerId, Guid.Empty, OrderId, OrderNumber, 500m, 30m);
         act.Should().Throw<ArgumentException>().WithParameterName("outletId");
     }
 
     [Fact]
     public void Create_WithEmptyOrderId_Throws()
     {
-        var act = () => PayoutLedger.Create(OwnerId, OutletId, Guid.Empty, 500m, 30m);
+        var act = () => PayoutLedger.Create(OwnerId, OutletId, Guid.Empty, OrderNumber, 500m, 30m);
         act.Should().Throw<ArgumentException>().WithParameterName("orderId");
+    }
+
+    [Fact]
+    public void Create_WithEmptyOrderNumber_Throws()
+    {
+        var act = () => PayoutLedger.Create(OwnerId, OutletId, OrderId, " ", 500m, 30m);
+        act.Should().Throw<ArgumentException>().WithParameterName("orderNumber");
     }
 
     [Fact]
     public void Create_WithNonPositiveOrderAmount_Throws()
     {
-        var act = () => PayoutLedger.Create(OwnerId, OutletId, OrderId, 0m, 30m);
+        var act = () => PayoutLedger.Create(OwnerId, OutletId, OrderId, OrderNumber, 0m, 30m);
         act.Should().Throw<ArgumentException>().WithParameterName("orderAmount");
     }
 
     [Fact]
     public void Create_WithNegativeFlatFee_Throws()
     {
-        var act = () => PayoutLedger.Create(OwnerId, OutletId, OrderId, 500m, -1m);
+        var act = () => PayoutLedger.Create(OwnerId, OutletId, OrderId, OrderNumber, 500m, -1m);
         act.Should().Throw<ArgumentException>().WithParameterName("commissionFlatFee");
     }
 
     [Fact]
     public void AssignToPayout_FromPending_TransitionsToBatched()
     {
-        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, 500m, 30m);
+        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, OrderNumber, 500m, 30m);
         var payoutId = Guid.NewGuid();
 
         ledger.AssignToPayout(payoutId);
@@ -114,7 +123,7 @@ public class PayoutLedgerTests
     [Fact]
     public void AssignToPayout_FromBatched_Throws()
     {
-        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, 500m, 30m);
+        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, OrderNumber, 500m, 30m);
         ledger.AssignToPayout(Guid.NewGuid());
 
         var act = () => ledger.AssignToPayout(Guid.NewGuid());
@@ -125,7 +134,7 @@ public class PayoutLedgerTests
     [Fact]
     public void MarkAsPaidOut_WithoutBatching_Throws()
     {
-        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, 500m, 30m);
+        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, OrderNumber, 500m, 30m);
 
         var act = () => ledger.MarkAsPaidOut();
 
@@ -135,7 +144,7 @@ public class PayoutLedgerTests
     [Fact]
     public void MarkAsPaidOut_FromBatched_TransitionsToPaidOut()
     {
-        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, 500m, 30m);
+        var ledger = PayoutLedger.Create(OwnerId, OutletId, OrderId, OrderNumber, 500m, 30m);
         ledger.AssignToPayout(Guid.NewGuid());
 
         ledger.MarkAsPaidOut();
