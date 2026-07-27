@@ -33,4 +33,11 @@ public sealed class GoogleMapsOptions
     /// Region bias for results.
     /// </summary>
     public string Region { get; set; } = "in";
+
+    /// <summary>
+    /// When true, autocomplete + place details use the Places API (New)
+    /// (places.googleapis.com/v1). When false, the legacy Places API is used.
+    /// Reverse geocoding always uses the Geocoding API regardless of this flag.
+    /// </summary>
+    public bool UsePlacesApiNew { get; set; } = false;
 }
