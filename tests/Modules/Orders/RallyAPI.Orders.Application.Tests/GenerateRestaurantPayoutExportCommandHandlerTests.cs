@@ -32,7 +32,7 @@ public class GenerateRestaurantPayoutExportCommandHandlerTests
 
     private static Payout PendingPayout(Guid ownerId, decimal orderAmount, decimal commissionFlatFee)
     {
-        var ledger = PayoutLedger.Create(ownerId, Guid.NewGuid(), Guid.NewGuid(), orderAmount, commissionFlatFee);
+        var ledger = PayoutLedger.Create(ownerId, Guid.NewGuid(), Guid.NewGuid(), "ORD-20260713-00001", orderAmount, commissionFlatFee);
         return Payout.CreateFromLedger(ownerId, PeriodStart, PeriodEnd, new[] { ledger }, null, null);
     }
 

@@ -36,6 +36,7 @@ public sealed class GetGstSummaryQueryHandler
         var lineItems = entries.Select(e => new GstLineItemDto
         {
             OrderId = e.OrderId,
+            OrderNumber = e.OrderNumber,
             OutletId = e.OutletId,
             OrderAmount = e.OrderAmount,
             GstAmount = e.GstAmount,

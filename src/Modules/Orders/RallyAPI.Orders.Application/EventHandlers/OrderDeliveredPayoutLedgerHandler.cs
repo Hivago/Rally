@@ -90,6 +90,7 @@ public sealed class OrderDeliveredPayoutLedgerHandler : INotificationHandler<Ord
                 ownerId: restaurant.OwnerId.Value,
                 outletId: restaurant.Id,
                 orderId: order.Id,
+                orderNumber: notification.OrderNumber,
                 orderAmount: orderAmount,
                 commissionFlatFee: restaurantCharge,
                 commissionGstPercent: _restaurantCharge.GstPercent);
