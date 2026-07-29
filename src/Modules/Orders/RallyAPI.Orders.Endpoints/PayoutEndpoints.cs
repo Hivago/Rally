@@ -26,7 +26,7 @@ public static class PayoutEndpoints
 
         restaurantGroup.MapGet("/earnings", GetEarnings)
             .WithName("GetRestaurantEarnings")
-            .WithSummary("Get current week's earnings summary");
+            .WithSummary("Get earnings summary for a date range (defaults to the current week)");
 
         restaurantGroup.MapGet("/", GetPayoutHistory)
             .WithName("GetPayoutHistory")
@@ -62,9 +62,13 @@ public static class PayoutEndpoints
         return app;
     }
 
+    private static readonly TimeZoneInfo IstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+
     private static async Task<IResult> GetEarnings(
         HttpContext httpContext,
         IMediator mediator,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
         CancellationToken ct)
     {
         var ownerIdClaim = httpContext.User.FindFirst("owner_id")?.Value;
@@ -84,7 +88,29 @@ public static class PayoutEndpoints
         if (restaurant?.OwnerId is null)
             return Results.NotFound(new { error = "Restaurant owner not found" });
 
-        var query = new GetRestaurantEarningsQuery { OwnerId = restaurant.OwnerId.Value };
+        // Default to the current week (Monday-Sunday IST) when no range is given,
+        // preserving the widget's original "this week" behavior for existing callers.
+        DateOnly fromDate, toDate;
+        if (from.HasValue && to.HasValue)
+        {
+            fromDate = from.Value;
+            toDate = to.Value;
+        }
+        else
+        {
+            var istNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, IstTimeZone);
+            var daysFromMonday = ((int)istNow.DayOfWeek - 1 + 7) % 7;
+            var mondayIst = istNow.Date.AddDays(-daysFromMonday);
+            fromDate = DateOnly.FromDateTime(mondayIst);
+            toDate = fromDate.AddDays(6);
+        }
+
+        var query = new GetRestaurantEarningsQuery
+        {
+            OwnerId = restaurant.OwnerId.Value,
+            FromDate = fromDate,
+            ToDate = toDate
+        };
         var result = await mediator.Send(query, ct);
 
         return result.IsSuccess

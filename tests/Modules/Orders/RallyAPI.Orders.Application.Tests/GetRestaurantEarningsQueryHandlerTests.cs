@@ -31,11 +31,16 @@ public class GetRestaurantEarningsQueryHandlerTests
         var ledger = PayoutLedger.Create(
             OwnerId, Guid.NewGuid(), Guid.NewGuid(), "ORD-20260727-00042", 160m, 50m);
 
-        _ledgerRepository.GetPendingByOwnerIdAsync(OwnerId, Arg.Any<CancellationToken>())
+        _ledgerRepository.GetByOwnerIdAndDateRangeAsync(
+                OwnerId, Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(new[] { ledger });
 
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-6));
+        var toDate = DateOnly.FromDateTime(DateTime.UtcNow);
+
         var result = await _handler.Handle(
-            new GetRestaurantEarningsQuery { OwnerId = OwnerId }, CancellationToken.None);
+            new GetRestaurantEarningsQuery { OwnerId = OwnerId, FromDate = fromDate, ToDate = toDate },
+            CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.LedgerEntries.Should().ContainSingle()

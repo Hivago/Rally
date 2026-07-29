@@ -22,18 +22,22 @@ public sealed class GetRestaurantEarningsQueryHandler
         GetRestaurantEarningsQuery query,
         CancellationToken cancellationToken)
     {
-        // Calculate current week (Monday-Sunday IST)
-        var istNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, IstTimeZone);
-        var daysFromMonday = ((int)istNow.DayOfWeek - 1 + 7) % 7;
-        var mondayIst = istNow.Date.AddDays(-daysFromMonday);
-        var sundayIst = mondayIst.AddDays(6);
+        if (query.FromDate > query.ToDate)
+            return Result.Failure<EarningsSummaryDto>(Error.Validation("From date must be before or equal to To date."));
 
-        var periodStart = DateOnly.FromDateTime(mondayIst);
-        var periodEnd = DateOnly.FromDateTime(sundayIst);
+        var periodStart = query.FromDate;
+        var periodEnd = query.ToDate;
 
-        // Get all pending entries for this owner (current week = not yet batched)
-        var entries = await _ledgerRepository.GetPendingByOwnerIdAsync(
-            query.OwnerId, cancellationToken);
+        // Convert IST date range to UTC for querying. Entries are matched by date
+        // regardless of payout-batch status, so past (already-batched/paid) weeks
+        // are just as browsable as the current, still-unbatched week.
+        var fromUtc = TimeZoneInfo.ConvertTimeToUtc(
+            periodStart.ToDateTime(TimeOnly.MinValue), IstTimeZone);
+        var toUtc = TimeZoneInfo.ConvertTimeToUtc(
+            periodEnd.AddDays(1).ToDateTime(TimeOnly.MinValue), IstTimeZone);
+
+        var entries = await _ledgerRepository.GetByOwnerIdAndDateRangeAsync(
+            query.OwnerId, fromUtc, toUtc, cancellationToken);
 
         var ledgerDtos = entries.Select(e => new PayoutLedgerDto
         {
