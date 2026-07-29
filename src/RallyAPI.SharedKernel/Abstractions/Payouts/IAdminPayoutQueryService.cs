@@ -13,6 +13,15 @@ public interface IAdminPayoutQueryService
     Task<RestaurantPayoutsPagedResult> GetRestaurantPayoutsAsync(
         RestaurantPayoutsFilter filter,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Order-level breakdown for a single restaurant payout, for any owner
+    /// (unlike the restaurant-facing detail query, this is not owner-scoped).
+    /// Returns null if the payout does not exist.
+    /// </summary>
+    Task<AdminPayoutDetail?> GetRestaurantPayoutDetailAsync(
+        Guid payoutId,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record RestaurantPayoutSummary(
@@ -60,3 +69,39 @@ public sealed record RestaurantPayoutRow(
     DateTime? PaidAtUtc,
     DateTime? ExportedAtUtc,
     string? TransactionReference);
+
+public sealed record AdminPayoutDetail(
+    Guid PayoutId,
+    Guid OwnerId,
+    string DisplayName,
+    DateOnly CycleStart,
+    DateOnly CycleEnd,
+    int OrderCount,
+    decimal GrossOrderAmount,
+    decimal TotalGstCollected,
+    decimal TotalCommission,
+    decimal TotalCommissionGst,
+    decimal TotalTds,
+    decimal NetPayoutAmount,
+    string Status,
+    string? TransactionReference,
+    DateTime? PaidAtUtc,
+    string? Notes,
+    DateTime CreatedAtUtc,
+    IReadOnlyList<AdminPayoutLedgerLine> LedgerEntries);
+
+public sealed record AdminPayoutLedgerLine(
+    Guid Id,
+    Guid OutletId,
+    Guid OrderId,
+    string OrderNumber,
+    decimal OrderAmount,
+    decimal GstAmount,
+    decimal CommissionPercentage,
+    decimal? CommissionFlatFee,
+    decimal CommissionAmount,
+    decimal CommissionGst,
+    decimal TdsAmount,
+    decimal NetAmount,
+    string Status,
+    DateTime CreatedAtUtc);

@@ -16,6 +16,8 @@ namespace RallyAPI.Host.Notifications;
 /// </summary>
 public sealed class OrderStatusSignalRHandler :
     INotificationHandler<OrderConfirmedEvent>,
+    INotificationHandler<OrderPreparingEvent>,
+    INotificationHandler<OrderReadyForPickupEvent>,
     INotificationHandler<RiderAssignedEvent>,
     INotificationHandler<OrderPickedUpEvent>,
     INotificationHandler<OrderDeliveredEvent>,
@@ -48,6 +50,38 @@ public sealed class OrderStatusSignalRHandler :
             orderNumber = order.OrderNumber.Value,
             status      = "Confirmed",
             message     = $"{order.RestaurantName} confirmed your order"
+        }, ct);
+    }
+
+    public async Task Handle(OrderPreparingEvent notification, CancellationToken ct)
+    {
+        var order = await _orders.GetByIdAsync(notification.OrderId, ct);
+        if (order is null) { LogMissing(notification.OrderId); return; }
+
+        await PushToCustomer(order.CustomerId, new
+        {
+            orderId     = order.Id,
+            orderNumber = order.OrderNumber.Value,
+            status      = "Preparing",
+            message     = $"{order.RestaurantName} is preparing your order"
+        }, ct);
+    }
+
+    public async Task Handle(OrderReadyForPickupEvent notification, CancellationToken ct)
+    {
+        var order = await _orders.GetByIdAsync(notification.OrderId, ct);
+        if (order is null) { LogMissing(notification.OrderId); return; }
+
+        var message = order.FulfillmentType == FulfillmentType.Pickup
+            ? "Your order is ready for pickup at the restaurant!"
+            : "Your order is ready! Waiting for a delivery partner to pick it up.";
+
+        await PushToCustomer(order.CustomerId, new
+        {
+            orderId     = order.Id,
+            orderNumber = order.OrderNumber.Value,
+            status      = "ReadyForPickup",
+            message
         }, ct);
     }
 
