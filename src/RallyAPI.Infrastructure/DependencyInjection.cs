@@ -28,10 +28,23 @@ public static class DependencyInjection
             client.Timeout = timeout;
         });
 
-        services.AddHttpClient<IGeocodingService, GoogleGeocodingService>(client =>
+        // Geocoding/Places: pick legacy or Places API (New) by config flag.
+        // Reverse geocoding uses the Geocoding API in both implementations.
+        var usePlacesApiNew = configuration.GetValue<bool>("GoogleMaps:UsePlacesApiNew", false);
+        if (usePlacesApiNew)
         {
-            client.Timeout = timeout;
-        });
+            services.AddHttpClient<IGeocodingService, GooglePlacesV1Service>(client =>
+            {
+                client.Timeout = timeout;
+            });
+        }
+        else
+        {
+            services.AddHttpClient<IGeocodingService, GoogleGeocodingService>(client =>
+            {
+                client.Timeout = timeout;
+            });
+        }
 
         services.AddStorageServices(configuration);
 
@@ -39,6 +52,10 @@ public static class DependencyInjection
             options.UseNpgsql(configuration.GetConnectionString("Database")));
 
         services.AddSingleton<RedisIdempotencyService>();
+
+        // Read-through cache for hot catalog paths (browse + menu). Reuses the
+        // IConnectionMultiplexer singleton registered by the Users module.
+        services.AddSingleton<RallyAPI.SharedKernel.Abstractions.Caching.ICacheService, RedisCacheService>();
 
         return services;
     }

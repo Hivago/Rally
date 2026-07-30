@@ -1,4 +1,5 @@
-﻿using MediatR;
+using MediatR;
+using RallyAPI.Catalog.Application.Abstractions;
 using RallyAPI.Catalog.Application.MenuItems.Commands.CreateMenuItem;
 using RallyAPI.SharedKernel.Results;
 
@@ -16,4 +17,4 @@ public sealed record UpdateMenuItemCommand(
     int PreparationTimeMinutes,
     List<MenuItemOptionDto>? Options,
     List<OptionGroupDto>? OptionGroups,
-    List<string>? Tags) : IRequest<Result>;
+    List<string>? Tags) : IRequest<Result>, IMenuCacheInvalidatingCommand;
