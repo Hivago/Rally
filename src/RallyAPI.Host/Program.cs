@@ -285,16 +285,70 @@ var relaxedLimits = isDev || builder.Environment.IsStaging();
 IConnectionMultiplexer ResolveRedis(HttpContext context) =>
     context.RequestServices.GetRequiredService<IConnectionMultiplexer>();
 
+// Partition key for AUTHENTICATED endpoints: the JWT sub, not the IP. Indian
+// mobile carriers CGNAT hundreds of users behind one IP, so per-IP buckets on
+// order/payment endpoints throttle real customers at dinner peak (429 at
+// checkout). UseAuthentication runs before UseRateLimiter, so User is populated.
+// IP fallback only applies if the endpoint somehow runs unauthenticated.
+string UserOrIpPartition(HttpContext context) =>
+    context.User.FindFirst("sub")?.Value
+        ?? context.Connection.RemoteIpAddress?.ToString()
+        ?? "unknown";
+
 builder.Services.AddRateLimiter(options =>
 {
+    // OTP SEND (anonymous → per-IP). The per-IP bucket is only an outer DoS
+    // shell — the real SMS-cost/abuse guard is OtpService's per-phone limit
+    // (3 sends per phone per 10 min + lockout). Sized for CGNAT: one carrier
+    // IP can carry dozens of genuine users logging in within the window.
     options.AddPolicy("otp", context =>
         RedisRateLimitPartition.GetSlidingWindowRateLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new RedisSlidingWindowRateLimiterOptions
             {
                 ConnectionMultiplexerFactory = () => ResolveRedis(context),
-                PermitLimit = relaxedLimits ? 100 : 20,
+                PermitLimit = relaxedLimits ? 100 : 60,
                 Window = relaxedLimits ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(10)
+            }));
+
+    // OTP VERIFY (anonymous → per-IP), split from the send bucket: previously a
+    // mistyped OTP burned the shared quota and could lock the user out of
+    // requesting a fresh code. Brute force is bounded per-phone by OtpService
+    // (3 failed attempts → 15 min lockout), so this stays generous.
+    options.AddPolicy("otp-verify", context =>
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new RedisSlidingWindowRateLimiterOptions
+            {
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
+                PermitLimit = relaxedLimits ? 200 : 60,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+
+    // ORDER PLACEMENT (authenticated → per-user). A human cannot legitimately
+    // place more than a handful of orders a minute; 15 leaves room for
+    // idempotent retries after network failures.
+    options.AddPolicy("order", context =>
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
+            UserOrIpPartition(context),
+            _ => new RedisSlidingWindowRateLimiterOptions
+            {
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
+                PermitLimit = relaxedLimits ? 200 : 15,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+
+    // PAYMENTS (authenticated → per-user): initiate + verify. Higher than
+    // "order" because the frontend may retry verification after the PayU
+    // redirect.
+    options.AddPolicy("payment", context =>
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
+            UserOrIpPartition(context),
+            _ => new RedisSlidingWindowRateLimiterOptions
+            {
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
+                PermitLimit = relaxedLimits ? 200 : 30,
+                Window = TimeSpan.FromMinutes(1)
             }));
 
     options.AddPolicy("login", context =>
