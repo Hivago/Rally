@@ -53,6 +53,10 @@ public static class DependencyInjection
 
         services.AddSingleton<RedisIdempotencyService>();
 
+        // Read-through cache for hot catalog paths (browse + menu). Reuses the
+        // IConnectionMultiplexer singleton registered by the Users module.
+        services.AddSingleton<RallyAPI.SharedKernel.Abstractions.Caching.ICacheService, RedisCacheService>();
+
         return services;
     }
 }

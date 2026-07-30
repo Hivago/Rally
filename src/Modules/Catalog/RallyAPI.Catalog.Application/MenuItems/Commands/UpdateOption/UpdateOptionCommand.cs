@@ -1,4 +1,5 @@
 using MediatR;
+using RallyAPI.Catalog.Application.Abstractions;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Catalog.Application.MenuItems.Commands.UpdateOption;
@@ -9,4 +10,4 @@ public sealed record UpdateOptionCommand(
     string Name,
     string Type,
     decimal AdditionalPrice,
-    bool IsDefault) : IRequest<Result>;
+    bool IsDefault) : IRequest<Result>, IMenuCacheInvalidatingCommand;

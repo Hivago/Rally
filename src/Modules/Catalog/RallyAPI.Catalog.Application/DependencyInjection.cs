@@ -15,6 +15,8 @@ public static class DependencyInjection
         {
             cfg.RegisterServicesFromAssembly(assembly);
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+            // Constrained to IMenuCacheInvalidatingCommand — only menu-write commands pass through it.
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(MenuCacheInvalidationBehavior<,>));
         });
 
         services.AddValidatorsFromAssembly(assembly);

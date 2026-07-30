@@ -1,4 +1,5 @@
 using MediatR;
+using RallyAPI.Catalog.Application.Abstractions;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Catalog.Application.MenuItems.Commands.UpdateOptionGroup;
@@ -11,4 +12,4 @@ public sealed record UpdateOptionGroupCommand(
     bool IsRequired,
     int MinSelections,
     int MaxSelections,
-    int DisplayOrder) : IRequest<Result>;
+    int DisplayOrder) : IRequest<Result>, IMenuCacheInvalidatingCommand;

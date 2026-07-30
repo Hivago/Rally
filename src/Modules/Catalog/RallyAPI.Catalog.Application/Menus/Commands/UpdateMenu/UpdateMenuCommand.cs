@@ -1,4 +1,5 @@
-﻿using MediatR;
+using MediatR;
+using RallyAPI.Catalog.Application.Abstractions;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Catalog.Application.Menus.Commands.UpdateMenu;
@@ -8,4 +9,4 @@ public sealed record UpdateMenuCommand(
     Guid RestaurantId,
     string Name,
     string? Description,
-    int DisplayOrder) : IRequest<Result>;
+    int DisplayOrder) : IRequest<Result>, IMenuCacheInvalidatingCommand;

@@ -2,6 +2,7 @@
 
 using MediatR;
 using RallyAPI.Catalog.Application.Abstractions;
+using RallyAPI.SharedKernel.Abstractions.Caching;
 using RallyAPI.SharedKernel.Abstractions.Restaurants;
 using RallyAPI.SharedKernel.Results;
 using System.Linq;
@@ -11,24 +12,38 @@ namespace RallyAPI.Catalog.Application.Restaurants.Queries.GetRestaurantMenu;
 internal sealed class GetRestaurantMenuQueryHandler
     : IRequestHandler<GetRestaurantMenuQuery, Result<RestaurantMenuResponse>>
 {
+    // Menu edits evict explicitly (MenuCacheInvalidationBehavior), so the TTL only
+    // bounds staleness for restaurant-level fields baked into the response
+    // (IsAcceptingOrders — also evicted by SetAvailability — and prep time).
+    private static readonly TimeSpan MenuTtl = TimeSpan.FromSeconds(60);
+
     private readonly IRestaurantQueryService _restaurantQueryService;
     private readonly IMenuRepository _menuRepository;
     private readonly IMenuItemRepository _menuItemRepository;
+    private readonly ICacheService _cache;
 
     public GetRestaurantMenuQueryHandler(
         IRestaurantQueryService restaurantQueryService,
         IMenuRepository menuRepository,
-        IMenuItemRepository menuItemRepository)
+        IMenuItemRepository menuItemRepository,
+        ICacheService cache)
     {
         _restaurantQueryService = restaurantQueryService;
         _menuRepository = menuRepository;
         _menuItemRepository = menuItemRepository;
+        _cache = cache;
     }
 
     public async Task<Result<RestaurantMenuResponse>> Handle(
         GetRestaurantMenuQuery request,
         CancellationToken cancellationToken)
     {
+        var cacheKey = CatalogCacheKeys.Menu(request.RestaurantId);
+
+        var cached = await _cache.GetAsync<RestaurantMenuResponse>(cacheKey, cancellationToken);
+        if (cached is not null)
+            return cached;
+
         // Get restaurant details from Users module
         var restaurant = await _restaurantQueryService.GetByIdAsync(
             request.RestaurantId, cancellationToken);
@@ -97,12 +112,17 @@ internal sealed class GetRestaurantMenuQueryHandler
                     : new List<MenuItemResponse>()
             )).ToList();
 
-        return new RestaurantMenuResponse(
+        var response = new RestaurantMenuResponse(
             restaurant.Id,
             restaurant.Name,
             restaurant.IsAcceptingOrders,
             restaurant.AcceptsPickup,
             restaurant.AvgPrepTimeMins,
             menuResponses);
+
+        // Only successful responses are cached — a NotFound must never stick.
+        await _cache.SetAsync(cacheKey, response, MenuTtl, cancellationToken);
+
+        return response;
     }
 }

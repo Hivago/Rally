@@ -1,4 +1,5 @@
 using MediatR;
+using RallyAPI.Catalog.Application.Abstractions;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Catalog.Application.Restaurants.Commands.ImportMenu;
@@ -14,7 +15,7 @@ public sealed record ImportMenuCommand(
     Guid RestaurantId,
     Stream WorkbookStream,
     IReadOnlyDictionary<string, ImageBlob> ImageBlobs
-) : IRequest<Result<ImportMenuResponse>>;
+) : IRequest<Result<ImportMenuResponse>>, IMenuCacheInvalidatingCommand;
 
 public sealed record ImageBlob(byte[] Content, string ContentType);
 

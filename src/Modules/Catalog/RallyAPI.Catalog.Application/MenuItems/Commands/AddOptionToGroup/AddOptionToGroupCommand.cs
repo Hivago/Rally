@@ -1,4 +1,5 @@
 using MediatR;
+using RallyAPI.Catalog.Application.Abstractions;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Catalog.Application.MenuItems.Commands.AddOptionToGroup;
@@ -9,6 +10,6 @@ public sealed record AddOptionToGroupCommand(
     string Name,
     string Type,
     decimal AdditionalPrice,
-    bool IsDefault) : IRequest<Result<AddOptionToGroupResponse>>;
+    bool IsDefault) : IRequest<Result<AddOptionToGroupResponse>>, IMenuCacheInvalidatingCommand;
 
 public sealed record AddOptionToGroupResponse(Guid OptionId);
