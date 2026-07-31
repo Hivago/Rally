@@ -1,0 +1,56 @@
+name: Database Backup
+
+# Daily pg_dump of the Rally Postgres database, uploaded to a dedicated
+# Cloudflare R2 bucket. Railway's Hobby plan has no managed backups/PITR
+# (Pro-only), so this is the DIY substitute: daily snapshots, not
+# point-in-time recovery. See docs/db-backup-restore.md for the restore
+# procedure and the required one-time setup (R2 bucket + secrets).
+
+on:
+  schedule:
+    # 02:00 IST daily = 20:30 UTC the previous day
+    - cron: '30 20 * * *'
+  workflow_dispatch: {} # allows a manual "Run workflow" click to test setup
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump database
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          TIMESTAMP=$(date -u +'%Y-%m-%dT%H-%M-%SZ')
+          DUMP_FILE="rally-db-${TIMESTAMP}.dump"
+          echo "DUMP_FILE=${DUMP_FILE}" >> "$GITHUB_ENV"
+          # -Fc: custom format — compressed, and pg_restore can selectively
+          # restore tables/schemas from it instead of only all-or-nothing.
+          pg_dump "$DATABASE_URL" -Fc -f "$DUMP_FILE"
+
+      - name: Verify dump is non-empty
+        run: |
+          set -euo pipefail
+          SIZE=$(stat -c%s "$DUMP_FILE")
+          echo "Dump size: ${SIZE} bytes"
+          # A near-empty file most likely means pg_dump connected but failed
+          # partway (bad credentials, network drop) rather than an empty DB.
+          # Fail loudly instead of silently uploading a useless "backup".
+          if [ "$SIZE" -lt 10000 ]; then
+            echo "::error::Dump file suspiciously small (${SIZE} bytes) — failing so a bad backup never looks like a good one."
+            exit 1
+          fi
+
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: 'true' # skip EC2 metadata lookup — not on EC2, avoids a slow timeout
+        run: |
+          set -euo pipefail
+          aws s3 cp "$DUMP_FILE" "s3://${{ secrets.R2_BACKUP_BUCKET }}/${DUMP_FILE}" \
+            --endpoint-url "https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com"
+
+      - name: Clean up local dump
+        if: always()
+        run: rm -f "$DUMP_FILE"
