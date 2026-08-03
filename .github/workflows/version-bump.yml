@@ -1,0 +1,42 @@
+name: Bump Version
+
+# Auto-bumps the PATCH version in Directory.Build.props on every push to master,
+# so GET /version reflects the running deploy instead of staying frozen at 1.0.0.
+# Guarded against re-triggering itself via the "[skip version]" marker it adds
+# to its own commit message.
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    if: "!contains(github.event.head_commit.message, '[skip version]')"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump patch version
+        id: bump
+        run: |
+          CURRENT=$(grep -oP '(?<=<Version>)[^<]+(?=</Version>)' Directory.Build.props)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+          sed -i "s#<Version>$CURRENT</Version>#<Version>$NEW_VERSION</Version>#" Directory.Build.props
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Directory.Build.props
+          git commit -m "chore(release): bump version to ${{ steps.bump.outputs.new_version }} [skip version]"
+          git push
