@@ -8,6 +8,7 @@ public interface IRestaurantOwnerRepository
     Task<RestaurantOwner?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<RestaurantOwner?> GetByEmailAsync(Email email, CancellationToken ct = default);
     Task<bool> ExistsByEmailAsync(Email email, CancellationToken ct = default);
+    Task<IReadOnlyList<RestaurantOwner>> GetByPhoneAsync(PhoneNumber phone, CancellationToken ct = default);
     Task<(IReadOnlyList<RestaurantOwner> Items, int TotalCount)> GetPagedAsync(
         bool? isActive,
         string? search,
