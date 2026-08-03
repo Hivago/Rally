@@ -54,7 +54,9 @@ public static class OrderEndpoints
             .WithName("PlaceOrder")
             .WithSummary("Place a new order")
             .RequireAuthorization("Customer")
-            .RequireRateLimiting("login")
+            // Per-user policy — the old shared per-IP "login" policy throttled
+            // whole CGNAT blocks of customers at checkout.
+            .RequireRateLimiting("order")
             .RequireIdempotency()
             .Produces<OrderDto>(StatusCodes.Status201Created)
             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest)

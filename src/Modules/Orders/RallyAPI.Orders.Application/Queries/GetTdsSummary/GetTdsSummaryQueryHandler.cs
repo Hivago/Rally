@@ -35,6 +35,7 @@ public sealed class GetTdsSummaryQueryHandler
         var lineItems = entries.Select(e => new TdsLineItemDto
         {
             OrderId = e.OrderId,
+            OrderNumber = e.OrderNumber,
             OutletId = e.OutletId,
             OrderAmount = e.OrderAmount,
             CommissionAmount = e.CommissionAmount,

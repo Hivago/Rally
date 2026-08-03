@@ -39,6 +39,7 @@ public sealed class GetPayoutDetailQueryHandler
             Id = e.Id,
             OutletId = e.OutletId,
             OrderId = e.OrderId,
+            OrderNumber = e.OrderNumber,
             OrderAmount = e.OrderAmount,
             GstAmount = e.GstAmount,
             CommissionPercentage = e.CommissionPercentage,

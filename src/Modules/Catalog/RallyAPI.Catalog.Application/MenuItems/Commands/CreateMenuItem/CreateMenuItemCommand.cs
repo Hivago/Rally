@@ -1,4 +1,5 @@
-﻿using MediatR;
+using MediatR;
+using RallyAPI.Catalog.Application.Abstractions;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Catalog.Application.MenuItems.Commands.CreateMenuItem;
@@ -15,7 +16,7 @@ public sealed record CreateMenuItemCommand(
     int PreparationTimeMinutes,
     List<MenuItemOptionDto>? Options,
     List<OptionGroupDto>? OptionGroups,
-    List<string>? Tags) : IRequest<Result<CreateMenuItemResponse>>;
+    List<string>? Tags) : IRequest<Result<CreateMenuItemResponse>>, IMenuCacheInvalidatingCommand;
 
 public sealed record MenuItemOptionDto(
     string Name,

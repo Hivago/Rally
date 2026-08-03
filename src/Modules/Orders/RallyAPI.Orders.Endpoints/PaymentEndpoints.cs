@@ -40,7 +40,7 @@ public static class PaymentEndpoints
                 : Results.BadRequest(new { error = result.Error.Message });
         })
         .RequireAuthorization("Customer")
-        .RequireRateLimiting("login")
+        .RequireRateLimiting("payment")
         .WithName("InitiatePayment");
         // 2. PayU webhook (S2S callback) — source of truth
         group.MapPost("/webhook", async (
@@ -181,6 +181,7 @@ public static class PaymentEndpoints
                 : Results.BadRequest(new { error = result.Error.Message });
         })
         .RequireAuthorization("Customer")
+        .RequireRateLimiting("payment")
         .WithName("VerifyPayment");
 
         // 4. Refund — admin only

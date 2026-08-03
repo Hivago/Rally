@@ -28,6 +28,11 @@ public sealed class PayoutLedgerConfiguration : IEntityTypeConfiguration<PayoutL
             .HasColumnName("order_id")
             .IsRequired();
 
+        builder.Property(l => l.OrderNumber)
+            .HasColumnName("order_number")
+            .HasMaxLength(50)
+            .IsRequired();
+
         builder.Property(l => l.OrderAmount)
             .HasColumnName("order_amount")
             .HasPrecision(10, 2)

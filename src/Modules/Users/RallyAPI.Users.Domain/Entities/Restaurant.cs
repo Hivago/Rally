@@ -23,6 +23,7 @@ public sealed class Restaurant : AggregateRoot
     public decimal Longitude { get; private set; }
     public bool IsActive { get; private set; }
     public bool IsAcceptingOrders { get; private set; }
+    public bool MustChangePassword { get; private set; }
     public int AvgPrepTimeMins { get; private set; }
     public TimeOnly OpeningTime { get; private set; }
     public TimeOnly ClosingTime { get; private set; }
@@ -228,6 +229,22 @@ public sealed class Restaurant : AggregateRoot
             return Result.Failure(Error.Validation("Password cannot be empty."));
 
         PasswordHash = newPasswordHash;
+        MustChangePassword = false;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Admin-driven password reset. Unlike <see cref="UpdatePassword"/>, this flags the account
+    /// so the restaurant is required to set their own password on next login.
+    /// </summary>
+    public Result ResetPassword(string newPasswordHash)
+    {
+        if (string.IsNullOrWhiteSpace(newPasswordHash))
+            return Result.Failure(Error.Validation("Password cannot be empty."));
+
+        PasswordHash = newPasswordHash;
+        MustChangePassword = true;
         MarkAsUpdated();
         return Result.Success();
     }

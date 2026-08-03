@@ -130,7 +130,8 @@ internal sealed class LoginRestaurantCommandHandler
             restaurant.Name,
             tokenPair.AccessToken,
             tokenPair.RefreshToken,
-            tokenPair.AccessTokenExpiresAt);
+            tokenPair.AccessTokenExpiresAt,
+            restaurant.MustChangePassword);
     }
 
     private static string HashToken(string token)

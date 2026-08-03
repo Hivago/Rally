@@ -377,6 +377,12 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(0m)
                         .HasColumnName("min_order_amount");
 
+                    b.Property<bool>("MustChangePassword")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("must_change_password");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -490,6 +496,12 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
+
+                    b.Property<bool>("MustChangePassword")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("must_change_password");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -821,6 +833,79 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                     b.ToTable("rider_kyc_documents", "users");
                 });
 
+            modelBuilder.Entity("RallyAPI.Users.Domain.Entities.RiderPayoutExportBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("ControlSumTotal")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("control_sum_total");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("GeneratedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("generated_at_utc");
+
+                    b.Property<Guid>("GeneratedByAdminId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("generated_by_admin_id");
+
+                    b.Property<string>("GeneratedFileHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("generated_file_hash");
+
+                    b.Property<DateOnly>("PeriodEnd")
+                        .HasColumnType("date")
+                        .HasColumnName("period_end");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("date")
+                        .HasColumnName("period_start");
+
+                    b.Property<DateTime?>("ReconciledAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reconciled_at_utc");
+
+                    b.Property<Guid?>("ReconciledByAdminId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reconciled_by_admin_id");
+
+                    b.Property<string>("ReconciliationFileHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("reconciliation_file_hash");
+
+                    b.Property<int>("RowCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("row_count");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_rider_payout_export_batches_status");
+
+                    b.HasIndex("PeriodStart", "PeriodEnd")
+                        .HasDatabaseName("ix_rider_payout_export_batches_period");
+
+                    b.ToTable("rider_payout_export_batches", "users");
+                });
+
             modelBuilder.Entity("RallyAPI.Users.Domain.Entities.RiderPayoutLedger", b =>
                 {
                     b.Property<Guid>("Id")
@@ -851,6 +936,14 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0)
                         .HasColumnName("delivery_count");
+
+                    b.Property<Guid?>("ExportBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("export_batch_id");
+
+                    b.Property<DateTime?>("ExportedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("exported_at_utc");
 
                     b.Property<string>("FailureReason")
                         .HasMaxLength(500)
@@ -906,7 +999,16 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("ExportBatchId")
+                        .HasDatabaseName("idx_rider_payout_ledger_export_batch_id");
 
                     b.HasIndex("RiderId")
                         .HasDatabaseName("idx_rider_payout_ledger_rider_id");

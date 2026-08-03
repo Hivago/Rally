@@ -15,7 +15,9 @@ public class VerifyOtp : IEndpoint
             .WithTags("Riders")
             .WithSummary("Verify OTP and get token")
             .AllowAnonymous()
-.RequireRateLimiting("otp");
+            // Own bucket, split from SendOtp — a mistyped OTP must not burn the
+            // quota for requesting a fresh code.
+            .RequireRateLimiting("otp-verify");
     }
 
     private static async Task<IResult> HandleAsync(

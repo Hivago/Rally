@@ -27,6 +27,7 @@ public sealed record PayoutLedgerDto
     public Guid Id { get; init; }
     public Guid OutletId { get; init; }
     public Guid OrderId { get; init; }
+    public string OrderNumber { get; init; } = string.Empty;
     public decimal OrderAmount { get; init; }
     public decimal GstAmount { get; init; }
     public decimal CommissionPercentage { get; init; }
@@ -88,6 +89,7 @@ public sealed record GstSummaryDto
 public sealed record GstLineItemDto
 {
     public Guid OrderId { get; init; }
+    public string OrderNumber { get; init; } = string.Empty;
     public Guid OutletId { get; init; }
     public decimal OrderAmount { get; init; }
     public decimal GstAmount { get; init; }
@@ -111,6 +113,7 @@ public sealed record TdsSummaryDto
 public sealed record TdsLineItemDto
 {
     public Guid OrderId { get; init; }
+    public string OrderNumber { get; init; } = string.Empty;
     public Guid OutletId { get; init; }
     public decimal OrderAmount { get; init; }
     public decimal CommissionAmount { get; init; }

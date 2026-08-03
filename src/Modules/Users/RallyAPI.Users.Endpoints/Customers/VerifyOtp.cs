@@ -15,7 +15,9 @@ public class VerifyOtp : IEndpoint
             .WithName("CustomerVerifyOtp")
             .WithTags("Customers")
             .AllowAnonymous()
-.RequireRateLimiting("otp");
+            // Own bucket, split from SendOtp — a mistyped OTP must not burn the
+            // quota for requesting a fresh code.
+            .RequireRateLimiting("otp-verify");
     }
 
     public record VerifyCustomerOtpRequest(string PhoneNumber, string Otp);

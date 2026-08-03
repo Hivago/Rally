@@ -1,4 +1,5 @@
 using MediatR;
+using RallyAPI.Catalog.Application.Abstractions;
 using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Catalog.Application.MenuItems.Commands.CreateOptionGroup;
@@ -11,7 +12,7 @@ public sealed record CreateOptionGroupCommand(
     int MinSelections,
     int MaxSelections,
     int DisplayOrder,
-    List<OptionItemDto>? Options) : IRequest<Result<CreateOptionGroupResponse>>;
+    List<OptionItemDto>? Options) : IRequest<Result<CreateOptionGroupResponse>>, IMenuCacheInvalidatingCommand;
 
 public sealed record OptionItemDto(
     string Name,

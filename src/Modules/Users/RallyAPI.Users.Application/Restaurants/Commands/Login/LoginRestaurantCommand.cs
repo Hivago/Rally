@@ -26,4 +26,5 @@ public sealed record LoginRestaurantResponse(
     string Name,
     string AccessToken,
     string RefreshToken,
-    DateTime AccessTokenExpiresAt);
+    DateTime AccessTokenExpiresAt,
+    bool MustChangePassword);

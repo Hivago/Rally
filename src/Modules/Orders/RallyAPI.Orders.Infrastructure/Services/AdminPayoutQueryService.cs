@@ -118,6 +118,7 @@ public sealed class AdminPayoutQueryService : IAdminPayoutQueryService
                 p.PeriodEnd,
                 p.CreatedAt,
                 p.PaidAt,
+                p.ExportedAtUtc,
                 p.TransactionReference
             })
             .ToListAsync(cancellationToken);
@@ -140,10 +141,68 @@ public sealed class AdminPayoutQueryService : IAdminPayoutQueryService
                 r.PeriodEnd,
                 r.CreatedAt,
                 r.PaidAt,
+                r.ExportedAtUtc,
                 r.TransactionReference))
             .ToList();
 
         return new RestaurantPayoutsPagedResult(items, total, page, pageSize);
+    }
+
+    public async Task<AdminPayoutDetail?> GetRestaurantPayoutDetailAsync(
+        Guid payoutId,
+        CancellationToken cancellationToken = default)
+    {
+        var payout = await _context.Payouts.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == payoutId, cancellationToken);
+
+        if (payout is null)
+            return null;
+
+        var ledgerEntries = await _context.PayoutLedgers.AsNoTracking()
+            .Where(l => l.PayoutId == payoutId)
+            .OrderBy(l => l.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        var displays = await _restaurantQueryService.GetOwnerPayoutDisplaysAsync(
+            [payout.OwnerId], cancellationToken);
+
+        var lines = ledgerEntries
+            .Select(e => new AdminPayoutLedgerLine(
+                e.Id,
+                e.OutletId,
+                e.OrderId,
+                e.OrderNumber,
+                e.OrderAmount,
+                e.GstAmount,
+                e.CommissionPercentage,
+                e.CommissionFlatFee,
+                e.CommissionAmount,
+                e.CommissionGst,
+                e.TdsAmount,
+                e.NetAmount,
+                e.Status.ToString(),
+                e.CreatedAt))
+            .ToList();
+
+        return new AdminPayoutDetail(
+            payout.Id,
+            payout.OwnerId,
+            FormatDisplay(payout.OwnerId, displays),
+            payout.PeriodStart,
+            payout.PeriodEnd,
+            payout.OrderCount,
+            payout.GrossOrderAmount,
+            payout.TotalGstCollected,
+            payout.TotalCommission,
+            payout.TotalCommissionGst,
+            payout.TotalTds,
+            payout.NetPayoutAmount,
+            payout.Status.ToString(),
+            payout.TransactionReference,
+            payout.PaidAt,
+            payout.Notes,
+            payout.CreatedAt,
+            lines);
     }
 
     private static string FormatDisplay(

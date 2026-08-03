@@ -97,6 +97,12 @@ public class RestaurantConfiguration : IEntityTypeConfiguration<Restaurant>
             .HasDefaultValue(false)
             .IsRequired();
 
+        // MustChangePassword — set true by admin force-reset, cleared on self-service change
+        builder.Property(r => r.MustChangePassword)
+            .HasColumnName("must_change_password")
+            .HasDefaultValue(false)
+            .IsRequired();
+
         // AvgPrepTimeMins
         builder.Property(r => r.AvgPrepTimeMins)
             .HasColumnName("avg_prep_time_mins")

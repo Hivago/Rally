@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using RallyAPI.Orders.Application.Commands.ProcessPayout;
 using RallyAPI.Orders.Application.DTOs;
 using RallyAPI.Orders.Application.Queries.GetGstSummary;
 using RallyAPI.Orders.Application.Queries.GetPayoutDetail;
@@ -27,7 +26,7 @@ public static class PayoutEndpoints
 
         restaurantGroup.MapGet("/earnings", GetEarnings)
             .WithName("GetRestaurantEarnings")
-            .WithSummary("Get current week's earnings summary");
+            .WithSummary("Get earnings summary for a date range (defaults to the current week)");
 
         restaurantGroup.MapGet("/", GetPayoutHistory)
             .WithName("GetPayoutHistory")
@@ -55,16 +54,21 @@ public static class PayoutEndpoints
             .WithName("GetPendingPayouts")
             .WithSummary("Get all pending payouts waiting for processing");
 
-        adminGroup.MapPut("/{payoutId:guid}/process", ProcessPayout)
-            .WithName("ProcessPayout")
-            .WithSummary("Mark a payout as processed with transaction reference");
+        // Legacy PUT /{payoutId}/process (manual UTR entry, no statement, no amount-match)
+        // was removed — it let an admin mark any payout Paid by typing in a reference with
+        // no verification. Payouts are settled via the weekly ICICI export + bank statement
+        // reconciliation flow instead (see specs/icici-manual-payout-export.md).
 
         return app;
     }
 
+    private static readonly TimeZoneInfo IstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+
     private static async Task<IResult> GetEarnings(
         HttpContext httpContext,
         IMediator mediator,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
         CancellationToken ct)
     {
         var ownerIdClaim = httpContext.User.FindFirst("owner_id")?.Value;
@@ -84,7 +88,29 @@ public static class PayoutEndpoints
         if (restaurant?.OwnerId is null)
             return Results.NotFound(new { error = "Restaurant owner not found" });
 
-        var query = new GetRestaurantEarningsQuery { OwnerId = restaurant.OwnerId.Value };
+        // Default to the current week (Monday-Sunday IST) when no range is given,
+        // preserving the widget's original "this week" behavior for existing callers.
+        DateOnly fromDate, toDate;
+        if (from.HasValue && to.HasValue)
+        {
+            fromDate = from.Value;
+            toDate = to.Value;
+        }
+        else
+        {
+            var istNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, IstTimeZone);
+            var daysFromMonday = ((int)istNow.DayOfWeek - 1 + 7) % 7;
+            var mondayIst = istNow.Date.AddDays(-daysFromMonday);
+            fromDate = DateOnly.FromDateTime(mondayIst);
+            toDate = fromDate.AddDays(6);
+        }
+
+        var query = new GetRestaurantEarningsQuery
+        {
+            OwnerId = restaurant.OwnerId.Value,
+            FromDate = fromDate,
+            ToDate = toDate
+        };
         var result = await mediator.Send(query, ct);
 
         return result.IsSuccess
@@ -138,25 +164,6 @@ public static class PayoutEndpoints
             : Results.BadRequest(new { error = result.Error.Message });
     }
 
-    private static async Task<IResult> ProcessPayout(
-        Guid payoutId,
-        ProcessPayoutRequest request,
-        IMediator mediator,
-        CancellationToken ct)
-    {
-        var command = new ProcessPayoutCommand
-        {
-            PayoutId = payoutId,
-            TransactionReference = request.TransactionReference,
-            Notes = request.Notes
-        };
-
-        var result = await mediator.Send(command, ct);
-
-        return result.IsSuccess
-            ? Results.Ok(new { message = "Payout processed successfully" })
-            : Results.BadRequest(new { error = result.Error.Message });
-    }
     private static async Task<IResult> GetPayoutDetail(
         Guid payoutId,
         HttpContext httpContext,
@@ -260,5 +267,3 @@ public static class PayoutEndpoints
             : Results.BadRequest(new { error = result.Error.Message });
     }
 }
-
-public record ProcessPayoutRequest(string TransactionReference, string? Notes);

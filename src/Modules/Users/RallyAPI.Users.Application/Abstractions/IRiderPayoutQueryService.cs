@@ -54,4 +54,7 @@ public sealed record RiderPayoutRow(
     string Status,
     string? StatusNote,
     DateTime CycleStart,
-    DateTime CycleEnd);
+    DateTime CycleEnd,
+    DateTime CreatedAtUtc,
+    DateTime? PaidAtUtc,
+    DateTime? ExportedAtUtc);

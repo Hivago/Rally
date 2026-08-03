@@ -3,6 +3,7 @@
 //          Consumed by Catalog module for browse/search endpoints.
 
 using Microsoft.EntityFrameworkCore;
+using RallyAPI.SharedKernel.Abstractions.Caching;
 using RallyAPI.SharedKernel.Abstractions.Restaurants;
 using RallyAPI.Users.Infrastructure.Persistence;
 
@@ -10,11 +11,48 @@ namespace RallyAPI.Users.Infrastructure.Services;
 
 internal sealed class RestaurantQueryService : IRestaurantQueryService
 {
-    private readonly UsersDbContext _context;
+    // Short TTL: browse tolerates ~30s staleness (open/close toggles evict
+    // explicitly via SetAvailability; everything else just waits out the TTL).
+    private static readonly TimeSpan ActiveRestaurantsTtl = TimeSpan.FromSeconds(30);
 
-    public RestaurantQueryService(UsersDbContext context)
+    private readonly UsersDbContext _context;
+    private readonly ICacheService _cache;
+
+    public RestaurantQueryService(UsersDbContext context, ICacheService cache)
     {
         _context = context;
+        _cache = cache;
+    }
+
+    /// <summary>
+    /// The full active-restaurant list, cached WITHOUT distance (requester-specific).
+    /// Caching the unfiltered list — rather than per-filter-combination results —
+    /// gives a near-100% hit rate; filters are cheap in memory at city scale.
+    /// </summary>
+    private async Task<IReadOnlyList<RestaurantSummary>> GetActiveSummariesAsync(CancellationToken ct)
+    {
+        return await _cache.GetOrCreateAsync<List<RestaurantSummary>>(
+            CatalogCacheKeys.ActiveRestaurants,
+            ActiveRestaurantsTtl,
+            async () =>
+            {
+                var rows = await _context.Restaurants
+                    .AsNoTracking()
+                    .Where(r => r.IsActive && r.DeletedAt == null)
+                    .ToListAsync(ct);
+
+                return rows.Select(r => ToSummary(r, null, null)).ToList();
+            },
+            ct);
+    }
+
+    private static RestaurantSummary WithDistance(RestaurantSummary s, double? lat, double? lng)
+    {
+        if (!lat.HasValue || !lng.HasValue)
+            return s;
+
+        var d = HaversineDistance(lat.Value, lng.Value, s.Latitude, s.Longitude);
+        return s with { DistanceKm = Math.Round(d, 2) };
     }
 
     public async Task<IReadOnlyList<RestaurantSummary>> GetActiveRestaurantsAsync(
@@ -23,13 +61,9 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
         double? radiusKm = null,
         CancellationToken ct = default)
     {
-        var query = _context.Restaurants
-            .AsNoTracking()
-            .Where(r => r.IsActive && r.DeletedAt == null);
+        var cached = await GetActiveSummariesAsync(ct);
 
-        var restaurants = await query.ToListAsync(ct);
-
-        var summaries = restaurants.Select(r => ToSummary(r, latitude, longitude)).ToList();
+        var summaries = cached.Select(s => WithDistance(s, latitude, longitude)).ToList();
 
         // Filter by radius if location provided
         if (latitude.HasValue && longitude.HasValue && radiusKm.HasValue)
@@ -60,47 +94,44 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
             _ => filter.PageSize
         };
 
-        var query = _context.Restaurants
-            .AsNoTracking()
-            .Where(r => r.IsActive && r.DeletedAt == null);
+        // All filtering happens in memory against the cached active list — at
+        // city scale (tens–hundreds of restaurants) this is far cheaper than a
+        // DB round trip per browse request.
+        var active = await GetActiveSummariesAsync(ct);
 
-        // SQL-side filters (cheap scalar comparisons)
+        IEnumerable<RestaurantSummary> result = active
+            .Select(s => WithDistance(s, filter.Latitude, filter.Longitude));
+
         if (filter.PureVeg == true)
-            query = query.Where(r => r.IsPureVeg);
+            result = result.Where(r => r.IsPureVeg);
 
         if (filter.VeganFriendly == true)
-            query = query.Where(r => r.IsVeganFriendly);
+            result = result.Where(r => r.IsVeganFriendly);
 
         if (filter.JainOptions == true)
-            query = query.Where(r => r.HasJainOptions);
+            result = result.Where(r => r.HasJainOptions);
 
         if (filter.OpenNow == true)
-            query = query.Where(r => r.IsAcceptingOrders);
+            result = result.Where(r => r.IsAcceptingOrders);
 
         if (filter.SupportsPickup.HasValue)
-            query = query.Where(r => r.AcceptsPickup == filter.SupportsPickup.Value);
+            result = result.Where(r => r.AcceptsPickup == filter.SupportsPickup.Value);
 
         if (filter.MaxPrepTimeMins.HasValue)
-            query = query.Where(r => r.AvgPrepTimeMins <= filter.MaxPrepTimeMins.Value);
+            result = result.Where(r => r.AvgPrepTimeMins <= filter.MaxPrepTimeMins.Value);
 
         if (filter.MinPrice.HasValue)
-            query = query.Where(r => r.MinOrderAmount >= filter.MinPrice.Value);
+            result = result.Where(r => r.MinOrderAmount >= filter.MinPrice.Value);
 
         if (filter.MaxPrice.HasValue)
-            query = query.Where(r => r.MinOrderAmount <= filter.MaxPrice.Value);
+            result = result.Where(r => r.MinOrderAmount <= filter.MaxPrice.Value);
 
-        // Name keyword — ILIKE is the Npgsql case-insensitive operator. Cuisine keyword
-        // would need to touch the jsonb column, which doesn't translate cleanly, so we
-        // handle it in-memory after materialization.
+        // Name keyword — in-memory equivalent of the previous SQL ILIKE '%term%'.
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var pattern = $"%{filter.Search.Trim()}%";
-            query = query.Where(r => EF.Functions.ILike(r.Name, pattern));
+            var term = filter.Search.Trim();
+            result = result.Where(r => r.Name.Contains(term, StringComparison.OrdinalIgnoreCase));
         }
-
-        var rows = await query.ToListAsync(ct);
-
-        IEnumerable<RestaurantSummary> result = rows.Select(r => ToSummary(r, filter.Latitude, filter.Longitude));
 
         // In-memory filters: cuisine list (jsonb) + Haversine radius
         if (filter.Cuisines is { Count: > 0 })
@@ -290,5 +321,29 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
                     info?.OutletCount ?? 0,
                     info?.FirstName);
             });
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, OwnerBankDetails>> GetOwnerBankDetailsAsync(
+        IReadOnlyCollection<Guid> ownerIds,
+        CancellationToken ct = default)
+    {
+        if (ownerIds.Count == 0)
+            return new Dictionary<Guid, OwnerBankDetails>();
+
+        var owners = await _context.RestaurantOwners
+            .AsNoTracking()
+            .Where(o => ownerIds.Contains(o.Id))
+            .Select(o => new
+            {
+                o.Id,
+                o.BankAccountNumber,
+                o.BankIfscCode,
+                o.BankAccountName
+            })
+            .ToListAsync(ct);
+
+        return owners.ToDictionary(
+            o => o.Id,
+            o => new OwnerBankDetails(o.Id, o.BankAccountNumber, o.BankIfscCode, o.BankAccountName));
     }
 }
