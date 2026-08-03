@@ -23,17 +23,18 @@ internal sealed class SendRestaurantOtpCommandHandler : IRequestHandler<SendRest
             return Result.Failure(phoneResult.Error);
 
         // Unlike Customer OTP, restaurant accounts are admin-provisioned — never auto-create,
-        // and never send an OTP to a phone that can't resolve to exactly one account.
-        var matches = await _restaurantRepository.GetByPhoneAsync(phoneResult.Value, cancellationToken);
+        // and never send an OTP to a phone that can't resolve to exactly one account. Deactivated
+        // duplicates (e.g. a mistaken second registration) don't count against the real account.
+        var matches = (await _restaurantRepository.GetByPhoneAsync(phoneResult.Value, cancellationToken))
+            .Where(r => r.IsActive)
+            .ToList();
+
         if (matches.Count == 0)
-            return Result.Failure(Error.Validation("No restaurant account found for this phone number."));
+            return Result.Failure(Error.Validation("No active restaurant account found for this phone number."));
 
         if (matches.Count > 1)
             return Result.Failure(Error.Validation(
                 "Multiple accounts are linked to this phone number. Please log in with email and password, or contact support."));
-
-        if (!matches[0].IsActive)
-            return Result.Failure(Error.Validation("Restaurant account is inactive. Contact support."));
 
         var otpResult = await _otpService.GenerateAndSendOtpAsync(phoneResult.Value.Value, cancellationToken);
         if (otpResult.IsFailure)

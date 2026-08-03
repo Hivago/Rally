@@ -44,17 +44,19 @@ internal sealed class VerifyRestaurantOtpCommandHandler
             return Result.Failure<VerifyRestaurantOtpResponse>(Error.Validation("Invalid or expired OTP."));
 
         // Re-check existence/uniqueness at verify time too — state may have changed since send.
-        var matches = await _restaurantRepository.GetByPhoneAsync(phoneResult.Value, cancellationToken);
+        // Deactivated duplicates don't count against the real account.
+        var matches = (await _restaurantRepository.GetByPhoneAsync(phoneResult.Value, cancellationToken))
+            .Where(r => r.IsActive)
+            .ToList();
+
         if (matches.Count == 0)
-            return Result.Failure<VerifyRestaurantOtpResponse>(Error.Validation("No restaurant account found for this phone number."));
+            return Result.Failure<VerifyRestaurantOtpResponse>(Error.Validation("No active restaurant account found for this phone number."));
 
         if (matches.Count > 1)
             return Result.Failure<VerifyRestaurantOtpResponse>(Error.Validation(
                 "Multiple accounts are linked to this phone number. Please log in with email and password, or contact support."));
 
         var restaurant = matches[0];
-        if (!restaurant.IsActive)
-            return Result.Failure<VerifyRestaurantOtpResponse>(Error.Validation("Restaurant account is inactive. Contact support."));
 
         var tokenPair = _jwtProvider.GenerateRestaurantTokenPair(restaurant);
 

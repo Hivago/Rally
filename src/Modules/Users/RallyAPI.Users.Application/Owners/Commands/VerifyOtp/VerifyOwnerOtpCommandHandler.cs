@@ -44,17 +44,19 @@ internal sealed class VerifyOwnerOtpCommandHandler
             return Result.Failure<VerifyOwnerOtpResponse>(Error.Validation("Invalid or expired OTP."));
 
         // Re-check existence/uniqueness at verify time too — state may have changed since send.
-        var matches = await _ownerRepository.GetByPhoneAsync(phoneResult.Value, cancellationToken);
+        // Deactivated duplicates don't count against the real account.
+        var matches = (await _ownerRepository.GetByPhoneAsync(phoneResult.Value, cancellationToken))
+            .Where(o => o.IsActive)
+            .ToList();
+
         if (matches.Count == 0)
-            return Result.Failure<VerifyOwnerOtpResponse>(Error.Validation("No owner account found for this phone number."));
+            return Result.Failure<VerifyOwnerOtpResponse>(Error.Validation("No active owner account found for this phone number."));
 
         if (matches.Count > 1)
             return Result.Failure<VerifyOwnerOtpResponse>(Error.Validation(
                 "Multiple accounts are linked to this phone number. Please log in with email and password, or contact support."));
 
         var owner = matches[0];
-        if (!owner.IsActive)
-            return Result.Failure<VerifyOwnerOtpResponse>(Error.Validation("Owner account is inactive. Contact support."));
 
         var tokenPair = _jwtProvider.GenerateOwnerTokenPair(owner);
 

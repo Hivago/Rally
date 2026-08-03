@@ -22,18 +22,19 @@ internal sealed class SendOwnerOtpCommandHandler : IRequestHandler<SendOwnerOtpC
         if (phoneResult.IsFailure)
             return Result.Failure(phoneResult.Error);
 
-        // Owner accounts are admin-provisioned — never auto-create, and never send an OTP
-        // to a phone that can't resolve to exactly one account.
-        var matches = await _ownerRepository.GetByPhoneAsync(phoneResult.Value, cancellationToken);
+        // Owner accounts are admin-provisioned — never auto-create, and never send an OTP to a
+        // phone that can't resolve to exactly one account. Deactivated duplicates (e.g. a
+        // mistaken second registration) don't count against the real account.
+        var matches = (await _ownerRepository.GetByPhoneAsync(phoneResult.Value, cancellationToken))
+            .Where(o => o.IsActive)
+            .ToList();
+
         if (matches.Count == 0)
-            return Result.Failure(Error.Validation("No owner account found for this phone number."));
+            return Result.Failure(Error.Validation("No active owner account found for this phone number."));
 
         if (matches.Count > 1)
             return Result.Failure(Error.Validation(
                 "Multiple accounts are linked to this phone number. Please log in with email and password, or contact support."));
-
-        if (!matches[0].IsActive)
-            return Result.Failure(Error.Validation("Owner account is inactive. Contact support."));
 
         var otpResult = await _otpService.GenerateAndSendOtpAsync(phoneResult.Value.Value, cancellationToken);
         if (otpResult.IsFailure)
