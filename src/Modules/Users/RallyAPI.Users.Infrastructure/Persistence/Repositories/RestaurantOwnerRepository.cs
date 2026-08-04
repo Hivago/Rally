@@ -32,6 +32,13 @@ public class RestaurantOwnerRepository : IRestaurantOwnerRepository
             .AnyAsync(o => o.Email == email, ct);
     }
 
+    public async Task<IReadOnlyList<RestaurantOwner>> GetByPhoneAsync(PhoneNumber phone, CancellationToken ct = default)
+    {
+        return await _context.RestaurantOwners
+            .Where(o => o.Phone == phone)
+            .ToListAsync(ct);
+    }
+
     public async Task<(IReadOnlyList<RestaurantOwner> Items, int TotalCount)> GetPagedAsync(
         bool? isActive,
         string? search,
