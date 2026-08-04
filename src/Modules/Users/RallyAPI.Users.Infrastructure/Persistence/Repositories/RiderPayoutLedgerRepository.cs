@@ -40,6 +40,32 @@ public sealed class RiderPayoutLedgerRepository : IRiderPayoutLedgerRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<RiderPayoutLedger>> GetByExportBatchIdAsync(
+        Guid exportBatchId, CancellationToken ct = default)
+    {
+        return await _context.RiderPayoutLedger
+            .Where(p => p.ExportBatchId == exportBatchId)
+            .ToListAsync(ct);
+    }
+
+    public async Task<bool> ExistsWithTransactionReferenceAsync(
+        string transactionReference, CancellationToken ct = default)
+    {
+        return await _context.RiderPayoutLedger
+            .AnyAsync(p => p.TransactionReference == transactionReference, ct);
+    }
+
+    public async Task<IReadOnlyList<RiderPayoutLedger>> GetStaleProcessingAsync(
+        DateTime olderThanUtc, CancellationToken ct = default)
+    {
+        return await _context.RiderPayoutLedger
+            .Where(p => p.Status == RiderPayoutStatus.Processing
+                     && p.ExportedAtUtc != null
+                     && p.ExportedAtUtc < olderThanUtc)
+            .OrderBy(p => p.ExportedAtUtc)
+            .ToListAsync(ct);
+    }
+
     public async Task<RiderEarningsBreakdown> GetEarningsBreakdownAsync(
         Guid riderId,
         DateTime nowUtc,

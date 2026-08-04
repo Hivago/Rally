@@ -24,4 +24,28 @@ public interface IPayoutRepository
     /// </summary>
     Task<IReadOnlyList<Payout>> GetPendingByPeriodAsync(
         DateOnly periodStart, DateOnly periodEnd, CancellationToken ct = default);
+
+    /// <summary>
+    /// All payouts stamped with the given export batch, regardless of status. Used by
+    /// reconciliation to scope the ICICI result-file rows to exactly the payouts that went
+    /// out in that batch.
+    /// </summary>
+    Task<IReadOnlyList<Payout>> GetByExportBatchIdAsync(
+        Guid exportBatchId, CancellationToken ct = default);
+
+    /// <summary>
+    /// True if any payout already carries this bank-issued transaction reference (UTR).
+    /// Used by reconciliation to reject a duplicate/replayed UTR before marking a second
+    /// payout Paid off the same real transfer.
+    /// </summary>
+    Task<bool> ExistsWithTransactionReferenceAsync(
+        string transactionReference, CancellationToken ct = default);
+
+    /// <summary>
+    /// Payouts still Processing (exported, not yet reconciled) whose ExportedAtUtc is older
+    /// than the given cutoff — the "stuck in the bank" report so nothing rots silently past
+    /// the point a human should look at it.
+    /// </summary>
+    Task<IReadOnlyList<Payout>> GetStaleProcessingAsync(
+        DateTime olderThanUtc, CancellationToken ct = default);
 }
