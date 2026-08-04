@@ -65,7 +65,8 @@ public class ManuallyResolveRiderPayoutCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         payout.Status.Should().Be(RiderPayoutStatus.Paid);
         batch.Status.Should().Be(PayoutExportBatchStatus.Reconciled);
-        batch.ReconciliationFileHash.Should().StartWith("MANUAL-OVERRIDE-");
+        batch.ReconciliationFileHash.Should().StartWith("MANUAL-");
+        batch.ReconciliationFileHash!.Length.Should().BeLessOrEqualTo(64);
     }
 
     [Fact]

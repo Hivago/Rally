@@ -232,5 +232,6 @@ Three gaps identified while walking through a year of real admin usage were clos
   drifted rider bank details, a row the bank's report never covered). Requires a ≥10-char
   reason and, for Paid, a UTR checked against the same duplicate-UTR guard as automatic
   reconciliation. Closes the batch (`MarkReconciled`) if it was the last payout still
-  Processing, stamping a `MANUAL-OVERRIDE-` prefixed marker instead of a file hash so a later
-  audit can tell it apart from an automatic reconcile.
+  Processing, stamping a `MANUAL-`-prefixed marker instead of a file hash so a later audit can
+  tell it apart from an automatic reconcile (marker is truncated to fit the column's 64-char
+  limit, sized for a real SHA-256 hex digest — caught by the live smoke test below).

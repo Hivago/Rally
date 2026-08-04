@@ -84,7 +84,8 @@ public class ManuallyResolveRestaurantPayoutCommandHandlerTests
         payout.Status.Should().Be(PayoutStatus.Paid);
         payout.TransactionReference.Should().Be("IN42619755781929");
         batch.Status.Should().Be(PayoutExportBatchStatus.Reconciled);
-        batch.ReconciliationFileHash.Should().StartWith("MANUAL-OVERRIDE-");
+        batch.ReconciliationFileHash.Should().StartWith("MANUAL-");
+        batch.ReconciliationFileHash!.Length.Should().BeLessOrEqualTo(64);
     }
 
     [Fact]

@@ -68,9 +68,11 @@ public sealed class ManuallyResolveRiderPayoutCommandHandler
                 var stillProcessing = siblings.Any(p => p.Id != payout.Id && p.Status == RiderPayoutStatus.Processing);
                 if (!stillProcessing)
                 {
+                    // ReconciliationFileHash is HasMaxLength(64) (sized for a real SHA-256
+                    // hex digest) — the "MANUAL-" prefix + truncated hash must fit inside it.
                     var marker = $"MANUAL-OVERRIDE:{request.ResolvedByAdminId}:{DateTime.UtcNow:O}";
                     var markerHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(marker)));
-                    batch.MarkReconciled(request.ResolvedByAdminId, $"MANUAL-OVERRIDE-{markerHash}");
+                    batch.MarkReconciled(request.ResolvedByAdminId, $"MANUAL-{markerHash[..56]}");
                     _batchRepository.Update(batch);
                 }
             }
