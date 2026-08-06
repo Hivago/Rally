@@ -20,17 +20,20 @@ public class RefundPaymentCommandHandler
     private readonly IPaymentRepository _paymentRepository;
     private readonly IOrderRepository _orderRepository;
     private readonly IPayUService _payUService;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<RefundPaymentCommandHandler> _logger;
 
     public RefundPaymentCommandHandler(
         IPaymentRepository paymentRepository,
         IOrderRepository orderRepository,
         IPayUService payUService,
+        IUnitOfWork unitOfWork,
         ILogger<RefundPaymentCommandHandler> logger)
     {
         _paymentRepository = paymentRepository;
         _orderRepository = orderRepository;
         _payUService = payUService;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -52,6 +55,17 @@ public class RefundPaymentCommandHandler
         if (string.IsNullOrWhiteSpace(payment.PayuId))
             return Result.Failure<RefundPaymentResponse>(
                 Error.Create("Payment.NoPayuId", "Cannot refund — no PayU transaction ID"));
+
+        // 2b. Admin force-refund on a payment stuck before Paid (e.g. webhook never confirmed
+        // success even though PayU already captured the money) must reconcile the local status
+        // to Paid first — MarkRefundInitiated always requires Paid regardless of ForceRefund,
+        // and a PayuId is already on record so the underlying transaction genuinely exists.
+        if (bypassRefundableCheck
+            && payment.Status != PaymentStatus.Paid
+            && (payment.Status == PaymentStatus.Pending || payment.Status == PaymentStatus.Processing))
+        {
+            payment.MarkSuccess(payment.PayuId, payment.PaymentMode ?? string.Empty, payment.BankRefNum);
+        }
 
         // 3. Determine refund amount
         var refundAmount = command.Amount ?? payment.Amount;
@@ -78,10 +92,11 @@ public class RefundPaymentCommandHandler
 
         // 6. Update order's payment status
         var order = await _orderRepository.GetByIdAsync(command.OrderId, ct);
-        if (order is not null)
+        if (order is not null && order.Status.RequiresRefund())
         {
             order.InitiateRefund();
             _orderRepository.Update(order, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
         }
 
         _logger.LogInformation(
