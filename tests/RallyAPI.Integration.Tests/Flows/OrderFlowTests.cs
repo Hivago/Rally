@@ -27,7 +27,7 @@ public sealed class OrderFlowTests : IntegrationTestBase
     {
         AuthenticateAsCustomer();
 
-        var response = await Client.PostAsync("/api/orders", JsonBody(BuildPlaceOrderRequest()));
+        var response = await PostOrderAsync(BuildPlaceOrderRequest());
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         response.Headers.Location.Should().NotBeNull();
@@ -48,7 +48,7 @@ public sealed class OrderFlowTests : IntegrationTestBase
     {
         Client.DefaultRequestHeaders.Authorization = null;
 
-        var response = await Client.PostAsync("/api/orders", JsonBody(BuildPlaceOrderRequest()));
+        var response = await PostOrderAsync(BuildPlaceOrderRequest());
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -59,7 +59,7 @@ public sealed class OrderFlowTests : IntegrationTestBase
         AuthenticateAsCustomer();
 
         var body = BuildPlaceOrderRequest(paymentId: "");
-        var response = await Client.PostAsync("/api/orders", JsonBody(body));
+        var response = await PostOrderAsync(body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         await AssertErrorShapeAsync(response);

@@ -55,6 +55,17 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected static StringContent JsonBody(object body)
         => new(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
+    /// <summary>POST /api/orders requires an Idempotency-Key header — this attaches a fresh one per call.</summary>
+    protected async Task<HttpResponseMessage> PostOrderAsync(object body)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/orders")
+        {
+            Content = JsonBody(body)
+        };
+        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        return await Client.SendAsync(request);
+    }
+
     protected static async Task<T> DeserializeAsync<T>(HttpResponseMessage response)
     {
         var json = await response.Content.ReadAsStringAsync();
@@ -117,7 +128,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         AuthenticateAsCustomer();
 
         var body     = BuildPlaceOrderRequest(restaurantId, paymentId, subTotal, deliveryFee);
-        var response = await Client.PostAsync("/api/orders", JsonBody(body));
+        var response = await PostOrderAsync(body);
         response.EnsureSuccessStatusCode();
 
         var json   = await response.Content.ReadAsStringAsync();
