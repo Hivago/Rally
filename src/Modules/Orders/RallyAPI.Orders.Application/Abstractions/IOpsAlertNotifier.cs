@@ -6,6 +6,8 @@ public interface IOpsAlertNotifier
         Guid orderId,
         string orderNumber,
         Guid restaurantId,
+        string restaurantName,
+        string? restaurantPhone,
         string reason,
         DateTime escalatedAt,
         CancellationToken cancellationToken = default);

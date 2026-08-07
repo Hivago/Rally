@@ -39,6 +39,8 @@ public sealed class DiscordOpsAlertNotifier : IOpsAlertNotifier
         Guid orderId,
         string orderNumber,
         Guid restaurantId,
+        string restaurantName,
+        string? restaurantPhone,
         string reason,
         DateTime escalatedAt,
         CancellationToken cancellationToken = default)
@@ -48,6 +50,12 @@ public sealed class DiscordOpsAlertNotifier : IOpsAlertNotifier
             _logger.LogDebug("Discord ops-alerts webhook not configured — skipping notification.");
             return;
         }
+
+        // Discord embed field values support markdown, so a tel: link lets whoever is on
+        // call tap straight into a phone dialer instead of copy-pasting the number.
+        var phoneDisplay = string.IsNullOrWhiteSpace(restaurantPhone)
+            ? "—"
+            : $"[{restaurantPhone}](tel:{restaurantPhone})";
 
         var payload = new DiscordWebhookPayload(
             Embeds:
@@ -59,9 +67,10 @@ public sealed class DiscordOpsAlertNotifier : IOpsAlertNotifier
                     Fields:
                     [
                         new DiscordEmbedField("Order Number", orderNumber, true),
-                        new DiscordEmbedField("Order ID", orderId.ToString(), true),
-                        new DiscordEmbedField("Restaurant ID", restaurantId.ToString(), true),
+                        new DiscordEmbedField("Restaurant", restaurantName, true),
+                        new DiscordEmbedField("Call Restaurant", phoneDisplay, true),
                         new DiscordEmbedField("Escalated At (UTC)", escalatedAt.ToString("u"), true),
+                        new DiscordEmbedField("Order ID", orderId.ToString(), false),
                     ])
             ]);
 

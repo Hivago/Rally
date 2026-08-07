@@ -23,6 +23,8 @@ public sealed class OrderEscalatedToAdminDiscordNotificationHandler : INotificat
             notification.OrderId,
             notification.OrderNumber,
             notification.RestaurantId,
+            notification.RestaurantName,
+            notification.RestaurantPhone,
             notification.EscalationReason,
             notification.EscalatedAt,
             cancellationToken);
