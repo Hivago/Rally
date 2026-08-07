@@ -14,6 +14,10 @@
   <ItemGroup>
     <ProjectReference Include="..\RallyAPI.Marketing.Application\RallyAPI.Marketing.Application.csproj" />
     <ProjectReference Include="..\RallyAPI.Marketing.Infrastructure\RallyAPI.Marketing.Infrastructure.csproj" />
+    <!-- Needed only for the AdminRole.SuperAdmin check on the onboarding-application detail
+         endpoint (mirrors the same cross-module composition-root pattern already used by
+         Users.Endpoints reaching into Orders.Application for the ICICI reconcile endpoints). -->
+    <ProjectReference Include="..\..\Users\RallyAPI.Users.Application\RallyAPI.Users.Application.csproj" />
   </ItemGroup>
 
 </Project>
