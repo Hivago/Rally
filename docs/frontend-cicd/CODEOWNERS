@@ -1,0 +1,15 @@
+# CODEOWNERS — place at repo root or in .github/CODEOWNERS
+#
+# This makes you (the CTO) the required reviewer for EVERY change in the repo.
+# Combined with "Require review from Code Owners" in branch protection, it means
+# no PR can be merged without your approval.
+#
+# Replace @yashdvishwakarma with your actual GitHub username if different.
+
+# You own everything.
+*       @yashdvishwakarma
+
+# (Optional) If you later want the frontend dev to be able to approve small,
+# non-critical areas while you keep control of the rest, you can scope it, e.g.:
+#   /src/components/ui/   @yashdvishwakarma @frontend-dev-username
+# But for "only you can merge", keep the single line above.
