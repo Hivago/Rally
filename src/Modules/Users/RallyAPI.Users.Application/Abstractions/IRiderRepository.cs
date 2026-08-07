@@ -10,6 +10,14 @@ public interface IRiderRepository
     Task<Rider?> GetByPhoneAsync(PhoneNumber phone, CancellationToken cancellationToken = default);
     Task<bool> ExistsByPhoneAsync(PhoneNumber phone, CancellationToken cancellationToken = default);
     Task<List<Rider>> GetOnlineRidersAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Riders still flagged IsOnline whose last known activity (LastLocationUpdate, falling
+    /// back to UpdatedAt for riders who never sent a location ping) is older than <paramref name="cutoff"/>.
+    /// Used by the presence sweep to auto-offline riders whose app never called GoOffline
+    /// (killed, crashed, or lost connectivity without a clean disconnect).
+    /// </summary>
+    Task<List<Rider>> GetStaleOnlineRidersAsync(DateTime cutoff, CancellationToken cancellationToken = default);
     Task<Rider?> GetByIdWithKycAsync(Guid id, CancellationToken cancellationToken = default);
     Task<int> CountAsync(bool? isOnline = null, CancellationToken cancellationToken = default);
     Task<int> CountPendingKycAsync(CancellationToken cancellationToken = default);
