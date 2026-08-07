@@ -576,6 +576,8 @@ public sealed class Order : AggregateRoot
             Id,
             OrderNumber.Value,  // adjust if OrderNumber is a string, not a value object
             RestaurantId,
+            RestaurantName,
+            RestaurantPhone,
             reason,
             EscalatedAt.Value));
     }

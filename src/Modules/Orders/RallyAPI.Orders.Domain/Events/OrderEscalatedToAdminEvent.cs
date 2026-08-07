@@ -11,6 +11,8 @@ public sealed class OrderEscalatedToAdminEvent : BaseDomainEvent
     public Guid OrderId { get; init; }
     public string OrderNumber { get; init; }
     public Guid RestaurantId { get; init; }
+    public string RestaurantName { get; init; }
+    public string? RestaurantPhone { get; init; }
     public string EscalationReason { get; init; }
     public DateTime EscalatedAt { get; init; }
 
@@ -18,12 +20,16 @@ public sealed class OrderEscalatedToAdminEvent : BaseDomainEvent
         Guid orderId,
         string orderNumber,
         Guid restaurantId,
+        string restaurantName,
+        string? restaurantPhone,
         string escalationReason,
         DateTime escalatedAt)
     {
         OrderId = orderId;
         OrderNumber = orderNumber;
         RestaurantId = restaurantId;
+        RestaurantName = restaurantName;
+        RestaurantPhone = restaurantPhone;
         EscalationReason = escalationReason;
         EscalatedAt = escalatedAt;
     }

@@ -40,6 +40,14 @@ public class RiderRepository : IRiderRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<Rider>> GetStaleOnlineRidersAsync(DateTime cutoff, CancellationToken cancellationToken = default)
+    {
+        return await _context.Riders
+            .Where(r => r.IsOnline)
+            .Where(r => (r.LastLocationUpdate ?? r.UpdatedAt) < cutoff)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<Rider?> GetByIdWithKycAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await _context.Riders
