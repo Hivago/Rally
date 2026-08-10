@@ -21,7 +21,7 @@ public class GetStaleRestaurantPayoutsQueryHandlerTests
         var ledger = PayoutLedger.Create(ownerId, Guid.NewGuid(), Guid.NewGuid(), "ORD-1", 550m, 50m);
         var payout = Payout.CreateFromLedger(ownerId, PeriodStart, PeriodEnd, new[] { ledger }, "111", "ICIC0001111");
         var batchId = Guid.NewGuid();
-        payout.MarkProcessing(batchId);
+        payout.MarkProcessing(batchId, "111", "ICIC0001111");
 
         var handler = new GetStaleRestaurantPayoutsQueryHandler(_payoutRepository);
         _payoutRepository.GetStaleProcessingAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>())

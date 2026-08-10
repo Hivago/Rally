@@ -31,13 +31,13 @@ public class ListRestaurantPayoutExportBatchesQueryHandlerTests
         var ownerId1 = Guid.NewGuid();
         var ledger1 = PayoutLedger.Create(ownerId1, Guid.NewGuid(), Guid.NewGuid(), "ORD-1", 550m, 50m);
         var paidPayout = Payout.CreateFromLedger(ownerId1, PeriodStart, PeriodEnd, new[] { ledger1 }, "111", "ICIC0001111");
-        paidPayout.MarkProcessing(batch.Id);
+        paidPayout.MarkProcessing(batch.Id, "111", "ICIC0001111");
         paidPayout.MarkPaid("IN42619755781929");
 
         var ownerId2 = Guid.NewGuid();
         var ledger2 = PayoutLedger.Create(ownerId2, Guid.NewGuid(), Guid.NewGuid(), "ORD-2", 550m, 50m);
         var stuckPayout = Payout.CreateFromLedger(ownerId2, PeriodStart, PeriodEnd, new[] { ledger2 }, "222", "ICIC0002222");
-        stuckPayout.MarkProcessing(batch.Id);
+        stuckPayout.MarkProcessing(batch.Id, "222", "ICIC0002222");
 
         _batchRepository.GetRecentAsync(null, 0, 20, Arg.Any<CancellationToken>())
             .Returns(new[] { batch });

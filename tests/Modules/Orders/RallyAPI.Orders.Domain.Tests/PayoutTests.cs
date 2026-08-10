@@ -81,16 +81,18 @@ public class PayoutTests
     // --- Lifecycle the ICICI export/reconcile flow depends on ---
 
     [Fact]
-    public void MarkProcessing_FromPending_StampsExportBatch()
+    public void MarkProcessing_FromPending_StampsExportBatchAndBankDetails()
     {
         var payout = Payout.CreateFromLedger(OwnerId, PeriodStart, PeriodEnd, new[] { Ledger(500m, 30m) }, null, null);
         var batchId = Guid.NewGuid();
 
-        payout.MarkProcessing(batchId);
+        payout.MarkProcessing(batchId, "123123123123", "SBIN0000123");
 
         payout.Status.Should().Be(PayoutStatus.Processing);
         payout.ExportBatchId.Should().Be(batchId);
         payout.ExportedAtUtc.Should().NotBeNull();
+        payout.BankAccountNumber.Should().Be("123123123123");
+        payout.BankIfscCode.Should().Be("SBIN0000123");
     }
 
     [Fact]
@@ -98,7 +100,21 @@ public class PayoutTests
     {
         var payout = Payout.CreateFromLedger(OwnerId, PeriodStart, PeriodEnd, new[] { Ledger(500m, 30m) }, null, null);
 
-        var act = () => payout.MarkProcessing(Guid.Empty);
+        var act = () => payout.MarkProcessing(Guid.Empty, "123123123123", "SBIN0000123");
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(null, "SBIN0000123")]
+    [InlineData("", "SBIN0000123")]
+    [InlineData("123123123123", null)]
+    [InlineData("123123123123", "")]
+    public void MarkProcessing_WithMissingBankDetails_Throws(string? accountNumber, string? ifscCode)
+    {
+        var payout = Payout.CreateFromLedger(OwnerId, PeriodStart, PeriodEnd, new[] { Ledger(500m, 30m) }, null, null);
+
+        var act = () => payout.MarkProcessing(Guid.NewGuid(), accountNumber!, ifscCode!);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -107,11 +123,11 @@ public class PayoutTests
     public void MarkProcessing_FromNonPending_Throws()
     {
         var payout = Payout.CreateFromLedger(OwnerId, PeriodStart, PeriodEnd, new[] { Ledger(500m, 30m) }, null, null);
-        payout.MarkProcessing(Guid.NewGuid());
+        payout.MarkProcessing(Guid.NewGuid(), "123123123123", "SBIN0000123");
 
         // Already Processing — a second export can never re-pick this payout up
         // (the anti-double-pay invariant).
-        var act = () => payout.MarkProcessing(Guid.NewGuid());
+        var act = () => payout.MarkProcessing(Guid.NewGuid(), "123123123123", "SBIN0000123");
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -125,7 +141,7 @@ public class PayoutTests
         var premature = () => payout.MarkPaid("ICICIUTR123");
         premature.Should().Throw<InvalidOperationException>();
 
-        payout.MarkProcessing(Guid.NewGuid());
+        payout.MarkProcessing(Guid.NewGuid(), "123123123123", "SBIN0000123");
         payout.MarkPaid("ICICIUTR123");
 
         payout.Status.Should().Be(PayoutStatus.Paid);
@@ -137,7 +153,7 @@ public class PayoutTests
     public void MarkFailed_FromProcessing_RecordsReason()
     {
         var payout = Payout.CreateFromLedger(OwnerId, PeriodStart, PeriodEnd, new[] { Ledger(500m, 30m) }, null, null);
-        payout.MarkProcessing(Guid.NewGuid());
+        payout.MarkProcessing(Guid.NewGuid(), "123123123123", "SBIN0000123");
 
         payout.MarkFailed("Account frozen at beneficiary bank");
 

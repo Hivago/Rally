@@ -33,7 +33,7 @@ public class ManuallyResolveRestaurantPayoutCommandHandlerTests
         var ownerId = Guid.NewGuid();
         var ledger = PayoutLedger.Create(ownerId, Guid.NewGuid(), Guid.NewGuid(), "ORD-1", 550m, 50m);
         var payout = Payout.CreateFromLedger(ownerId, PeriodStart, PeriodEnd, new[] { ledger }, "111", "ICIC0001111");
-        payout.MarkProcessing(batchId);
+        payout.MarkProcessing(batchId, "111", "ICIC0001111");
         return payout;
     }
 

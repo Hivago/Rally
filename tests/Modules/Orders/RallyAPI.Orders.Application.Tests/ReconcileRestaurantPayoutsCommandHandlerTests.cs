@@ -35,7 +35,7 @@ public class ReconcileRestaurantPayoutsCommandHandlerTests
     {
         var ledger = PayoutLedger.Create(ownerId, Guid.NewGuid(), Guid.NewGuid(), "ORD-20260713-00001", orderAmount, commissionFlatFee);
         var payout = Payout.CreateFromLedger(ownerId, PeriodStart, PeriodEnd, new[] { ledger }, accountNumber, ifsc);
-        payout.MarkProcessing(batchId);
+        payout.MarkProcessing(batchId, accountNumber, ifsc);
         return payout;
     }
 

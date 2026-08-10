@@ -75,8 +75,11 @@ public sealed class Payout : AggregateRoot
     /// Marks this payout as included in an exported ICICI bulk-transfer file. Only a Pending
     /// payout can be exported — Processing/OnHold/Paid/Failed payouts are never re-included
     /// in a later export, which is what makes double-export (and so double-pay) impossible.
+    /// Stamps the exact bank details written into that file onto the payout itself, so
+    /// reconcile's (account, IFSC, amount) matching key always reflects what the bank actually
+    /// received — not whatever was on file (possibly nothing) when the payout was created.
     /// </summary>
-    public void MarkProcessing(Guid exportBatchId)
+    public void MarkProcessing(Guid exportBatchId, string bankAccountNumber, string bankIfscCode)
     {
         if (Status != PayoutStatus.Pending)
             throw new InvalidOperationException($"Cannot process payout in {Status} status.");
@@ -84,9 +87,17 @@ public sealed class Payout : AggregateRoot
         if (exportBatchId == Guid.Empty)
             throw new ArgumentException("Export batch ID is required.", nameof(exportBatchId));
 
+        if (string.IsNullOrWhiteSpace(bankAccountNumber))
+            throw new ArgumentException("Bank account number is required.", nameof(bankAccountNumber));
+
+        if (string.IsNullOrWhiteSpace(bankIfscCode))
+            throw new ArgumentException("Bank IFSC code is required.", nameof(bankIfscCode));
+
         Status = PayoutStatus.Processing;
         ExportBatchId = exportBatchId;
         ExportedAtUtc = DateTime.UtcNow;
+        BankAccountNumber = bankAccountNumber;
+        BankIfscCode = bankIfscCode;
         MarkAsUpdated();
     }
 
