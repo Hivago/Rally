@@ -29,7 +29,7 @@ public sealed record RestaurantOnboardingApplicationSummaryDto(
     string Email,
     string City,
     OnboardingApplicationStatus Status,
-    string BankAccountMasked,
+    string? BankAccountMasked,   // null if the applicant didn't provide bank details
     string PanMasked,
     string? GstMasked,
     DateTime CreatedAt);

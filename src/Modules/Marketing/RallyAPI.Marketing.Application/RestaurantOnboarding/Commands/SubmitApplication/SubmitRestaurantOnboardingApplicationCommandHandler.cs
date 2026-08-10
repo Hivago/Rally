@@ -46,8 +46,15 @@ public sealed class SubmitRestaurantOnboardingApplicationCommandHandler
         // Encrypt sensitive fields here — never write plaintext PAN/GST/bank account number
         // to the database. Everything else stays plaintext (non-sensitive, and needed for
         // search/display in the admin review list).
-        var bankAccountNumberEncrypted = _encryption.Encrypt(request.BankAccountNumber);
-        var bankAccountLast4 = Last4(request.BankAccountNumber);
+        // Bank details are temporarily optional (onboarding.hivago.in doesn't collect them
+        // yet) — mirrors the GST handling just below.
+        string? bankAccountNumberEncrypted = null;
+        string? bankAccountLast4 = null;
+        if (!string.IsNullOrWhiteSpace(request.BankAccountNumber))
+        {
+            bankAccountNumberEncrypted = _encryption.Encrypt(request.BankAccountNumber);
+            bankAccountLast4 = Last4(request.BankAccountNumber);
+        }
 
         var panNumberEncrypted = _encryption.Encrypt(request.PanNumber);
         var panLast4 = Last4(request.PanNumber);

@@ -444,6 +444,7 @@ string[] productionOrigins =
     "https://admin.hivago.in",
     "https://restaurant.hivago.in",
     "https://onboarding.hivago.in",
+    "https://onboarding.hivago.in",
 ];
 
 string[] localhostOrigins =
