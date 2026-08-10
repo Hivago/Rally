@@ -81,6 +81,34 @@ public class GenerateRestaurantPayoutExportCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_StampsLiveBankDetailsOntoPayout_SoReconcileCanMatchLater()
+    {
+        // Regression: the payout is created with null bank details (WeeklyPayoutBatchService
+        // doesn't know them yet) — export must stamp the live owner bank details it just wrote
+        // into the file onto the Payout entity too, or reconcile's (account, IFSC, amount) match
+        // can never succeed even when the uploaded bank report is byte-identical to the export.
+        var owner = Guid.NewGuid();
+        var payout = PendingPayout(owner, 500m, 30m);
+        payout.BankAccountNumber.Should().BeNull();
+        payout.BankIfscCode.Should().BeNull();
+
+        _payoutRepository.GetPendingByPeriodAsync(PeriodStart, PeriodEnd, Arg.Any<CancellationToken>())
+            .Returns(new[] { payout });
+        _restaurantQueryService.GetOwnerBankDetailsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, OwnerBankDetails>
+            {
+                [owner] = new OwnerBankDetails(owner, "123123123123", "SBIN0000123", "Aditya")
+            });
+
+        var result = await _handler.Handle(
+            new GenerateRestaurantPayoutExportCommand(PeriodStart, PeriodEnd, AdminId), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        payout.BankAccountNumber.Should().Be("123123123123");
+        payout.BankIfscCode.Should().Be("SBIN0000123");
+    }
+
+    [Fact]
     public async Task Handle_ExcludesNegativeNetPayout_InsteadOfCrashingOrExportingIt()
     {
         // Misconfigured commission (flat fee exceeds the order amount) drives NetPayoutAmount
