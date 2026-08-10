@@ -28,11 +28,13 @@ public sealed class RestaurantOnboardingApplication : BaseEntity
     public string? CuisineType { get; private set; }
     public string? FssaiNumber { get; private set; }
 
-    public string BankAccountNumberEncrypted { get; private set; } = string.Empty;
+    // Temporarily optional — onboarding.hivago.in doesn't collect bank details yet. Revert to
+    // required (non-nullable, with the Create() guard clauses below) once the form catches up.
+    public string? BankAccountNumberEncrypted { get; private set; }
     /// <summary>Last 4 digits, stored in plaintext so the admin list view can show a masked hint without decrypting every row.</summary>
-    public string BankAccountLast4 { get; private set; } = string.Empty;
-    public string BankIfscCode { get; private set; } = string.Empty;
-    public string BankAccountName { get; private set; } = string.Empty;
+    public string? BankAccountLast4 { get; private set; }
+    public string? BankIfscCode { get; private set; }
+    public string? BankAccountName { get; private set; }
 
     public string PanNumberEncrypted { get; private set; } = string.Empty;
     public string PanLast4 { get; private set; } = string.Empty;
@@ -59,10 +61,10 @@ public sealed class RestaurantOnboardingApplication : BaseEntity
         string addressLine,
         string? cuisineType,
         string? fssaiNumber,
-        string bankAccountNumberEncrypted,
-        string bankAccountLast4,
-        string bankIfscCode,
-        string bankAccountName,
+        string? bankAccountNumberEncrypted,
+        string? bankAccountLast4,
+        string? bankIfscCode,
+        string? bankAccountName,
         string panNumberEncrypted,
         string panLast4,
         string? gstNumberEncrypted,
@@ -88,14 +90,7 @@ public sealed class RestaurantOnboardingApplication : BaseEntity
         if (string.IsNullOrWhiteSpace(addressLine))
             return Result.Failure<RestaurantOnboardingApplication>(Error.Validation("Address is required."));
 
-        if (string.IsNullOrWhiteSpace(bankAccountNumberEncrypted))
-            return Result.Failure<RestaurantOnboardingApplication>(Error.Validation("Bank account number is required."));
-
-        if (string.IsNullOrWhiteSpace(bankIfscCode))
-            return Result.Failure<RestaurantOnboardingApplication>(Error.Validation("Bank IFSC code is required."));
-
-        if (string.IsNullOrWhiteSpace(bankAccountName))
-            return Result.Failure<RestaurantOnboardingApplication>(Error.Validation("Bank account holder name is required."));
+        // Bank details are temporarily optional — see the property comments above.
 
         if (string.IsNullOrWhiteSpace(panNumberEncrypted))
             return Result.Failure<RestaurantOnboardingApplication>(Error.Validation("PAN number is required."));
@@ -113,8 +108,8 @@ public sealed class RestaurantOnboardingApplication : BaseEntity
             FssaiNumber = fssaiNumber?.Trim(),
             BankAccountNumberEncrypted = bankAccountNumberEncrypted,
             BankAccountLast4 = bankAccountLast4,
-            BankIfscCode = bankIfscCode.Trim().ToUpperInvariant(),
-            BankAccountName = bankAccountName.Trim(),
+            BankIfscCode = bankIfscCode?.Trim().ToUpperInvariant(),
+            BankAccountName = bankAccountName?.Trim(),
             PanNumberEncrypted = panNumberEncrypted,
             PanLast4 = panLast4,
             GstNumberEncrypted = gstNumberEncrypted,

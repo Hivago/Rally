@@ -29,7 +29,7 @@ public sealed class ListRestaurantOnboardingApplicationsQueryHandler
             a.Email,
             a.City,
             a.Status,
-            Mask(a.BankAccountLast4),
+            a.BankAccountLast4 is null ? null : Mask(a.BankAccountLast4),
             Mask(a.PanLast4),
             a.GstLast4 is null ? null : Mask(a.GstLast4),
             a.CreatedAt)).ToList();

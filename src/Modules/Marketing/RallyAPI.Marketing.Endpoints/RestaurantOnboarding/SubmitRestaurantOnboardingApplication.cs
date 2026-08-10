@@ -33,9 +33,11 @@ public sealed class SubmitRestaurantOnboardingApplication : IEndpoint
         string AddressLine,
         string? CuisineType,
         string? FssaiNumber,
-        string BankAccountNumber,
-        string BankIfscCode,
-        string BankAccountName,
+        // Bank details are temporarily optional — onboarding.hivago.in doesn't collect them
+        // yet. Remove this relaxation once the form is updated to always send them.
+        string? BankAccountNumber,
+        string? BankIfscCode,
+        string? BankAccountName,
         string PanNumber,
         string? GstNumber,
         string? Source,

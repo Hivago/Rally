@@ -18,9 +18,11 @@ public sealed record SubmitRestaurantOnboardingApplicationCommand(
     string AddressLine,
     string? CuisineType,
     string? FssaiNumber,
-    string BankAccountNumber,
-    string BankIfscCode,
-    string BankAccountName,
+    // Temporarily optional — onboarding.hivago.in doesn't collect these yet. Revert to
+    // required once the form is updated.
+    string? BankAccountNumber,
+    string? BankIfscCode,
+    string? BankAccountName,
     string PanNumber,
     string? GstNumber,
     string? Source,

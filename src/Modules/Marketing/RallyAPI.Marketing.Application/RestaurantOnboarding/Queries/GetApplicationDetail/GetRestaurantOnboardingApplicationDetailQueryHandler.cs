@@ -33,7 +33,9 @@ public sealed class GetRestaurantOnboardingApplicationDetailQueryHandler
 
         if (request.IncludeSensitiveDetails)
         {
-            bankAccountNumber = _encryption.Decrypt(app.BankAccountNumberEncrypted);
+            // Bank details are optional (onboarding.hivago.in doesn't collect them yet) — same
+            // null-guard already used for GST just below.
+            bankAccountNumber = app.BankAccountNumberEncrypted is null ? null : _encryption.Decrypt(app.BankAccountNumberEncrypted);
             panNumber = _encryption.Decrypt(app.PanNumberEncrypted);
             gstNumber = app.GstNumberEncrypted is null ? null : _encryption.Decrypt(app.GstNumberEncrypted);
         }
@@ -48,7 +50,7 @@ public sealed class GetRestaurantOnboardingApplicationDetailQueryHandler
             app.AddressLine,
             app.CuisineType,
             app.FssaiNumber,
-            Mask(app.BankAccountLast4),
+            app.BankAccountLast4 is null ? null : Mask(app.BankAccountLast4),
             bankAccountNumber,
             app.BankIfscCode,
             app.BankAccountName,
