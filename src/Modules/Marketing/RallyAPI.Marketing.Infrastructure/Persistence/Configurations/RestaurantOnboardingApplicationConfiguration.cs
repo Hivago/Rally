@@ -25,10 +25,12 @@ public sealed class RestaurantOnboardingApplicationConfiguration : IEntityTypeCo
         // no reason to guess a cap. A HasMaxLength here that's too tight is exactly the class
         // of bug that broke the payout reconcile manual-resolve marker (see
         // docs/icici-payout-reconciliation-rules.md) — don't repeat it on financial PII.
-        builder.Property(x => x.BankAccountNumberEncrypted).IsRequired();
-        builder.Property(x => x.BankAccountLast4).IsRequired().HasMaxLength(4);
-        builder.Property(x => x.BankIfscCode).IsRequired().HasMaxLength(11);
-        builder.Property(x => x.BankAccountName).IsRequired().HasMaxLength(255);
+        // Nullable: bank details are temporarily optional — onboarding.hivago.in doesn't
+        // collect them yet. Revert to .IsRequired() once the form is updated.
+        builder.Property(x => x.BankAccountNumberEncrypted);
+        builder.Property(x => x.BankAccountLast4).HasMaxLength(4);
+        builder.Property(x => x.BankIfscCode).HasMaxLength(11);
+        builder.Property(x => x.BankAccountName).HasMaxLength(255);
 
         builder.Property(x => x.PanNumberEncrypted).IsRequired();
         builder.Property(x => x.PanLast4).IsRequired().HasMaxLength(4);

@@ -24,10 +24,10 @@ public sealed record RestaurantOnboardingApplicationDetailDto(
     string AddressLine,
     string? CuisineType,
     string? FssaiNumber,
-    string BankAccountMasked,
+    string? BankAccountMasked,   // null if the applicant didn't provide bank details
     string? BankAccountNumber,   // null unless IncludeSensitiveDetails
-    string BankIfscCode,
-    string BankAccountName,
+    string? BankIfscCode,
+    string? BankAccountName,
     string PanMasked,
     string? PanNumber,           // null unless IncludeSensitiveDetails
     string? GstMasked,

@@ -54,14 +54,18 @@ public class RestaurantOnboardingApplicationTests
     }
 
     [Fact]
-    public void Create_MissingBankAccountNumber_Fails()
+    public void Create_WithoutBankDetails_Succeeds()
     {
+        // Temporarily optional — onboarding.hivago.in doesn't collect bank details yet.
         var result = RestaurantOnboardingApplication.Create(
             "Sharma Foods", "Ravi Sharma", "9876543210", "ravi@example.com", "Pune", "123 MG Road",
-            null, null, bankAccountNumberEncrypted: "", "3333", "ICIC0001234", "Ravi Sharma",
-            "enc2", "234F", null, null, null, null);
+            null, null, bankAccountNumberEncrypted: null, bankAccountLast4: null, bankIfscCode: null,
+            bankAccountName: null, "enc2", "234F", null, null, null, null);
 
-        result.IsFailure.Should().BeTrue();
+        result.IsSuccess.Should().BeTrue();
+        result.Value.BankAccountNumberEncrypted.Should().BeNull();
+        result.Value.BankIfscCode.Should().BeNull();
+        result.Value.BankAccountName.Should().BeNull();
     }
 
     [Fact]

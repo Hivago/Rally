@@ -45,17 +45,19 @@ public sealed class SubmitRestaurantOnboardingApplicationCommandValidator
             .Matches(@"^\d{14}$").WithMessage("FSSAI number must be 14 digits.")
             .When(x => !string.IsNullOrWhiteSpace(x.FssaiNumber));
 
-        RuleFor(x => x.BankAccountNumber)
-            .NotEmpty().WithMessage("Bank account number is required.")
-            .Matches(@"^\d{9,18}$").WithMessage("Bank account number must be 9-18 digits.");
+        // Temporarily optional — onboarding.hivago.in doesn't collect bank details yet.
+        // Still validated when provided; revert to always-required once the form catches up.
+        RuleFor(x => x.BankAccountNumber!)
+            .Matches(@"^\d{9,18}$").WithMessage("Bank account number must be 9-18 digits.")
+            .When(x => !string.IsNullOrWhiteSpace(x.BankAccountNumber));
 
-        RuleFor(x => x.BankIfscCode)
-            .NotEmpty().WithMessage("IFSC code is required.")
-            .Matches(@"^[A-Z]{4}0[A-Z0-9]{6}$").WithMessage("IFSC code is not a valid format (e.g. ICIC0001234).");
+        RuleFor(x => x.BankIfscCode!)
+            .Matches(@"^[A-Z]{4}0[A-Z0-9]{6}$").WithMessage("IFSC code is not a valid format (e.g. ICIC0001234).")
+            .When(x => !string.IsNullOrWhiteSpace(x.BankIfscCode));
 
-        RuleFor(x => x.BankAccountName)
-            .NotEmpty().WithMessage("Bank account holder name is required.")
-            .MaximumLength(255);
+        RuleFor(x => x.BankAccountName!)
+            .MaximumLength(255)
+            .When(x => !string.IsNullOrWhiteSpace(x.BankAccountName));
 
         RuleFor(x => x.PanNumber)
             .NotEmpty().WithMessage("PAN number is required.")

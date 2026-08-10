@@ -87,6 +87,34 @@ public class SubmitRestaurantOnboardingApplicationCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_NoBankDetailsProvided_LeavesBankFieldsNull_AndStillSucceeds()
+    {
+        // Temporarily optional — onboarding.hivago.in doesn't collect bank details yet.
+        _repository.HasPendingApplicationAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        RestaurantOnboardingApplication? saved = null;
+        await _repository.AddAsync(
+            Arg.Do<RestaurantOnboardingApplication>(a => saved = a), Arg.Any<CancellationToken>());
+
+        var command = ValidCommand() with
+        {
+            BankAccountNumber = null,
+            BankIfscCode = null,
+            BankAccountName = null
+        };
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        saved.Should().NotBeNull();
+        saved!.BankAccountNumberEncrypted.Should().BeNull();
+        saved.BankAccountLast4.Should().BeNull();
+        saved.BankIfscCode.Should().BeNull();
+        saved.BankAccountName.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Handle_PendingApplicationAlreadyExistsForPhoneOrEmail_ReturnsConflict_DoesNotEncryptOrSave()
     {
         _repository.HasPendingApplicationAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
