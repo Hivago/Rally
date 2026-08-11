@@ -7,7 +7,7 @@ using RallyAPI.Users.Domain.ValueObjects;
 
 namespace RallyAPI.Users.Application.Admins.Commands.CreateOwner;
 
-internal sealed class CreateOwnerCommandHandler
+public sealed class CreateOwnerCommandHandler
     : IRequestHandler<CreateOwnerCommand, Result<CreateOwnerResponse>>
 {
     private readonly IAdminRepository _adminRepository;
@@ -79,18 +79,13 @@ internal sealed class CreateOwnerCommandHandler
                 return Result.Failure<CreateOwnerResponse>(gstResult.Error);
         }
 
-        if (!string.IsNullOrWhiteSpace(request.BankAccountNumber)
-            && !string.IsNullOrWhiteSpace(request.BankIfscCode)
-            && !string.IsNullOrWhiteSpace(request.BankAccountName))
-        {
-            var bankResult = owner.UpdateBankDetails(
-                request.BankAccountNumber,
-                request.BankIfscCode,
-                request.BankAccountName);
+        var bankResult = owner.UpdateBankDetails(
+            request.BankAccountNumber,
+            request.BankIfscCode,
+            request.BankAccountName);
 
-            if (bankResult.IsFailure)
-                return Result.Failure<CreateOwnerResponse>(bankResult.Error);
-        }
+        if (bankResult.IsFailure)
+            return Result.Failure<CreateOwnerResponse>(bankResult.Error);
 
         await _ownerRepository.AddAsync(owner, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

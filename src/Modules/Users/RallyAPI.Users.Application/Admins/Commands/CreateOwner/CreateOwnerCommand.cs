@@ -15,8 +15,8 @@ public sealed record CreateOwnerCommand(
     string Password,
     string? PanNumber,
     string? GstNumber,
-    string? BankAccountNumber,
-    string? BankIfscCode,
-    string? BankAccountName) : IRequest<Result<CreateOwnerResponse>>;
+    string BankAccountNumber,
+    string BankIfscCode,
+    string BankAccountName) : IRequest<Result<CreateOwnerResponse>>;
 
 public sealed record CreateOwnerResponse(Guid OwnerId);
