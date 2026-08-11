@@ -63,4 +63,30 @@ public class PayoutRepository : IPayoutRepository
                      && p.PeriodEnd == periodEnd)
             .ToListAsync(ct);
     }
+
+    public async Task<IReadOnlyList<Payout>> GetByExportBatchIdAsync(
+        Guid exportBatchId, CancellationToken ct = default)
+    {
+        return await _context.Payouts
+            .Where(p => p.ExportBatchId == exportBatchId)
+            .ToListAsync(ct);
+    }
+
+    public async Task<bool> ExistsWithTransactionReferenceAsync(
+        string transactionReference, CancellationToken ct = default)
+    {
+        return await _context.Payouts
+            .AnyAsync(p => p.TransactionReference == transactionReference, ct);
+    }
+
+    public async Task<IReadOnlyList<Payout>> GetStaleProcessingAsync(
+        DateTime olderThanUtc, CancellationToken ct = default)
+    {
+        return await _context.Payouts
+            .Where(p => p.Status == PayoutStatus.Processing
+                     && p.ExportedAtUtc != null
+                     && p.ExportedAtUtc < olderThanUtc)
+            .OrderBy(p => p.ExportedAtUtc)
+            .ToListAsync(ct);
+    }
 }

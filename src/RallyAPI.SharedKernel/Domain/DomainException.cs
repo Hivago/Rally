@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+
 
 namespace RallyAPI.SharedKernel.Domain
 {
@@ -21,4 +23,5 @@ namespace RallyAPI.SharedKernel.Domain
             return new DomainException(code, message);
         }
     }
+
 }

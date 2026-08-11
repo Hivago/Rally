@@ -35,7 +35,24 @@ jobs:
           dotnet test tests/Modules/Delivery/RallyAPI.Delivery.Application.Tests/ --no-build --configuration Release --verbosity normal
           dotnet test tests/Modules/Pricing/RallyAPI.Pricing.Application.Tests/ --no-build --configuration Release --verbosity normal
           dotnet test tests/Modules/Users/RallyAPI.Users.Infrastructure.Tests/ --no-build --configuration Release --verbosity normal
+          dotnet test tests/Modules/Marketing/RallyAPI.Marketing.Application.Tests/ --no-build --configuration Release --verbosity normal
           dotnet test RallyAPI.Integrations.ProRouting.Tests/ --no-build --configuration Release --verbosity normal
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_CI_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_CI_WEBHOOK_URL secret not set — skipping notification."
+            exit 0
+          fi
+          payload=$(jq -n \
+            --arg desc "[$GITHUB_REF_NAME] $GITHUB_ACTOR — build-and-test failed" \
+            --arg url "$RUN_URL" \
+            '{embeds: [{title: "Rally CI failed", description: $desc, url: $url, color: 15158332}]}')
+          curl -sf -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK_URL"
 
   integration-tests:
     runs-on: ubuntu-latest
@@ -59,3 +76,19 @@ jobs:
 
       - name: Run integration tests
         run: dotnet test tests/RallyAPI.Integration.Tests/ --no-build --configuration Release --verbosity normal
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_CI_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_CI_WEBHOOK_URL secret not set — skipping notification."
+            exit 0
+          fi
+          payload=$(jq -n \
+            --arg desc "[$GITHUB_REF_NAME] $GITHUB_ACTOR — integration-tests failed" \
+            --arg url "$RUN_URL" \
+            '{embeds: [{title: "Rally CI failed", description: $desc, url: $url, color: 15158332}]}')
+          curl -sf -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK_URL"

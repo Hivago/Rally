@@ -26,9 +26,9 @@ public class CreateOwner : IEndpoint
         string Password,
         string? PanNumber,
         string? GstNumber,
-        string? BankAccountNumber,
-        string? BankIfscCode,
-        string? BankAccountName);
+        string BankAccountNumber,
+        string BankIfscCode,
+        string BankAccountName);
 
     private static async Task<IResult> HandleAsync(
         CreateOwnerRequest request,

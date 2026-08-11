@@ -383,6 +383,18 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1)
             }));
 
+    // Public restaurant onboarding form: stricter than lead-capture since this collects bank
+    // account/PAN/GST, not just contact interest. 5 requests/minute per IP in prod.
+    options.AddPolicy("restaurant-onboarding", context =>
+        RedisRateLimitPartition.GetSlidingWindowRateLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new RedisSlidingWindowRateLimiterOptions
+            {
+                ConnectionMultiplexerFactory = () => ResolveRedis(context),
+                PermitLimit = relaxedLimits ? 100 : 5,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+
     // Admin CSV export: 5 requests/minute per admin (by JWT sub claim).
     // Falls back to remote IP if unauthenticated, but the endpoint also requires auth.
     options.AddPolicy("admin-export", context =>
@@ -431,6 +443,8 @@ string[] productionOrigins =
     "https://www.hivago.in",
     "https://admin.hivago.in",
     "https://restaurant.hivago.in",
+    "https://onboarding.hivago.in",
+    "https://onboarding.hivago.in",
 ];
 
 string[] localhostOrigins =
@@ -439,6 +453,8 @@ string[] localhostOrigins =
     "http://localhost:5173",     // Vite dev server
     "http://localhost:4173",     // Vite preview
     "http://localhost:8081",     // Expo/React Native web
+    "http://localhost:5500",     // VS Code Live Server default (restaurant-onboarding static page)
+    "http://127.0.0.1:5500",     // Live Server sometimes binds 127.0.0.1 instead of localhost
 ];
 
 var configuredOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? string.Empty)

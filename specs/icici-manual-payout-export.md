@@ -165,7 +165,73 @@ owner wants stronger control; not required for v1 given the framing above.
 - Beneficiary bank details read live at export time (no stale snapshot on the batch).
 - ClosedXML (already used by Catalog menu import/template) — no new dependency, no ₹35k gateway.
 
-### Open Questions
-- Exact ICICI bulk-upload column layout (export) — **template requested, pending**.
-- Exact ICICI result/response file layout (reconcile) — pending, same source.
-- Rider payout weekly cycle vs restaurant Mon–Sun period alignment — confirm periods match.
+### Open Questions — RESOLVED (2026-08-04)
+
+Confirmed against a real ICICI "Consolidated Status Report" (`ConsolidatedReportNPAB.xlsx`,
+a live vendor-payment batch the owner ran manually). This is the bank's actual result-file
+layout — 29 columns, header row 1:
+
+```
+File_Sequence_Num | Pymt_Prod_Type_Code | Pymt_Mode | Debit_Acct_no | Beneficiary Name |
+Beneficiary Account No | Bene_IFSC_Code | Amount | Debit narration | Credit narration |
+Mobile Numder | Email id | Remark | Pymt_Date | Reference_no | Addl_Info1-5 |
+Beneficiary LEI | STATUS | Current Step | File name | Rejected by | Rejection Reason |
+Acct_Debit_date | Customer Ref No | UTR NO
+```
+
+Observed values: `STATUS` = `Success` / `Reversed` (others likely `Rejected`/`Failed` per
+ICICI docs, not seen in the sample). `UTR NO` on real Success rows is **16 characters**
+(e.g. `IN42619755781929`), not 22 as originally assumed in section 4a — the UTR-format
+validation in `IciciReconciliationParser`/`ReconcileRestaurantPayoutsCommandHandler` checks
+length ≥ 10 and alphanumeric rather than hard-coding 16, since RTGS/IMPS references can differ
+in length from NEFT's.
+
+**Reconcile matching strategy (implemented):** rather than changing the already-shipped export
+template to embed a Rally-owned reference number, reconcile rows are matched to Processing
+payouts *within the target export batch* by `(Beneficiary Account No, Bene_IFSC_Code, Amount)`
+— exact match required, ambiguous (>1 candidate) or unmatched rows are reported for manual
+review, never guessed. Restaurant `Payout` stores bank details at export time so this needs no
+extra lookup; `RiderPayoutLedger` has no stored bank fields (export reads them live), so
+`ReconcileRiderPayoutsCommandHandler` re-fetches live rider bank details to build the same key.
+
+- Rider payout weekly cycle vs restaurant Mon–Sun period alignment — confirmed via shared
+  `PayoutExportBatchStatus` lifecycle; both use the same Generated→Reconciled flow.
+
+### Import/Reconcile — Implemented (2026-08-04)
+
+- `IciciReconciliationParser` (SharedKernel.Utilities.Payouts) — header-name-based column
+  lookup (resilient to reordering), classifies each row Success/Failed/Unresolved.
+- `ReconcileRestaurantPayoutsCommand`/Handler (Orders.Application) and
+  `ReconcileRiderPayoutsCommand`/Handler (Users.Application) — apply the security controls
+  from section 4a: exact amount-match (via the matching key itself), UTR format + duplicate
+  check, idempotent re-upload (already Paid/Failed rows are a no-op, reported not reapplied),
+  structured audit log (Warning level) on every Processing→Paid transition, batch flips to
+  `Reconciled` only once every payout in it is resolved (partial uploads leave it `Generated`
+  so a fuller report can be uploaded later).
+- `POST /api/admin/payouts/restaurant/reconcile?batchId=` and
+  `POST /api/admin/payouts/rider/reconcile?batchId=` — multipart file upload, Super-Admin-only
+  (checked against `Admin.Role`, not just the generic `Admin` policy — see section 4a).
+- Not implemented (deferred, no infra to hang it on yet): raw-file byte storage for the audit
+  trail (R2 is still "pending" per project status — only the SHA-256 hash is persisted on the
+  batch for now) and the "notify all Super Admins" alert (no notification service exists yet;
+  the Warning-level log is the interim signal). Maker-checker second-approval remains a v2
+  option as originally scoped.
+
+### Operational gaps closed (2026-08-04, same day)
+
+Three gaps identified while walking through a year of real admin usage were closed immediately:
+
+- `GET /api/admin/payouts/{restaurant|rider}/batches?status=&page=&pageSize=` — lists recent
+  export batches with a live Processing/Paid/Failed breakdown. Recovers the `exportBatchId`
+  that previously only appeared once, in the export response header.
+- `GET /api/admin/payouts/{restaurant|rider}/stale?olderThanDays=3` — payouts stuck Processing
+  past the threshold. A pull report, not a push alert — no notification service exists yet, so
+  an admin has to check it.
+- `POST /api/admin/payouts/{restaurant|rider}/{payoutId}/manual-resolve` — Super-Admin-only
+  escape hatch for a Processing payout the automatic matcher can't resolve (ambiguous match,
+  drifted rider bank details, a row the bank's report never covered). Requires a ≥10-char
+  reason and, for Paid, a UTR checked against the same duplicate-UTR guard as automatic
+  reconciliation. Closes the batch (`MarkReconciled`) if it was the last payout still
+  Processing, stamping a `MANUAL-`-prefixed marker instead of a file hash so a later audit can
+  tell it apart from an automatic reconcile (marker is truncated to fit the column's 64-char
+  limit, sized for a real SHA-256 hex digest — caught by the live smoke test below).

@@ -49,6 +49,10 @@ public static class DependencyInjection
         services.AddHttpClient<IPayUService, PayUService>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
 
+        // Ops alerts (Discord) — order escalations, etc. See DiscordOpsAlertNotifier.
+        services.Configure<OpsAlertDiscordOptions>(configuration.GetSection(OpsAlertDiscordOptions.SectionName));
+        services.AddHttpClient<IOpsAlertNotifier, DiscordOpsAlertNotifier>();
+
         // Auto-cancel background service (two-stage: escalate → cancel)
         services.Configure<AutoCancelOptions>(
             configuration.GetSection(AutoCancelOptions.SectionName));

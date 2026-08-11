@@ -8,6 +8,7 @@ public class MarketingDbContext : DbContext, IUnitOfWork
 {
     public DbSet<CustomerWaitlistEntry> CustomerWaitlistEntries => Set<CustomerWaitlistEntry>();
     public DbSet<RestaurantLead> RestaurantLeads => Set<RestaurantLead>();
+    public DbSet<RestaurantOnboardingApplication> RestaurantOnboardingApplications => Set<RestaurantOnboardingApplication>();
 
     public MarketingDbContext(DbContextOptions<MarketingDbContext> options) : base(options)
     {

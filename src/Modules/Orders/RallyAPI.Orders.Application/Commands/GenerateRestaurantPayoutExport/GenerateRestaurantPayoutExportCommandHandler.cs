@@ -102,7 +102,8 @@ public sealed class GenerateRestaurantPayoutExportCommandHandler
 
         foreach (var payout in included)
         {
-            payout.MarkProcessing(batch.Id);
+            var bank = bankDetailsByOwner[payout.OwnerId];
+            payout.MarkProcessing(batch.Id, bank.BankAccountNumber!, bank.BankIfscCode!);
         }
 
         await _unitOfWork.SaveChangesAsync(ct);

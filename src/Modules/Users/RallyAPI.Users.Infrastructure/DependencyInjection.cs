@@ -158,6 +158,7 @@ public static class DependencyInjection
         services.Configure<RiderPayoutDispatchOptions>(
             configuration.GetSection(RiderPayoutDispatchOptions.SectionName));
         services.AddHostedService<RiderPayoutAggregationJob>();
+        services.AddHostedService<RiderPresenceSweepService>();
 
         return services;
     }
