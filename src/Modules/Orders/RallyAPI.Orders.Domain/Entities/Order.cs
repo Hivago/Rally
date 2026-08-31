@@ -556,13 +556,14 @@ public sealed class Order : AggregateRoot
     #endregion
 
     /// <summary>
-    /// Stage 1: Escalate order to admin when restaurant doesn't confirm in time.
-    /// Flags the order and raises a domain event for admin notification.
+    /// Escalate order to admin: either the restaurant hasn't confirmed in time (Paid), or a
+    /// rider has been assigned but hasn't picked up in time (ReadyForPickup). Flags the order
+    /// and raises a domain event for admin notification.
     /// </summary>
     public void EscalateToAdmin(string reason)
     {
-        if (Status != OrderStatus.Paid)
-            return; // Only escalate orders waiting for restaurant confirmation
+        if (Status != OrderStatus.Paid && Status != OrderStatus.ReadyForPickup)
+            return; // Only escalate orders actually waiting on a stalled step
 
         if (IsEscalated)
             return; // Already escalated, don't raise duplicate events
