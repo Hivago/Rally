@@ -42,6 +42,18 @@ public interface IDeliveryRequestRepository
     Task<IReadOnlyList<DeliveryRequest>> GetThirdPartySearchTimedOutAsync(DateTime dispatchedBefore, CancellationToken ct = default);
 
     /// <summary>
+    /// Returns requests where a rider IS assigned (own fleet or 3PL) but has not yet picked up
+    /// — status RiderAssigned / Assigned3PL / RiderEnRoutePickup / RiderArrivedPickup — idle
+    /// (no status change) since before <paramref name="idleBefore"/>, and not already escalated
+    /// (<see cref="DeliveryRequest.PickupEscalatedAt"/> is null). Unlike
+    /// <see cref="GetStuckForRedispatchAsync"/>, this never re-dispatches: a specific rider has
+    /// already committed to the job, so the recovery service only raises an admin alert and lets
+    /// a human decide, matching the precedent set for 3PL search timeouts (never auto-cancel a
+    /// commitment on a timer alone).
+    /// </summary>
+    Task<IReadOnlyList<DeliveryRequest>> GetOverduePickupsAsync(DateTime idleBefore, CancellationToken ct = default);
+
+    /// <summary>
     /// Reads the delivery's CURRENT status straight from the database, bypassing the
     /// change-tracker identity map. The inline dispatcher holds one DbContext for the
     /// whole dispatch run, so a normal (tracking) reload returns its own stale copy and

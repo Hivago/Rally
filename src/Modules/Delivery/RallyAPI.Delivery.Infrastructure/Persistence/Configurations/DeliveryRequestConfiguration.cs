@@ -239,6 +239,9 @@ public sealed class DeliveryRequestConfiguration : IEntityTypeConfiguration<Deli
         builder.Property(r => r.PickedUpAt)
             .HasColumnName("picked_up_at");
 
+        builder.Property(r => r.PickupEscalatedAt)
+            .HasColumnName("pickup_escalated_at");
+
         builder.Property(r => r.ArrivedDropAt)
             .HasColumnName("arrived_drop_at");
 

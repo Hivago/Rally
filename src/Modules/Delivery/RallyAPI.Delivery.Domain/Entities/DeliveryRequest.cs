@@ -102,6 +102,13 @@ public sealed class DeliveryRequest : AggregateRoot
     public DateTime? PickedUpAt { get; private set; }
     public DateTime? ArrivedDropAt { get; private set; }
     public DateTime? DeliveredAt { get; private set; }
+
+    /// <summary>
+    /// Set once the recovery sweep has raised a late-pickup alert for this request, so it is
+    /// only escalated to admin once. Cleared implicitly by never being re-set — a request only
+    /// leaves this idle window by actually being picked up, cancelled, or failed.
+    /// </summary>
+    public DateTime? PickupEscalatedAt { get; private set; }
     public DateTime? FailedAt { get; private set; }
     public DateTime? CancelledAt { get; private set; }
     public DateTime? RtoInitiatedAt { get; private set; }
@@ -356,6 +363,19 @@ public sealed class DeliveryRequest : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
 
         AddDomainEvent(new DeliveryPickedUpEvent(Id, OrderId, PickedUpAt.Value));
+    }
+
+    /// <summary>
+    /// Marks that a late-pickup alert has been raised for this request, so the recovery sweep
+    /// does not re-raise it every tick. Idempotent: a second call is a no-op.
+    /// </summary>
+    public void MarkPickupEscalated()
+    {
+        if (PickupEscalatedAt != null)
+            return;
+
+        PickupEscalatedAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void MarkRiderEnRouteDrop()
