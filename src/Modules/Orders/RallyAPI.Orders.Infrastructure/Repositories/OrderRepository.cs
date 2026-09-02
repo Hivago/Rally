@@ -27,10 +27,14 @@ public sealed class OrderRepository : IOrderRepository
 
     public async Task<Order?> GetByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken = default)
     {
+        // OrderNumber is a value object with HasConversion. EF cannot translate `.Value == string`
+        // (the converter intercepts the parameter) — compare the whole value object instead.
+        var number = Domain.ValueObjects.OrderNumber.From(orderNumber);
+
         return await _context.Orders
             .Include(o => o.Items)
             .Include(o => o.DeliveryInfo)
-            .FirstOrDefaultAsync(o => o.OrderNumber.Value == orderNumber, cancellationToken);
+            .FirstOrDefaultAsync(o => o.OrderNumber == number, cancellationToken);
     }
 
     public async Task AddAsync(Order order, CancellationToken cancellationToken = default)
@@ -193,7 +197,9 @@ public sealed class OrderRepository : IOrderRepository
 
     public async Task<bool> ExistsByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken = default)
     {
-        return await _context.Orders.AnyAsync(o => o.OrderNumber.Value == orderNumber, cancellationToken);
+        // See GetByOrderNumberAsync — compare the whole value object, not `.Value`, so EF can translate it.
+        var number = Domain.ValueObjects.OrderNumber.From(orderNumber);
+        return await _context.Orders.AnyAsync(o => o.OrderNumber == number, cancellationToken);
     }
 
     public async Task<IReadOnlyList<Order>> GetFilteredAsync(
@@ -253,11 +259,24 @@ public sealed class OrderRepository : IOrderRepository
 
         if (!string.IsNullOrWhiteSpace(search))
         {
+            // OrderNumber is a value object with HasConversion — `.Value.Contains(...)` doesn't
+            // translate (see AdminOrderQueryService for the same issue). Exact-match order
+            // numbers via the value-object factory; substring-match the plain string columns.
             var term = search.Trim();
-            query = query.Where(o =>
-                o.OrderNumber.Value.Contains(term) ||
-                o.CustomerName.Contains(term) ||
-                o.RestaurantName.Contains(term));
+            if (term.StartsWith("ORD-", StringComparison.OrdinalIgnoreCase))
+            {
+                var exact = Domain.ValueObjects.OrderNumber.From(term.ToUpper());
+                query = query.Where(o =>
+                    o.OrderNumber == exact ||
+                    o.CustomerName.Contains(term) ||
+                    o.RestaurantName.Contains(term));
+            }
+            else
+            {
+                query = query.Where(o =>
+                    o.CustomerName.Contains(term) ||
+                    o.RestaurantName.Contains(term));
+            }
         }
 
         return query;
