@@ -39,9 +39,13 @@ public sealed class GetTrackingInfoQueryHandler
     private static TrackingDto MapToTrackingDto(DeliveryRequest request)
     {
         var isOwnFleet = request.FleetType == FleetType.OwnFleet;
+        var isDeliveryOver = request.Status is DeliveryRequestStatus.Delivered
+            or DeliveryRequestStatus.Cancelled
+            or DeliveryRequestStatus.Failed;
 
         TrackingRiderDto? rider = null;
-        if (request.RiderId.HasValue || !string.IsNullOrEmpty(request.ExternalRiderName))
+        if (!isDeliveryOver &&
+            (request.RiderId.HasValue || !string.IsNullOrEmpty(request.ExternalRiderName)))
         {
             rider = new TrackingRiderDto
             {
