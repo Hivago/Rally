@@ -7,6 +7,7 @@ using RallyAPI.Infrastructure.GoogleMaps;
 using RallyAPI.Infrastructure.Storage;
 using RallyAPI.SharedKernel.Abstractions.Distance;
 using RallyAPI.SharedKernel.Abstractions.Geocoding;
+using RallyAPI.SharedKernel.Abstractions.Reviews;
 
 namespace RallyAPI.Infrastructure;
 
@@ -45,6 +46,11 @@ public static class DependencyInjection
                 client.Timeout = timeout;
             });
         }
+
+        services.AddHttpClient<IGoogleReviewsService, GoogleReviewsService>(client =>
+        {
+            client.Timeout = timeout;
+        });
 
         services.AddStorageServices(configuration);
 
