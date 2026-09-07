@@ -40,7 +40,8 @@ public class EditRestaurant : IEndpoint
             request.FssaiNumber,
             request.AcceptsPickup,
             request.Latitude,
-            request.Longitude);
+            request.Longitude,
+            request.GooglePlaceId);
 
         var result = await sender.Send(command, cancellationToken);
 
@@ -65,4 +66,5 @@ public record EditRestaurantRequest(
     string? FssaiNumber,
     bool? AcceptsPickup,
     decimal? Latitude,
-    decimal? Longitude);
+    decimal? Longitude,
+    string? GooglePlaceId);
