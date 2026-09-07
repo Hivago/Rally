@@ -257,7 +257,8 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
             CommissionFlatFee = r.CommissionFlatFee,
             OwnerId = r.OwnerId,
             AcceptsPickup = r.AcceptsPickup,
-            FssaiNumber = r.FssaiNumber
+            FssaiNumber = r.FssaiNumber,
+            GooglePlaceId = r.GooglePlaceId
         };
     }
 

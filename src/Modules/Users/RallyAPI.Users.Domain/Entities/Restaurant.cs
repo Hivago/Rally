@@ -46,6 +46,10 @@ public sealed class Restaurant : AggregateRoot
     // Compliance
     public string? FssaiNumber { get; private set; }
 
+    // Google Business Profile linkage — set by admin, used to show cached Google
+    // rating/reviews on the restaurant page. Null until an admin links it.
+    public string? GooglePlaceId { get; private set; }
+
     // Description
     public string? Description { get; private set; }
 
@@ -306,6 +310,13 @@ public sealed class Restaurant : AggregateRoot
             return Result.Failure(Error.Validation("FSSAI number must be between 14 and 20 characters."));
 
         FssaiNumber = fssaiNumber;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetGooglePlaceId(string? placeId)
+    {
+        GooglePlaceId = string.IsNullOrWhiteSpace(placeId) ? null : placeId.Trim();
         MarkAsUpdated();
         return Result.Success();
     }

@@ -190,6 +190,11 @@ public class RestaurantConfiguration : IEntityTypeConfiguration<Restaurant>
             .HasColumnName("fssai_number")
             .HasMaxLength(20);
 
+        // Google Business Profile Place ID — set by admin, drives cached Google reviews display
+        builder.Property(r => r.GooglePlaceId)
+            .HasColumnName("google_place_id")
+            .HasMaxLength(255);
+
         // Cuisine/dietary attributes — jsonb requires explicit converter for List<string>
         // (Npgsql 8.x maps List<string> to text[] by default, not jsonb)
         builder.Property(r => r.CuisineTypes)
