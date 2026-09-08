@@ -23,6 +23,9 @@ public sealed record RestaurantSummary
     public required decimal MinOrderAmount { get; init; }
     public string? LogoUrl { get; init; }
 
+    /// <summary>Google Business Profile Place ID, null until an admin links it.</summary>
+    public string? GooglePlaceId { get; init; }
+
     /// <summary>
     /// True when the restaurant accepts customer pickup orders. Default false.
     /// Customer UI uses this to hide/disable the Pickup tab per restaurant.
