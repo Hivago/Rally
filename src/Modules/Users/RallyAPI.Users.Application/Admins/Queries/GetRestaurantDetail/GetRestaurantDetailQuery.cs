@@ -35,6 +35,7 @@ public sealed record RestaurantDetailResponse(
     bool IsVeganFriendly,
     bool HasJainOptions,
     List<string> CuisineTypes,
+    string? GooglePlaceId,
     Guid? OwnerId,
     RestaurantOwnerSummary? Owner,
     NotificationPreferencesSummary Notifications,
