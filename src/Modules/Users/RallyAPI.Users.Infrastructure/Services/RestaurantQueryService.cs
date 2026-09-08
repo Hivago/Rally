@@ -224,6 +224,7 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
             MinOrderAmount = r.MinOrderAmount,
             LogoUrl = r.LogoUrl,
             AcceptsPickup = r.AcceptsPickup,
+            GooglePlaceId = r.GooglePlaceId,
             CreatedAt = r.CreatedAt,
             DistanceKm = distanceKm.HasValue ? Math.Round(distanceKm.Value, 2) : null
         };
