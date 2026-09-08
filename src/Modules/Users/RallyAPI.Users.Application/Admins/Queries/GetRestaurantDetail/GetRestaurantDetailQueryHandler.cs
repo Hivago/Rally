@@ -70,6 +70,7 @@ internal sealed class GetRestaurantDetailQueryHandler
             r.IsVeganFriendly,
             r.HasJainOptions,
             r.CuisineTypes?.ToList() ?? new(),
+            r.GooglePlaceId,
             r.OwnerId,
             owner is null ? null : new RestaurantOwnerSummary(
                 owner.Id,
