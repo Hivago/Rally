@@ -81,7 +81,7 @@ public sealed class OrderEdgeCaseTests : IntegrationTestBase
         AuthenticateAsCustomer();
 
         // Send a request missing required fields: restaurantId is empty, items is empty
-        var response = await Client.PostAsync("/api/orders", JsonBody(new
+        var response = await PostOrderAsync(new
         {
             paymentId    = "test-payment",
             restaurantId = Guid.Empty.ToString(),
@@ -93,7 +93,7 @@ public sealed class OrderEdgeCaseTests : IntegrationTestBase
                 city    = "",
                 pincode = ""
             }
-        }));
+        });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
