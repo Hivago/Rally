@@ -3,6 +3,7 @@ using MediatR;
 using RallyAPI.Delivery.Domain.Enums;
 using RallyAPI.Delivery.Domain.Events;
 using RallyAPI.SharedKernel.Domain;
+using RallyAPI.SharedKernel.Utilities;
 
 namespace RallyAPI.Delivery.Domain.Entities;
 
@@ -99,6 +100,14 @@ public sealed class DeliveryRequest : AggregateRoot
 
     public DateTime? AssignedAt { get; private set; }
     public DateTime? ArrivedPickupAt { get; private set; }
+
+    // Rider's actual GPS fix when they tapped "Arrived at Restaurant", and its
+    // distance from the stored PickupLatitude/Longitude. Feeds pin-drift detection —
+    // see RestaurantPinDriftDetectionService in Delivery.Infrastructure.
+    public double? ArrivedPickupLatitude { get; private set; }
+    public double? ArrivedPickupLongitude { get; private set; }
+    public decimal? PickupDriftMeters { get; private set; }
+
     public DateTime? PickedUpAt { get; private set; }
     public DateTime? ArrivedDropAt { get; private set; }
     public DateTime? DeliveredAt { get; private set; }
@@ -339,7 +348,7 @@ public sealed class DeliveryRequest : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void MarkRiderArrivedPickup()
+    public void MarkRiderArrivedPickup(double? arrivedLatitude = null, double? arrivedLongitude = null)
     {
         // Own-fleet riders go straight from RiderAssigned to arrived — the rider
         // app has no separate "en route to pickup" step (only 3PL callbacks set
@@ -351,6 +360,18 @@ public sealed class DeliveryRequest : AggregateRoot
 
         Status = DeliveryRequestStatus.RiderArrivedPickup;
         ArrivedPickupAt = DateTime.UtcNow;
+
+        // Telemetry for pin-drift detection. Own fleet only — 3PL riders' GPS isn't
+        // ours to read, so their arrivals never contribute a sample.
+        if (arrivedLatitude.HasValue && arrivedLongitude.HasValue)
+        {
+            ArrivedPickupLatitude = arrivedLatitude;
+            ArrivedPickupLongitude = arrivedLongitude;
+            PickupDriftMeters = (decimal)(GeoCalculator.CalculateDistanceKm(
+                arrivedLatitude.Value, arrivedLongitude.Value,
+                PickupLatitude, PickupLongitude) * 1000);
+        }
+
         UpdatedAt = DateTime.UtcNow;
     }
 

@@ -236,6 +236,16 @@ public sealed class DeliveryRequestConfiguration : IEntityTypeConfiguration<Deli
         builder.Property(r => r.ArrivedPickupAt)
             .HasColumnName("arrived_pickup_at");
 
+        builder.Property(r => r.ArrivedPickupLatitude)
+            .HasColumnName("arrived_pickup_latitude");
+
+        builder.Property(r => r.ArrivedPickupLongitude)
+            .HasColumnName("arrived_pickup_longitude");
+
+        builder.Property(r => r.PickupDriftMeters)
+            .HasColumnName("pickup_drift_meters")
+            .HasPrecision(8, 2);
+
         builder.Property(r => r.PickedUpAt)
             .HasColumnName("picked_up_at");
 

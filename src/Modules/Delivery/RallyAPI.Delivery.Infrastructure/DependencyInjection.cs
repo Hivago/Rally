@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RallyAPI.Delivery.Domain.Abstractions;
+using RallyAPI.Delivery.Infrastructure.BackgroundServices;
 using RallyAPI.Delivery.Infrastructure.Persistence;
 using RallyAPI.Delivery.Infrastructure.Repositories;
 using RallyAPI.Delivery.Infrastructure.Services;
@@ -49,6 +50,11 @@ public static class DependencyInjection
         // IRiderNotificationService is registered by the host (SignalRRiderNotificationService).
         // Do not register the stub here — it would silently mask the real implementation
         // if the host-level override were ever removed.
+
+        // Restaurant pin-drift detection sweep
+        services.Configure<RestaurantPinDriftOptions>(
+            configuration.GetSection(RestaurantPinDriftOptions.SectionName));
+        services.AddHostedService<RestaurantPinDriftDetectionService>();
 
         return services;
     }

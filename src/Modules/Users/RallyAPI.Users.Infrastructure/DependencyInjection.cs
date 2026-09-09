@@ -72,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<IRiderPayoutQueryService, RiderPayoutQueryService>();
         services.AddScoped<IRiderPayoutExportBatchRepository, RiderPayoutExportBatchRepository>();
         services.AddScoped<IRestaurantTimeOffRepository, RestaurantTimeOffRepository>();
+        services.AddScoped<IRestaurantLocationReviewQueueRepository, RestaurantLocationReviewQueueRepository>();
 
         // Cross-module availability probe — consumed by Orders.PlaceOrder
         services.AddScoped<IRestaurantAvailabilityChecker, RestaurantAvailabilityChecker>();
