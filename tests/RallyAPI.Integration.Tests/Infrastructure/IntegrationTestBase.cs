@@ -64,28 +64,65 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
     // ─── Shared request builders ──────────────────────────────────────────────────
 
+    // Pickup/drop coordinates shared between BuildPlaceOrderRequest and
+    // GetDeliveryQuoteIdAsync — PlaceOrder recomputes pricing from the quote it's
+    // handed, so the quote and the order it's attached to must describe the same trip.
+    private const double PickupLatitude = 28.6315;
+    private const double PickupLongitude = 77.2167;
+    private const string PickupPincode = "110001";
+    private const double DropLatitude = 28.6129;
+    private const double DropLongitude = 77.2295;
+    private const string DropPincode = "110002";
+
+    /// <summary>
+    /// Fetches a real delivery quote via POST /api/delivery/quote (own-fleet path —
+    /// IRiderQueryService/IDistanceCalculator/IDeliveryPricingCalculator are stubbed
+    /// in IntegrationTestFactory) and returns its ID for use as PlaceOrder's
+    /// deliveryQuoteId. PlaceOrder rejects delivery orders without one.
+    /// </summary>
+    protected async Task<string> GetDeliveryQuoteIdAsync(Guid? restaurantId = null, decimal orderAmount = 200m)
+    {
+        var response = await Client.PostAsync("/api/delivery/quote", JsonBody(new
+        {
+            restaurantId    = (restaurantId ?? RestaurantId).ToString(),
+            pickupLatitude  = PickupLatitude,
+            pickupLongitude = PickupLongitude,
+            pickupPincode   = PickupPincode,
+            dropLatitude    = DropLatitude,
+            dropLongitude   = DropLongitude,
+            dropPincode     = DropPincode,
+            orderAmount
+        }));
+        response.EnsureSuccessStatusCode();
+
+        var quote = await DeserializeAsync<JsonElement>(response);
+        return quote.GetProperty("id").GetString()!;
+    }
+
     /// <summary>Builds a minimal valid PlaceOrderRequest body.</summary>
     protected static object BuildPlaceOrderRequest(
         Guid? restaurantId    = null,
         string paymentId      = "test-payment-001",
         decimal subTotal      = 200m,
-        decimal deliveryFee   = 30m) => new
+        decimal deliveryFee   = 30m,
+        string? deliveryQuoteId = null) => new
     {
         paymentId,
         paymentTransactionId = "txn-test-001",
         restaurantId         = (restaurantId ?? RestaurantId).ToString(),
         restaurantName       = "Test Restaurant",
-        pickupLatitude       = 28.6315,
-        pickupLongitude      = 77.2167,
-        pickupPincode        = "110001",
+        deliveryQuoteId,
+        pickupLatitude       = PickupLatitude,
+        pickupLongitude      = PickupLongitude,
+        pickupPincode        = PickupPincode,
         pickupAddress        = "Connaught Place, New Delhi",
         deliveryAddress      = new
         {
             street       = "12, India Gate",
             city         = "New Delhi",
-            pincode      = "110002",
-            latitude     = 28.6129,
-            longitude    = 77.2295,
+            pincode      = DropPincode,
+            latitude     = DropLatitude,
+            longitude    = DropLongitude,
             contactPhone = "+919876543210"
         },
         items = new[]
@@ -107,6 +144,23 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         }
     };
 
+    /// <summary>
+    /// POSTs to /api/orders with a fresh Idempotency-Key attached — the endpoint is
+    /// guarded by IdempotencyEndpointFilter and rejects requests missing that header.
+    /// A fresh key per call means repeated calls in the same test (e.g. placing 2
+    /// orders for a pagination test) aren't deduped/rejected as the same checkout attempt.
+    /// </summary>
+    protected async Task<HttpResponseMessage> PostOrderAsync(object body)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/orders")
+        {
+            Content = JsonBody(body)
+        };
+        request.Headers.Add(RallyAPI.SharedKernel.Constants.HttpHeaders.IdempotencyKey, Guid.NewGuid().ToString());
+
+        return await Client.SendAsync(request);
+    }
+
     /// <summary>Places an order and returns its ID. Asserts success.</summary>
     protected async Task<Guid> PlaceOrderAsync(
         Guid? restaurantId  = null,
@@ -116,8 +170,9 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     {
         AuthenticateAsCustomer();
 
-        var body     = BuildPlaceOrderRequest(restaurantId, paymentId, subTotal, deliveryFee);
-        var response = await Client.PostAsync("/api/orders", JsonBody(body));
+        var quoteId  = await GetDeliveryQuoteIdAsync(restaurantId, subTotal);
+        var body     = BuildPlaceOrderRequest(restaurantId, paymentId, subTotal, deliveryFee, quoteId);
+        var response = await PostOrderAsync(body);
         response.EnsureSuccessStatusCode();
 
         var json   = await response.Content.ReadAsStringAsync();

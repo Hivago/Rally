@@ -203,6 +203,7 @@ public static class RiderDeliveryEndpoints
 
     private static async Task<IResult> ArrivedAtPickup(
         Guid deliveryId,
+        [FromBody] ArrivedAtPickupRequest? request,
         ICurrentUserService currentUser,
         DeliveryDbContext dbContext,
         CancellationToken ct)
@@ -218,7 +219,7 @@ public static class RiderDeliveryEndpoints
 
         try
         {
-            delivery.MarkRiderArrivedPickup();
+            delivery.MarkRiderArrivedPickup(request?.Latitude, request?.Longitude);
             await dbContext.SaveChangesAsync(ct);
             return Results.Ok(new { message = "Arrived at pickup" });
         }
