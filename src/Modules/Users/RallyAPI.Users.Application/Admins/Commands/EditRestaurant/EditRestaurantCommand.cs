@@ -19,4 +19,5 @@ public sealed record EditRestaurantCommand(
     string? FssaiNumber,
     bool? AcceptsPickup,
     decimal? Latitude,
-    decimal? Longitude) : IRequest<Result>;
+    decimal? Longitude,
+    string? GooglePlaceId) : IRequest<Result>;

@@ -38,6 +38,10 @@ public sealed class EditRestaurantCommandValidator : AbstractValidator<EditResta
             .MaximumLength(50).WithMessage("FSSAI number must not exceed 50 characters.")
             .When(x => x.FssaiNumber is not null);
 
+        RuleFor(x => x.GooglePlaceId)
+            .MaximumLength(255).WithMessage("Google Place ID must not exceed 255 characters.")
+            .When(x => x.GooglePlaceId is not null);
+
         RuleFor(x => x.Longitude)
             .NotNull().WithMessage("Longitude is required when Latitude is provided.")
             .When(x => x.Latitude.HasValue);

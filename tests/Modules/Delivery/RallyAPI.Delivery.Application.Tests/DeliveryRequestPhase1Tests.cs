@@ -217,4 +217,27 @@ public class DeliveryRequestPhase1Tests
         req.LastRiderLongitude.Should().Be(2.0);
         req.LastLocationUpdatedAt.Should().Be(newer);
     }
+
+    // ─── Late-pickup escalation ────────────────────────────────────────
+    [Fact]
+    public void MarkPickupEscalated_WhenNotYetEscalated_SetsTimestamp()
+    {
+        var req = NewRequest();
+
+        req.MarkPickupEscalated();
+
+        req.PickupEscalatedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void MarkPickupEscalated_WhenAlreadyEscalated_DoesNotOverwriteTimestamp()
+    {
+        var req = NewRequest();
+        req.MarkPickupEscalated();
+        var firstEscalatedAt = req.PickupEscalatedAt;
+
+        req.MarkPickupEscalated();
+
+        req.PickupEscalatedAt.Should().Be(firstEscalatedAt);
+    }
 }

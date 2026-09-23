@@ -320,6 +320,11 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("fssai_number");
 
+                    b.Property<string>("GooglePlaceId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("google_place_id");
+
                     b.Property<bool>("HasJainOptions")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -354,6 +359,16 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasPrecision(10, 8)
                         .HasColumnType("numeric(10,8)")
                         .HasColumnName("latitude");
+
+                    b.Property<DateTimeOffset?>("LocationDriftDetectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("location_drift_detected_at");
+
+                    b.Property<int>("LocationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("location_status");
 
                     b.Property<string>("LogoFileKey")
                         .HasMaxLength(500)
@@ -449,6 +464,86 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_restaurants_location");
 
                     b.ToTable("restaurants", "users");
+                });
+
+            modelBuilder.Entity("RallyAPI.Users.Domain.Entities.RestaurantLocationReviewQueue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("AverageDriftMeters")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("average_drift_meters");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal>("CurrentLatitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("current_latitude");
+
+                    b.Property<decimal>("CurrentLongitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("current_longitude");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<DateTimeOffset>("DetectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("detected_at");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("restaurant_id");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<Guid?>("ReviewedByAdminId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_admin_id");
+
+                    b.Property<int>("SampleSize")
+                        .HasColumnType("integer")
+                        .HasColumnName("sample_size");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("SuggestedLatitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("suggested_latitude");
+
+                    b.Property<decimal>("SuggestedLongitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("suggested_longitude");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_restaurant_location_review_queue_status");
+
+                    b.HasIndex("RestaurantId", "Status")
+                        .HasDatabaseName("ix_restaurant_location_review_queue_restaurant_status");
+
+                    b.ToTable("restaurant_location_review_queue", "users");
                 });
 
             modelBuilder.Entity("RallyAPI.Users.Domain.Entities.RestaurantOwner", b =>
@@ -1119,6 +1214,15 @@ namespace RallyAPI.Users.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Notifications")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RallyAPI.Users.Domain.Entities.RestaurantLocationReviewQueue", b =>
+                {
+                    b.HasOne("RallyAPI.Users.Domain.Entities.Restaurant", null)
+                        .WithMany()
+                        .HasForeignKey("RestaurantId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

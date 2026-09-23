@@ -50,8 +50,11 @@ public sealed class CurrentUserService : ICurrentUserService
 
     public bool IsInRole(string role) => User?.IsInRole(role) ?? false;
 
+    // Admin JWTs carry the specific AdminRole (Support/CityAdmin/SuperAdmin) in the "role" claim,
+    // never the literal string "Admin" — so IsAdmin must check "user_type" like the auth policies do
+    // (Program.cs "Admin" policy uses RequireClaim("user_type", "admin")), not IsInRole("Admin").
     public bool IsCustomer => IsInRole("Customer") || IsInRole("customer");
     public bool IsRestaurant => IsInRole("Restaurant") || IsInRole("restaurant");
     public bool IsRider => IsInRole("Rider") || IsInRole("rider");
-    public bool IsAdmin => IsInRole("Admin") || IsInRole("admin");
+    public bool IsAdmin => User?.HasClaim("user_type", "admin") ?? false;
 }

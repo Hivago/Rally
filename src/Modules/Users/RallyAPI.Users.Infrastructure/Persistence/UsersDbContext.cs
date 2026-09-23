@@ -28,6 +28,7 @@ namespace RallyAPI.Users.Infrastructure.Persistence
 
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
         public DbSet<RestaurantTimeOff> RestaurantTimeOffs => Set<RestaurantTimeOff>();
+        public DbSet<RestaurantLocationReviewQueue> RestaurantLocationReviewQueue => Set<RestaurantLocationReviewQueue>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -46,6 +46,16 @@ public sealed class Restaurant : AggregateRoot
     // Compliance
     public string? FssaiNumber { get; private set; }
 
+    // Google Business Profile linkage — set by admin, used to show cached Google
+    // rating/reviews on the restaurant page. Null until an admin links it.
+    public string? GooglePlaceId { get; private set; }
+
+    // Pin-drift detection (rider telemetry). Verified until the drift sweep flags
+    // it; UnderReview once an admin_review_queue entry exists; Corrected once an
+    // admin applies the suggested coordinates.
+    public RestaurantLocationStatus LocationStatus { get; private set; } = RestaurantLocationStatus.Verified;
+    public DateTimeOffset? LocationDriftDetectedAt { get; private set; }
+
     // Description
     public string? Description { get; private set; }
 
@@ -174,6 +184,56 @@ public sealed class Restaurant : AggregateRoot
 
         Latitude = latitude;
         Longitude = longitude;
+        // Any manual/corrected coordinate update clears a prior drift flag — the
+        // pin has just been re-verified by whoever moved it.
+        LocationStatus = RestaurantLocationStatus.Verified;
+        LocationDriftDetectedAt = null;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Called by the Delivery-module drift sweep (via integration event) when the
+    /// last 10 own-fleet pickups all landed more than the drift threshold away from
+    /// this pin. Idempotent — re-detecting while already flagged just refreshes the
+    /// timestamp instead of creating duplicate review-queue noise (that dedup lives
+    /// in the event handler, not here).
+    /// </summary>
+    public Result FlagLocationDrift(DateTimeOffset detectedAt)
+    {
+        LocationStatus = RestaurantLocationStatus.UnderReview;
+        LocationDriftDetectedAt = detectedAt;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Admin approved a review-queue finding: apply the suggested centroid as the
+    /// new pin. Distinct from <see cref="UpdateLocation"/> only in the resulting
+    /// status — Corrected instead of Verified — so the restaurant list can tell
+    /// "always been fine" apart from "was drifted, now fixed" for reporting.
+    /// </summary>
+    public Result ApplyLocationCorrection(decimal latitude, decimal longitude)
+    {
+        if (latitude < 6 || latitude > 38 || longitude < 68 || longitude > 98)
+            return Result.Failure(Error.Validation("Invalid location coordinates."));
+
+        Latitude = latitude;
+        Longitude = longitude;
+        LocationStatus = RestaurantLocationStatus.Corrected;
+        LocationDriftDetectedAt = null;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Admin rejected a review-queue finding: the pin is fine as-is, dismiss the
+    /// UnderReview flag without touching the coordinates.
+    /// </summary>
+    public Result ClearLocationReview()
+    {
+        LocationStatus = RestaurantLocationStatus.Verified;
+        LocationDriftDetectedAt = null;
         MarkAsUpdated();
         return Result.Success();
     }
@@ -306,6 +366,13 @@ public sealed class Restaurant : AggregateRoot
             return Result.Failure(Error.Validation("FSSAI number must be between 14 and 20 characters."));
 
         FssaiNumber = fssaiNumber;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetGooglePlaceId(string? placeId)
+    {
+        GooglePlaceId = string.IsNullOrWhiteSpace(placeId) ? null : placeId.Trim();
         MarkAsUpdated();
         return Result.Success();
     }

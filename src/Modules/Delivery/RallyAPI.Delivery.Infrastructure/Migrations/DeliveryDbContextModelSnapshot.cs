@@ -197,6 +197,14 @@ namespace RallyAPI.Delivery.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("arrived_pickup_at");
 
+                    b.Property<double?>("ArrivedPickupLatitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("arrived_pickup_latitude");
+
+                    b.Property<double?>("ArrivedPickupLongitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("arrived_pickup_longitude");
+
                     b.Property<DateTime?>("AssignedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("assigned_at");
@@ -386,6 +394,15 @@ namespace RallyAPI.Delivery.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("pickup_contact_phone");
+
+                    b.Property<decimal?>("PickupDriftMeters")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("pickup_drift_meters");
+
+                    b.Property<DateTime?>("PickupEscalatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("pickup_escalated_at");
 
                     b.Property<double>("PickupLatitude")
                         .HasColumnType("double precision")

@@ -28,9 +28,11 @@ public sealed class AdminAlertsService : IAdminAlertsService
         var stuckCutoff = now - StuckPaymentAge;
 
         // Each query runs sequentially against the same DbContext.
+        // Covers both escalation sources: restaurant not confirming (Paid) and a rider
+        // assigned but not picking up in time (ReadyForPickup) — see Order.EscalateToAdmin.
         var escalated = await _context.Orders
             .AsNoTracking()
-            .Where(o => o.IsEscalated && o.Status == OrderStatus.Paid)
+            .Where(o => o.IsEscalated && (o.Status == OrderStatus.Paid || o.Status == OrderStatus.ReadyForPickup))
             .OrderByDescending(o => o.EscalatedAt)
             .Take(limit)
             .Select(o => new AdminAlert(

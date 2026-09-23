@@ -412,5 +412,36 @@ public class OrderAggregateTests
         order.IsEscalated.Should().BeFalse();
     }
 
+    [Fact]
+    public void EscalateToAdmin_WhenOrderIsReadyForPickup_ShouldSetEscalatedFlag()
+    {
+        var order = CreatePaidOrder();
+        order.Confirm();
+        order.StartPreparing();
+        order.MarkReadyForPickup();
+
+        order.EscalateToAdmin("Rider assigned but has not picked up after 15 minute(s).");
+
+        order.IsEscalated.Should().BeTrue();
+        order.EscalationReason.Should().Be("Rider assigned but has not picked up after 15 minute(s).");
+        order.EscalatedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void EscalateToAdmin_WhenOrderIsPickedUp_ShouldNotEscalate()
+    {
+        var order = CreatePaidOrder();
+        var riderId = Guid.NewGuid();
+        order.Confirm();
+        order.StartPreparing();
+        order.MarkReadyForPickup();
+        order.AssignRider(riderId, isOwnFleet: true);
+        order.MarkPickedUp();
+
+        order.EscalateToAdmin("Too late");
+
+        order.IsEscalated.Should().BeFalse();
+    }
+
     #endregion
 }

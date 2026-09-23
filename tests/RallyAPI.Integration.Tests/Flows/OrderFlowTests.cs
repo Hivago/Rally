@@ -27,7 +27,8 @@ public sealed class OrderFlowTests : IntegrationTestBase
     {
         AuthenticateAsCustomer();
 
-        var response = await Client.PostAsync("/api/orders", JsonBody(BuildPlaceOrderRequest()));
+        var quoteId = await GetDeliveryQuoteIdAsync();
+        var response = await PostOrderAsync(BuildPlaceOrderRequest(deliveryQuoteId: quoteId));
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         response.Headers.Location.Should().NotBeNull();
@@ -59,7 +60,7 @@ public sealed class OrderFlowTests : IntegrationTestBase
         AuthenticateAsCustomer();
 
         var body = BuildPlaceOrderRequest(paymentId: "");
-        var response = await Client.PostAsync("/api/orders", JsonBody(body));
+        var response = await PostOrderAsync(body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         await AssertErrorShapeAsync(response);

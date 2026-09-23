@@ -47,6 +47,8 @@ public sealed record OrderLabelDto
     public decimal Tax { get; init; }
     public decimal DeliveryFee { get; init; }
     public decimal PackagingFee { get; init; }
+    public decimal PlatformFee { get; init; }
+    public decimal ServiceGst { get; init; }
     public decimal Discount { get; init; }
     public decimal Total { get; init; }
 

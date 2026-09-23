@@ -83,6 +83,9 @@ internal sealed class EditRestaurantCommandHandler
         if (request.AcceptsPickup.HasValue)
             restaurant.SetAcceptsPickup(request.AcceptsPickup.Value);
 
+        if (request.GooglePlaceId is not null)
+            restaurant.SetGooglePlaceId(request.GooglePlaceId);
+
         if (request.Latitude.HasValue && request.Longitude.HasValue)
         {
             var locationResult = restaurant.UpdateLocation(

@@ -110,6 +110,23 @@ public sealed class DeliveryRequestRepository : IDeliveryRequestRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<DeliveryRequest>> GetOverduePickupsAsync(
+        DateTime idleBefore,
+        CancellationToken ct = default)
+    {
+        return await _dbContext.DeliveryRequests
+            .Where(r => r.RiderId != null)
+            .Where(r => r.Status == DeliveryRequestStatus.RiderAssigned
+                     || r.Status == DeliveryRequestStatus.Assigned3PL
+                     || r.Status == DeliveryRequestStatus.RiderEnRoutePickup
+                     || r.Status == DeliveryRequestStatus.RiderArrivedPickup)
+            .Where(r => r.PickupEscalatedAt == null)
+            .Where(r => r.UpdatedAt < idleBefore)
+            .OrderBy(r => r.UpdatedAt)
+            .Take(50)
+            .ToListAsync(ct);
+    }
+
     public async Task<DeliveryRequestStatus?> GetCurrentStatusAsync(Guid id, CancellationToken ct = default)
     {
         // AsNoTracking + scalar projection: always hits the DB and never returns a

@@ -224,6 +224,7 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
             MinOrderAmount = r.MinOrderAmount,
             LogoUrl = r.LogoUrl,
             AcceptsPickup = r.AcceptsPickup,
+            GooglePlaceId = r.GooglePlaceId,
             CreatedAt = r.CreatedAt,
             DistanceKm = distanceKm.HasValue ? Math.Round(distanceKm.Value, 2) : null
         };
@@ -257,7 +258,8 @@ internal sealed class RestaurantQueryService : IRestaurantQueryService
             CommissionFlatFee = r.CommissionFlatFee,
             OwnerId = r.OwnerId,
             AcceptsPickup = r.AcceptsPickup,
-            FssaiNumber = r.FssaiNumber
+            FssaiNumber = r.FssaiNumber,
+            GooglePlaceId = r.GooglePlaceId
         };
     }
 

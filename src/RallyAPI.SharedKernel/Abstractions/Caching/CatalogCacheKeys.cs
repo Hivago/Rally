@@ -15,4 +15,8 @@ public static class CatalogCacheKeys
 
     /// <summary>The fully-built menu response for one restaurant.</summary>
     public static string Menu(Guid restaurantId) => $"catalog:menu:{restaurantId}";
+
+    /// <summary>Cached Google reviews lookup, keyed by Google Place ID (shared across
+    /// restaurants in the unlikely event two point at the same place).</summary>
+    public static string GoogleReviews(string placeId) => $"catalog:reviews:google:{placeId}";
 }

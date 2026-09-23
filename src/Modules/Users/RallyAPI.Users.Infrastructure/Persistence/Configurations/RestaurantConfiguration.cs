@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RallyAPI.Users.Domain.Entities;
+using RallyAPI.Users.Domain.Enums;
 using RallyAPI.Users.Domain.ValueObjects;
 
 namespace RallyAPI.Users.Infrastructure.Persistence.Configurations;
@@ -189,6 +190,20 @@ public class RestaurantConfiguration : IEntityTypeConfiguration<Restaurant>
         builder.Property(r => r.FssaiNumber)
             .HasColumnName("fssai_number")
             .HasMaxLength(20);
+
+        // Google Business Profile Place ID — set by admin, drives cached Google reviews display
+        builder.Property(r => r.GooglePlaceId)
+            .HasColumnName("google_place_id")
+            .HasMaxLength(255);
+
+        builder.Property(r => r.LocationStatus)
+            .HasColumnName("location_status")
+            .HasConversion<int>()
+            .HasDefaultValue(RestaurantLocationStatus.Verified)
+            .IsRequired();
+
+        builder.Property(r => r.LocationDriftDetectedAt)
+            .HasColumnName("location_drift_detected_at");
 
         // Cuisine/dietary attributes — jsonb requires explicit converter for List<string>
         // (Npgsql 8.x maps List<string> to text[] by default, not jsonb)

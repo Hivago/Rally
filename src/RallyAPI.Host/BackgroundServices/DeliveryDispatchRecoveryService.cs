@@ -6,6 +6,7 @@ using RallyAPI.Delivery.Domain.Abstractions;
 using RallyAPI.Delivery.Domain.Entities;
 using RallyAPI.Delivery.Domain.Enums;
 using RallyAPI.SharedKernel.Abstractions.Delivery;
+using RallyAPI.SharedKernel.IntegrationEvents.Delivery;
 
 namespace RallyAPI.Host.BackgroundServices;
 
@@ -38,11 +39,25 @@ namespace RallyAPI.Host.BackgroundServices;
 ///
 /// Re-dispatch is safe: TriggerDispatch is idempotent per state, and the xmin concurrency token
 /// rejects a losing write (skipped, retried next tick).
+///
+/// (3) Late-pickup alert: once a rider IS assigned (RiderId set), none of the above applies —
+/// they aren't "stuck" in dispatch, a specific person committed to the job. If that rider hasn't
+/// picked up within <see cref="PickupOverdueThreshold"/> this raises an admin alert (order
+/// escalated, same mechanism as a restaurant not confirming) but never auto-cancels or
+/// reassigns, for the same reason as (2): a slow status update isn't proof nothing is happening,
+/// and yanking a live rider's job out from under them on a timer alone is exactly the mistake
+/// incident 2026-07-17 was caused by. See <see cref="SweepOverduePickupsAsync"/>.
 /// </summary>
 public sealed class DeliveryDispatchRecoveryService : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan StuckThreshold = TimeSpan.FromMinutes(2);
+
+    // A rider has already committed to this job (RiderId is set), so this is deliberately much
+    // longer than StuckThreshold: unlike the pre-assignment case, there's no safe automatic
+    // action to take here (see GetOverduePickupsAsync) — only escalate to a human once it's
+    // genuinely abnormal, not on every short delay at the restaurant.
+    private static readonly TimeSpan PickupOverdueThreshold = TimeSpan.FromMinutes(15);
 
     // Hard age floor for stuck-recovery: never re-dispatch an order created longer ago than this.
     // A genuinely recoverable stuck order (interrupted dispatch) is minutes old; anything older is
@@ -83,6 +98,7 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
 
                 await RecoverStuckAsync(stoppingToken);
                 await SweepThirdPartyTimeoutsAsync(stoppingToken);
+                await SweepOverduePickupsAsync(stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -259,6 +275,53 @@ public sealed class DeliveryDispatchRecoveryService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "3PL reconcile for delivery {DeliveryId} threw", request.Id);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Late-pickup safety net: a rider IS assigned (own fleet or 3PL) but hasn't picked up
+    /// within <see cref="PickupOverdueThreshold"/>. Unlike <see cref="RecoverStuckAsync"/>, this
+    /// never re-dispatches or reassigns — a specific rider already committed to the job, and
+    /// (per the 3PL-timeout precedent above) a slow status update is not proof the work isn't
+    /// happening. It only raises an admin alert via <see cref="DeliveryPickupOverdueIntegrationEvent"/>
+    /// so a human can decide, and marks the request so the alert fires once, not every tick.
+    /// </summary>
+    private async Task SweepOverduePickupsAsync(CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IDeliveryRequestRepository>();
+        var publisher = scope.ServiceProvider.GetRequiredService<IPublisher>();
+
+        var idleBefore = DateTime.UtcNow - PickupOverdueThreshold;
+        var overdue = await repository.GetOverduePickupsAsync(idleBefore, ct);
+        if (overdue.Count == 0)
+            return;
+
+        var batch = overdue.Take(BatchSize).ToList();
+        _logger.LogWarning(
+            "Pickup overdue: {Total} delivery(ies) with an assigned rider idle past {Minutes}min, escalating {Batch}",
+            overdue.Count, PickupOverdueThreshold.TotalMinutes, batch.Count);
+
+        foreach (var request in batch)
+        {
+            try
+            {
+                var idleFor = DateTime.UtcNow - request.UpdatedAt;
+
+                request.MarkPickupEscalated();
+                await repository.UpdateAsync(request, ct);
+
+                await publisher.Publish(
+                    new DeliveryPickupOverdueIntegrationEvent(request.Id, request.OrderId, idleFor), ct);
+
+                _logger.LogWarning(
+                    "Escalated overdue pickup for delivery {DeliveryId} (Order {OrderId}, rider {RiderId}, idle {IdleMinutes:F0}min)",
+                    request.Id, request.OrderId, request.RiderId, idleFor.TotalMinutes);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Pickup-overdue escalation for delivery {DeliveryId} threw", request.Id);
             }
         }
     }

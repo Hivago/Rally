@@ -34,4 +34,10 @@ public sealed record RestaurantDetails
     /// Consumed by Orders.PlaceOrder to reject pickup orders against delivery-only restaurants.
     /// </summary>
     public bool AcceptsPickup { get; init; }
+
+    /// <summary>
+    /// Google Business Profile Place ID, set by admin. Null until linked — callers must
+    /// treat a null value as "no Google reviews available" rather than an error.
+    /// </summary>
+    public string? GooglePlaceId { get; init; }
 }

@@ -181,6 +181,8 @@ public static class OrderMappingExtensions
             Tax = pricing.Tax.Amount,
             DeliveryFee = pricing.DeliveryFee.Amount,
             PackagingFee = pricing.PackagingFee.Amount,
+            PlatformFee = pricing.PlatformFee.Amount,
+            ServiceGst = pricing.ServiceGst.Amount,
             Discount = pricing.Discount.Amount,
             Total = pricing.Total.Amount,
 

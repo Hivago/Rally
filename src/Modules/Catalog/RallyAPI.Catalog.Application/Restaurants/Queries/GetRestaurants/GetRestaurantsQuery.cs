@@ -47,4 +47,6 @@ public sealed record RestaurantListResponse(
     bool HasJainOptions,
     decimal MinOrderAmount,
     string? LogoUrl,
-    double? DistanceKm);
+    double? DistanceKm,
+    double? Rating,
+    int? UserRatingCount);

@@ -22,18 +22,27 @@ public sealed class TestJwtHelper
     }
 
     public string CreateCustomerToken(Guid customerId, string name = "Test Customer")
-        => CreateToken(customerId, name, "customer");
+        => CreateToken(customerId, name, "customer", "Customer");
 
     public string CreateRestaurantToken(Guid restaurantId, string name = "Test Restaurant")
-        => CreateToken(restaurantId, name, "restaurant");
+        => CreateToken(restaurantId, name, "restaurant", "Restaurant");
 
     public string CreateRiderToken(Guid riderId, string name = "Test Rider")
-        => CreateToken(riderId, name, "rider");
+        => CreateToken(riderId, name, "rider", "Rider");
 
     public string CreateAdminToken(Guid adminId, string name = "Test Admin")
-        => CreateToken(adminId, name, "admin");
+        => CreateToken(adminId, name, "admin", "SuperAdmin");
 
-    private string CreateToken(Guid userId, string name, string userType)
+    /// <summary>
+    /// <paramref name="role"/> must match JwtProvider's exact casing ("Customer", "Restaurant",
+    /// "Rider", an AdminRole name) — Program.cs configures RoleClaimType = "role", and
+    /// CurrentUserService.IsCustomer/IsRestaurant/IsRider (Orders module) resolve via
+    /// ClaimsPrincipal.IsInRole against that claim. Without it, every order-lifecycle
+    /// endpoint that calls GetCallerRole() sees an empty role and returns Unauthorized —
+    /// user_type alone (what this helper previously emitted) satisfies the ASP.NET
+    /// authorization policies but not this role check.
+    /// </summary>
+    private string CreateToken(Guid userId, string name, string userType, string role)
     {
         var key         = new RsaSecurityKey(_rsa);
         var credentials = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
@@ -44,6 +53,7 @@ public sealed class TestJwtHelper
             new(JwtRegisteredClaimNames.Sub, userId.ToString()),
             new(JwtRegisteredClaimNames.Name, name),
             new("user_type", userType),
+            new("role", role),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
 
