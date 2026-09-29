@@ -52,6 +52,7 @@ public sealed class RestaurantOrderFeedHandler :
     public Task Handle(OrderPaidEvent notification, CancellationToken ct) =>
         PushAsync(notification.RestaurantId, "NewOrderReceived", new
         {
+            restaurantId = notification.RestaurantId,
             orderId     = notification.OrderId,
             orderNumber = notification.OrderNumber,
             customerId  = notification.CustomerId,
@@ -97,6 +98,7 @@ public sealed class RestaurantOrderFeedHandler :
 
         await PushAsync(order.RestaurantId, "OrderStatusUpdate", new
         {
+            restaurantId = order.RestaurantId,
             orderId     = notification.OrderId,
             orderNumber = notification.OrderNumber,
             status      = "Cancelled",
@@ -122,6 +124,7 @@ public sealed class RestaurantOrderFeedHandler :
         string status, string message, CancellationToken ct) =>
         PushAsync(restaurantId, "OrderStatusUpdate", new
         {
+            restaurantId,
             orderId,
             orderNumber,
             status,

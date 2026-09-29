@@ -11,6 +11,7 @@ public interface IRestaurantRepository
     Task<bool> ExistsByEmailAsync(Email email, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Restaurant>> GetByPhoneAsync(PhoneNumber phone, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Restaurant>> GetByOwnerIdAsync(Guid ownerId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Restaurant>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default);
     /// <summary>
     /// Active outlet ids authorized under the same login as <paramref name="restaurant"/> —
     /// itself plus active siblings sharing its OwnerId, or just itself if OwnerId is null.
