@@ -48,6 +48,22 @@ public sealed class CurrentUserService : ICurrentUserService
 
     public bool IsAuthenticated => User?.Identity?.IsAuthenticated ?? false;
 
+    public IReadOnlyList<Guid> RestaurantIds
+    {
+        get
+        {
+            var claim = User?.FindFirst("restaurant_ids")?.Value;
+            if (string.IsNullOrEmpty(claim))
+                return UserId.HasValue ? new[] { UserId.Value } : Array.Empty<Guid>();
+
+            return claim.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => Guid.TryParse(s, out var id) ? id : (Guid?)null)
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .ToList();
+        }
+    }
+
     public bool IsInRole(string role) => User?.IsInRole(role) ?? false;
 
     // Admin JWTs carry the specific AdminRole (Support/CityAdmin/SuperAdmin) in the "role" claim,

@@ -41,7 +41,7 @@ public sealed class GetOrderLabelQueryHandler
             return Result.Failure<OrderLabelDto>(OrderErrors.NotFound(query.OrderId));
         }
 
-        if (!IsAuthorized(order, query.CallerId, query.CallerRole))
+        if (!IsAuthorized(order, query.CallerId, query.CallerRole, query.CallerRestaurantIds))
         {
             // Return NotFound — do not reveal that the order exists to unauthorized callers
             return Result.Failure<OrderLabelDto>(OrderErrors.NotFound(query.OrderId));
@@ -69,11 +69,12 @@ public sealed class GetOrderLabelQueryHandler
     }
 
     // A label is only ever printed by the owning restaurant or an Admin (same rule as the KOT).
-    private static bool IsAuthorized(Domain.Entities.Order order, Guid callerId, string callerRole) =>
+    private static bool IsAuthorized(
+        Domain.Entities.Order order, Guid callerId, string callerRole, IReadOnlyList<Guid>? callerRestaurantIds) =>
         callerRole switch
         {
             "Admin"      => true,
-            "Restaurant" => order.RestaurantId == callerId,
+            "Restaurant" => (callerRestaurantIds ?? new[] { callerId }).Contains(order.RestaurantId),
             _            => false
         };
 }

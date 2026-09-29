@@ -43,7 +43,8 @@ internal sealed class SwitchToOutletCommandHandler
             return Result.Failure<SwitchToOutletResponse>(
                 Error.Validation("Outlet is inactive."));
 
-        var tokenPair = _jwtProvider.GenerateRestaurantTokenPair(restaurant);
+        var restaurantIds = await _restaurantRepository.GetSiblingOutletIdsAsync(restaurant, cancellationToken);
+        var tokenPair = _jwtProvider.GenerateRestaurantTokenPair(restaurant, restaurantIds);
 
         var refreshTokenHash = HashToken(tokenPair.RefreshToken);
         var refreshToken = RefreshToken.Create(

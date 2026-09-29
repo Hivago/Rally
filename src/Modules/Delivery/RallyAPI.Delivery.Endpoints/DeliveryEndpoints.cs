@@ -85,7 +85,7 @@ public static class DeliveryEndpoints
             : string.Empty;
 
         var result = await mediator.Send(
-            new GetDeliveryCodesQuery(orderId, currentUser.UserId.Value, role), ct);
+            new GetDeliveryCodesQuery(orderId, currentUser.UserId.Value, role, currentUser.RestaurantIds), ct);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)

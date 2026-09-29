@@ -33,17 +33,29 @@ public sealed class NotificationHub : Hub
         {
             _tracker.AddConnection(userId.Value, Context.ConnectionId);
 
-            var groupName = userType switch
+            if (userType == "restaurant")
             {
-                "rider"      => $"rider_{userId.Value}",
-                "customer"   => $"customer_{userId.Value}",
-                "restaurant" => $"restaurant_{userId.Value}",
-                "admin"      => "admin",
-                _            => null
-            };
+                var idsClaim = Context.User?.FindFirst("restaurant_ids")?.Value;
+                var ids = string.IsNullOrEmpty(idsClaim)
+                    ? new[] { userId.Value.ToString() }
+                    : idsClaim.Split(',', StringSplitOptions.RemoveEmptyEntries);
 
-            if (groupName is not null)
-                await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+                foreach (var id in ids)
+                    await Groups.AddToGroupAsync(Context.ConnectionId, $"restaurant_{id}");
+            }
+            else
+            {
+                var groupName = userType switch
+                {
+                    "rider"    => $"rider_{userId.Value}",
+                    "customer" => $"customer_{userId.Value}",
+                    "admin"    => "admin",
+                    _          => null
+                };
+
+                if (groupName is not null)
+                    await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+            }
         }
 
         await base.OnConnectedAsync();

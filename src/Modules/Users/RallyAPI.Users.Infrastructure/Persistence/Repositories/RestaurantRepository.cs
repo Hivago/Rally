@@ -55,6 +55,18 @@ public class RestaurantRepository : IRestaurantRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Guid>> GetSiblingOutletIdsAsync(Restaurant restaurant, CancellationToken cancellationToken = default)
+    {
+        if (restaurant.OwnerId is null)
+            return new[] { restaurant.Id };
+
+        return await _context.Restaurants
+            .AsNoTracking()
+            .Where(r => r.OwnerId == restaurant.OwnerId && r.IsActive)
+            .Select(r => r.Id)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, int>> GetOutletCountsByOwnerIdsAsync(
         IReadOnlyCollection<Guid> ownerIds,
         CancellationToken cancellationToken = default)

@@ -15,4 +15,7 @@ public sealed record AssignRiderCommand : IRequest<Result<OrderDto>>
     public string? RiderPhone { get; init; }
     public Guid? AssignedById { get; init; }
     public string? AssignedByRole { get; init; }
+
+    /// <summary>For Restaurant callers: all outlets this login is authorized to act on (includes AssignedById).</summary>
+    public IReadOnlyList<Guid> AssignedByRestaurantIds { get; init; } = Array.Empty<Guid>();
 }

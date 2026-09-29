@@ -8,7 +8,7 @@ using RallyAPI.Users.Domain.ValueObjects;
 
 namespace RallyAPI.Users.Application.Restaurants.Commands.VerifyOtp;
 
-internal sealed class VerifyRestaurantOtpCommandHandler
+public sealed class VerifyRestaurantOtpCommandHandler
     : IRequestHandler<VerifyRestaurantOtpCommand, Result<VerifyRestaurantOtpResponse>>
 {
     private readonly IOtpService _otpService;
@@ -52,13 +52,21 @@ internal sealed class VerifyRestaurantOtpCommandHandler
         if (matches.Count == 0)
             return Result.Failure<VerifyRestaurantOtpResponse>(Error.Validation("No active restaurant account found for this phone number."));
 
+        // Only reject as ambiguous if there's more than one match AND they don't share a
+        // single, non-null owner — same-owner multi-outlet matches are the whole point of
+        // this feature and should succeed with a token authorized for all of them.
         if (matches.Count > 1)
-            return Result.Failure<VerifyRestaurantOtpResponse>(Error.Validation(
-                "Multiple accounts are linked to this phone number. Please log in with email and password, or contact support."));
+        {
+            var distinctOwners = matches.Select(r => r.OwnerId).Distinct().ToList();
+            if (distinctOwners.Count > 1 || distinctOwners[0] is null)
+                return Result.Failure<VerifyRestaurantOtpResponse>(Error.Validation(
+                    "Multiple accounts are linked to this phone number. Please log in with email and password, or contact support."));
+        }
 
-        var restaurant = matches[0];
+        var restaurant = matches.OrderBy(r => r.CreatedAt).First();
+        var restaurantIds = matches.Select(r => r.Id).ToList();
 
-        var tokenPair = _jwtProvider.GenerateRestaurantTokenPair(restaurant);
+        var tokenPair = _jwtProvider.GenerateRestaurantTokenPair(restaurant, restaurantIds);
 
         var refreshTokenHash = HashToken(tokenPair.RefreshToken);
         var refreshToken = RefreshToken.Create(

@@ -27,7 +27,7 @@ public sealed class GetKitchenTicketQueryHandler
             return Result.Failure<KitchenTicketDto>(OrderErrors.NotFound(query.OrderId));
         }
 
-        if (!IsAuthorized(order, query.CallerId, query.CallerRole))
+        if (!IsAuthorized(order, query.CallerId, query.CallerRole, query.CallerRestaurantIds))
         {
             // Return NotFound — do not reveal that the order exists to unauthorized callers
             return Result.Failure<KitchenTicketDto>(OrderErrors.NotFound(query.OrderId));
@@ -37,11 +37,12 @@ public sealed class GetKitchenTicketQueryHandler
     }
 
     // A KOT is only ever printed by the kitchen (the owning restaurant) or an Admin.
-    private static bool IsAuthorized(Domain.Entities.Order order, Guid callerId, string callerRole) =>
+    private static bool IsAuthorized(
+        Domain.Entities.Order order, Guid callerId, string callerRole, IReadOnlyList<Guid>? callerRestaurantIds) =>
         callerRole switch
         {
             "Admin"      => true,
-            "Restaurant" => order.RestaurantId == callerId,
+            "Restaurant" => (callerRestaurantIds ?? new[] { callerId }).Contains(order.RestaurantId),
             _            => false
         };
 }

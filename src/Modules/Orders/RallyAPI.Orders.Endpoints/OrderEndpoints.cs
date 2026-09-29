@@ -314,7 +314,9 @@ public static class OrderEndpoints
             return Results.Unauthorized();
 
         var callerRole = GetCallerRole(currentUser);
-        var result = await mediator.Send(new GetOrderByIdQuery(orderId, currentUser.UserId.Value, callerRole), cancellationToken);
+        var result = await mediator.Send(
+            new GetOrderByIdQuery(orderId, currentUser.UserId.Value, callerRole, currentUser.RestaurantIds),
+            cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -332,7 +334,7 @@ public static class OrderEndpoints
 
         var callerRole = GetCallerRole(currentUser);
         var result = await mediator.Send(
-            new GetKitchenTicketQuery(orderId, currentUser.UserId.Value, callerRole),
+            new GetKitchenTicketQuery(orderId, currentUser.UserId.Value, callerRole, currentUser.RestaurantIds),
             cancellationToken);
 
         return result.IsSuccess
@@ -351,7 +353,7 @@ public static class OrderEndpoints
 
         var callerRole = GetCallerRole(currentUser);
         var result = await mediator.Send(
-            new GetOrderLabelQuery(orderId, currentUser.UserId.Value, callerRole),
+            new GetOrderLabelQuery(orderId, currentUser.UserId.Value, callerRole, currentUser.RestaurantIds),
             cancellationToken);
 
         return result.IsSuccess
@@ -369,7 +371,9 @@ public static class OrderEndpoints
             return Results.Unauthorized();
 
         var callerRole = GetCallerRole(currentUser);
-        var result = await mediator.Send(new GetOrderByNumberQuery(orderNumber, currentUser.UserId.Value, callerRole), cancellationToken);
+        var result = await mediator.Send(
+            new GetOrderByNumberQuery(orderNumber, currentUser.UserId.Value, callerRole, currentUser.RestaurantIds),
+            cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -408,8 +412,12 @@ public static class OrderEndpoints
         [FromQuery] int page,
         [FromQuery] int pageSize,
         IMediator mediator,
+        ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
+        if (!currentUser.RestaurantIds.Contains(restaurantId))
+            return Error.Forbidden("You do not have access to this restaurant's orders.").ToErrorResult();
+
         var query = new GetOrdersByRestaurantQuery
         {
             RestaurantId = restaurantId,
@@ -478,12 +486,10 @@ public static class OrderEndpoints
         ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
-        /// TODO: Get restaurant ID from current user's associated restaurant
-        // For MVP, accept restaurant ID from user claims or require it in request
         var restaurantId = currentUser.UserId ?? Guid.Empty;
 
         var result = await mediator.Send(
-            new ConfirmOrderCommand(orderId, restaurantId),
+            new ConfirmOrderCommand(orderId, restaurantId, currentUser.RestaurantIds),
             cancellationToken);
 
         return result.IsSuccess
@@ -502,7 +508,8 @@ public static class OrderEndpoints
             OrderId = orderId,
             TargetStatus = OrderStatus.Preparing,
             ActorId = currentUser.UserId,
-            ActorRole = GetCallerRole(currentUser)
+            ActorRole = GetCallerRole(currentUser),
+            ActorRestaurantIds = currentUser.RestaurantIds
         };
 
         var result = await mediator.Send(command, cancellationToken);
@@ -523,7 +530,8 @@ public static class OrderEndpoints
             OrderId = orderId,
             TargetStatus = OrderStatus.ReadyForPickup,
             ActorId = currentUser.UserId,
-            ActorRole = GetCallerRole(currentUser)
+            ActorRole = GetCallerRole(currentUser),
+            ActorRestaurantIds = currentUser.RestaurantIds
         };
 
         var result = await mediator.Send(command, cancellationToken);
@@ -547,7 +555,8 @@ public static class OrderEndpoints
             RiderName = request.RiderName,
             RiderPhone = request.RiderPhone,
             AssignedById = currentUser.UserId,
-            AssignedByRole = GetCallerRole(currentUser)
+            AssignedByRole = GetCallerRole(currentUser),
+            AssignedByRestaurantIds = currentUser.RestaurantIds
         };
 
         var result = await mediator.Send(command, cancellationToken);
@@ -698,7 +707,8 @@ public static class OrderEndpoints
             OrderId = orderId,
             TargetStatus = OrderStatus.Delivered,
             ActorId = currentUser.UserId,
-            ActorRole = GetCallerRole(currentUser)
+            ActorRole = GetCallerRole(currentUser),
+            ActorRestaurantIds = currentUser.RestaurantIds
         };
 
         var result = await mediator.Send(command, cancellationToken);
@@ -730,6 +740,7 @@ public static class OrderEndpoints
         {
             OrderId = orderId,
             RestaurantId = restaurantId,
+            RestaurantIds = currentUser.RestaurantIds,
             Reason = request.Reason
         };
 

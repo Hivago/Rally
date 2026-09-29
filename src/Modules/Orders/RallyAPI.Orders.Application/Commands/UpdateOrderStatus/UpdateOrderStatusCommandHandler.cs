@@ -36,7 +36,7 @@ public sealed class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrde
         }
 
         // Verify caller owns this order for the given transition
-        if (!IsAuthorized(order, command.TargetStatus, command.ActorId, command.ActorRole))
+        if (!IsAuthorized(order, command.TargetStatus, command.ActorId, command.ActorRole, command.ActorRestaurantIds))
         {
             return Result.Failure<OrderDto>(OrderErrors.Unauthorized);
         }
@@ -108,19 +108,26 @@ public sealed class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrde
         Domain.Entities.Order order,
         OrderStatus targetStatus,
         Guid? actorId,
-        string? actorRole)
+        string? actorRole,
+        IReadOnlyList<Guid> actorRestaurantIds)
     {
         if (actorRole == "Admin") return true;
+
+        // Falls back to [actorId] when the caller's authorized outlet set wasn't supplied
+        // (e.g. pre-multi-outlet callers or tests constructing the command directly).
+        var effectiveRestaurantIds = actorRestaurantIds.Count > 0
+            ? actorRestaurantIds
+            : (actorId.HasValue ? new[] { actorId.Value } : Array.Empty<Guid>());
 
         return targetStatus switch
         {
             OrderStatus.Preparing or OrderStatus.ReadyForPickup =>
-                actorRole == "Restaurant" && order.RestaurantId == actorId,
+                actorRole == "Restaurant" && effectiveRestaurantIds.Contains(order.RestaurantId),
 
             // Pickup orders are collected by the customer and completed by the
             // owning restaurant (no rider, no DeliveryInfo).
             OrderStatus.Delivered when order.FulfillmentType == FulfillmentType.Pickup =>
-                actorRole == "Restaurant" && order.RestaurantId == actorId,
+                actorRole == "Restaurant" && effectiveRestaurantIds.Contains(order.RestaurantId),
 
             OrderStatus.PickedUp or OrderStatus.Delivered =>
                 actorRole == "Rider" && order.DeliveryInfo?.RiderId == actorId,

@@ -140,7 +140,7 @@ public class JwtProvider : IJwtProvider
         return GenerateTokenPair(claims);
     }
 
-    public TokenPair GenerateRestaurantTokenPair(Restaurant restaurant)
+    public TokenPair GenerateRestaurantTokenPair(Restaurant restaurant, IReadOnlyList<Guid> restaurantIds)
     {
         var claims = new List<Claim>
         {
@@ -149,7 +149,8 @@ public class JwtProvider : IJwtProvider
             new(JwtRegisteredClaimNames.Email, restaurant.Email.Value),
             new("name", restaurant.Name),
             new("role", "Restaurant"),
-            new("user_type", "restaurant")
+            new("user_type", "restaurant"),
+            new("restaurant_ids", string.Join(",", restaurantIds))
         };
 
         return GenerateTokenPair(claims);

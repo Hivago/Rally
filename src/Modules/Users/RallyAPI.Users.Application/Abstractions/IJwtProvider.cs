@@ -12,7 +12,7 @@ public interface IJwtProvider
     //Refresh token support
     TokenPair GenerateCustomerTokenPair(Customer customer);
     TokenPair GenerateRiderTokenPair(Rider rider);
-    TokenPair GenerateRestaurantTokenPair(Restaurant restaurant);
+    TokenPair GenerateRestaurantTokenPair(Restaurant restaurant, IReadOnlyList<Guid> restaurantIds);
     TokenPair GenerateAdminTokenPair(Admin admin);
     TokenPair GenerateOwnerTokenPair(RestaurantOwner owner);
 }

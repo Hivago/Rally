@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using RallyAPI.Delivery.Domain.Abstractions;
 using RallyAPI.SharedKernel.Abstractions.Delivery;
 using RallyAPI.SharedKernel.Results;
+using System.Linq;
 
 namespace RallyAPI.Delivery.Application.Commands.PushOtpsToProvider;
 
@@ -32,7 +33,9 @@ internal sealed class PushOtpsToProviderCommandHandler
             return Result.Failure<PushOtpsToProviderResult>(
                 Error.NotFound("DeliveryRequest", request.OrderId));
 
-        if (!request.IsAdmin && delivery.RestaurantId != request.CallerId)
+        var authorizedRestaurantIds = request.CallerRestaurantIds ?? new[] { request.CallerId };
+        if (!request.IsAdmin
+            && (delivery.RestaurantId is not Guid deliveryRestaurantId || !authorizedRestaurantIds.Contains(deliveryRestaurantId)))
         {
             _logger.LogWarning(
                 "Restaurant {CallerId} attempted to push OTPs for order {OrderId} owned by {OwnerId}",
