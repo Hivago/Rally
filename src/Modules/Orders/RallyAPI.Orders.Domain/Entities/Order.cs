@@ -246,7 +246,7 @@ public sealed class Order : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
 
         AddDomainEvent(new OrderPaidEvent(
-            Id, OrderNumber.Value, CustomerId, RestaurantId,
+            Id, OrderNumber.Value, CustomerId, RestaurantId, RestaurantName,
             Pricing.Total.Amount, _items.Count));
     }
 
