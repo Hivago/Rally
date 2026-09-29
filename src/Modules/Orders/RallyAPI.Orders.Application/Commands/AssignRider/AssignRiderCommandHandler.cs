@@ -35,9 +35,15 @@ public sealed class AssignRiderCommandHandler : IRequestHandler<AssignRiderComma
             return Result.Failure<OrderDto>(OrderErrors.NotFound(command.OrderId));
         }
 
-        // Verify caller is Admin or the restaurant that owns this order
+        // Verify caller is Admin or the restaurant that owns this order. Falls back to
+        // [AssignedById] when the caller's authorized outlet set wasn't supplied (e.g.
+        // pre-multi-outlet callers or tests constructing the command directly).
+        var effectiveRestaurantIds = command.AssignedByRestaurantIds.Count > 0
+            ? command.AssignedByRestaurantIds
+            : (command.AssignedById.HasValue ? new[] { command.AssignedById.Value } : Array.Empty<Guid>());
+
         var isAuthorized = command.AssignedByRole == "Admin"
-            || (command.AssignedByRole == "Restaurant" && order.RestaurantId == command.AssignedById);
+            || (command.AssignedByRole == "Restaurant" && effectiveRestaurantIds.Contains(order.RestaurantId));
 
         if (!isAuthorized)
         {

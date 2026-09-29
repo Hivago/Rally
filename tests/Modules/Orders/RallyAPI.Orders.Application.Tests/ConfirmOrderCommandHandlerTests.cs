@@ -31,7 +31,7 @@ public class ConfirmOrderCommandHandlerTests
     {
         var restaurantId = Guid.NewGuid();
         var order = BuildPaidOrder(restaurantId);
-        var command = new ConfirmOrderCommand(order.Id, restaurantId);
+        var command = new ConfirmOrderCommand(order.Id, restaurantId, new[] { restaurantId });
 
         _orderRepository.GetByIdAsync(order.Id, Arg.Any<CancellationToken>())
             .Returns(order);
@@ -49,7 +49,8 @@ public class ConfirmOrderCommandHandlerTests
     public async Task Handle_WhenOrderNotFound_ShouldReturnFailure()
     {
         var orderId = Guid.NewGuid();
-        var command = new ConfirmOrderCommand(orderId, Guid.NewGuid());
+        var callerId = Guid.NewGuid();
+        var command = new ConfirmOrderCommand(orderId, callerId, new[] { callerId });
 
         _orderRepository.GetByIdAsync(orderId, Arg.Any<CancellationToken>())
             .Returns((Order?)null);
@@ -65,7 +66,7 @@ public class ConfirmOrderCommandHandlerTests
     {
         var order = BuildPaidOrder(restaurantId: Guid.NewGuid());
         var differentRestaurantId = Guid.NewGuid();
-        var command = new ConfirmOrderCommand(order.Id, differentRestaurantId);
+        var command = new ConfirmOrderCommand(order.Id, differentRestaurantId, new[] { differentRestaurantId });
 
         _orderRepository.GetByIdAsync(order.Id, Arg.Any<CancellationToken>())
             .Returns(order);
@@ -77,12 +78,33 @@ public class ConfirmOrderCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenOrderBelongsToSiblingOutlet_ShouldSucceed()
+    {
+        // Multi-outlet cross-accept: the login's authorized RestaurantIds set includes
+        // a sibling outlet, distinct from the order's own RestaurantId (and from the
+        // acting outlet, which is command.RestaurantId).
+        var orderRestaurantId = Guid.NewGuid();
+        var actingRestaurantId = Guid.NewGuid();
+        var order = BuildPaidOrder(orderRestaurantId);
+        var command = new ConfirmOrderCommand(
+            order.Id, actingRestaurantId, new[] { actingRestaurantId, orderRestaurantId });
+
+        _orderRepository.GetByIdAsync(order.Id, Arg.Any<CancellationToken>())
+            .Returns(order);
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        order.Status.Should().Be(OrderStatus.Confirmed);
+    }
+
+    [Fact]
     public async Task Handle_WhenOrderIsNotInPaidStatus_ShouldReturnFailure()
     {
         var restaurantId = Guid.NewGuid();
         var order = BuildPaidOrder(restaurantId);
         order.Confirm(); // advance past Paid
-        var command = new ConfirmOrderCommand(order.Id, restaurantId);
+        var command = new ConfirmOrderCommand(order.Id, restaurantId, new[] { restaurantId });
 
         _orderRepository.GetByIdAsync(order.Id, Arg.Any<CancellationToken>())
             .Returns(order);
@@ -99,7 +121,7 @@ public class ConfirmOrderCommandHandlerTests
         var restaurantId = Guid.NewGuid();
         var order = BuildPaidOrder(restaurantId);
         order.Cancel(CancellationReason.CustomerRequested);
-        var command = new ConfirmOrderCommand(order.Id, restaurantId);
+        var command = new ConfirmOrderCommand(order.Id, restaurantId, new[] { restaurantId });
 
         _orderRepository.GetByIdAsync(order.Id, Arg.Any<CancellationToken>())
             .Returns(order);

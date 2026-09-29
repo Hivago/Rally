@@ -35,8 +35,8 @@ public sealed class ConfirmOrderCommandHandler : IRequestHandler<ConfirmOrderCom
             return Result.Failure<OrderDto>(OrderErrors.NotFound(command.OrderId));
         }
 
-        // Verify restaurant owns this order
-        if (order.RestaurantId != command.RestaurantId)
+        // Verify the order belongs to one of the acting login's authorized outlets
+        if (!command.RestaurantIds.Contains(order.RestaurantId))
         {
             return Result.Failure<OrderDto>(OrderErrors.NotRestaurantOrder);
         }
@@ -55,8 +55,9 @@ public sealed class ConfirmOrderCommandHandler : IRequestHandler<ConfirmOrderCom
             _orderRepository.Update(order);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            _logger.LogInformation("Order {OrderNumber} confirmed by restaurant {RestaurantId}",
-                order.OrderNumber.Value, command.RestaurantId);
+            _logger.LogInformation(
+                "Order {OrderNumber} confirmed for restaurant {OrderRestaurantId} via login for outlet {ActingRestaurantId}",
+                order.OrderNumber.Value, order.RestaurantId, command.RestaurantId);
 
             return Result.Success(order.ToDto());
         }

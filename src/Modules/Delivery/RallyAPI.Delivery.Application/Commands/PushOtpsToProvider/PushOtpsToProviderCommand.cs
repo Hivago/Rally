@@ -12,7 +12,8 @@ namespace RallyAPI.Delivery.Application.Commands.PushOtpsToProvider;
 public sealed record PushOtpsToProviderCommand(
     Guid OrderId,
     Guid CallerId,
-    bool IsAdmin) : IRequest<Result<PushOtpsToProviderResult>>;
+    bool IsAdmin,
+    IReadOnlyList<Guid>? CallerRestaurantIds = null) : IRequest<Result<PushOtpsToProviderResult>>;
 
 public sealed record PushOtpsToProviderResult(
     Guid DeliveryRequestId,

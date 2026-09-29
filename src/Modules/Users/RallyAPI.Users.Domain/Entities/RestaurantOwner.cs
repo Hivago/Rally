@@ -18,6 +18,13 @@ public sealed class RestaurantOwner : AggregateRoot
     public bool IsActive { get; private set; }
     public bool MustChangePassword { get; private set; }
 
+    /// <summary>
+    /// Off by default. When true, a login for any active outlet under this owner is
+    /// authorized to act on orders for all of this owner's other active outlets
+    /// (multi-outlet cross-accept). Admin-controlled — no restaurant/owner self-service.
+    /// </summary>
+    public bool CrossOutletAcceptEnabled { get; private set; }
+
     // EF Core
     private RestaurantOwner() { }
 
@@ -163,6 +170,17 @@ public sealed class RestaurantOwner : AggregateRoot
             return Result.Failure(Error.Validation("Owner is already active."));
 
         IsActive = true;
+        MarkAsUpdated();
+        return Result.Success();
+    }
+
+    public Result SetCrossOutletAcceptEnabled(bool enabled)
+    {
+        if (CrossOutletAcceptEnabled == enabled)
+            return Result.Failure(Error.Validation(
+                $"Cross-outlet accept is already {(enabled ? "enabled" : "disabled")}."));
+
+        CrossOutletAcceptEnabled = enabled;
         MarkAsUpdated();
         return Result.Success();
     }

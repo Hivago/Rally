@@ -7,6 +7,7 @@ using RallyAPI.Delivery.Application.Commands.RefreshDeliveryStatus;
 using RallyAPI.Delivery.Application.DTOs;
 using RallyAPI.Delivery.Application.Queries.DiagnoseRiderEligibility;
 using RallyAPI.SharedKernel.Extensions;
+using System.Linq;
 
 namespace RallyAPI.Delivery.Endpoints;
 
@@ -71,10 +72,10 @@ public static class AdminDeliveryEndpoints
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var (callerId, isAdmin, unauthorized) = ExtractCaller(httpContext);
+        var (callerId, isAdmin, restaurantIds, unauthorized) = ExtractCaller(httpContext);
         if (unauthorized) return Results.Unauthorized();
 
-        var command = new RefreshDeliveryStatusCommand(orderId, callerId, isAdmin);
+        var command = new RefreshDeliveryStatusCommand(orderId, callerId, isAdmin, restaurantIds);
         var result = await sender.Send(command, ct);
 
         return result.IsSuccess
@@ -88,10 +89,10 @@ public static class AdminDeliveryEndpoints
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var (callerId, isAdmin, unauthorized) = ExtractCaller(httpContext);
+        var (callerId, isAdmin, restaurantIds, unauthorized) = ExtractCaller(httpContext);
         if (unauthorized) return Results.Unauthorized();
 
-        var command = new PushOtpsToProviderCommand(orderId, callerId, isAdmin);
+        var command = new PushOtpsToProviderCommand(orderId, callerId, isAdmin, restaurantIds);
         var result = await sender.Send(command, ct);
 
         return result.IsSuccess
@@ -99,15 +100,25 @@ public static class AdminDeliveryEndpoints
             : result.Error.ToErrorResult();
     }
 
-    private static (Guid callerId, bool isAdmin, bool unauthorized) ExtractCaller(HttpContext httpContext)
+    private static (Guid callerId, bool isAdmin, IReadOnlyList<Guid> restaurantIds, bool unauthorized) ExtractCaller(
+        HttpContext httpContext)
     {
         var userType = httpContext.User.FindFirst("user_type")?.Value ?? string.Empty;
         var isAdmin = userType.Equals("admin", StringComparison.OrdinalIgnoreCase);
 
         var subClaim = httpContext.User.FindFirst("sub")?.Value ?? string.Empty;
         if (!Guid.TryParse(subClaim, out var callerId))
-            return (Guid.Empty, false, true);
+            return (Guid.Empty, false, Array.Empty<Guid>(), true);
 
-        return (callerId, isAdmin, false);
+        var restaurantIdsClaim = httpContext.User.FindFirst("restaurant_ids")?.Value;
+        var restaurantIds = string.IsNullOrEmpty(restaurantIdsClaim)
+            ? new[] { callerId }
+            : restaurantIdsClaim.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => Guid.TryParse(s, out var id) ? id : (Guid?)null)
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .ToArray();
+
+        return (callerId, isAdmin, restaurantIds, false);
     }
 }

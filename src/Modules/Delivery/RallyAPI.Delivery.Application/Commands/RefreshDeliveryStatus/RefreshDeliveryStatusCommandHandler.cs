@@ -6,6 +6,7 @@ using RallyAPI.Delivery.Domain.Enums;
 using RallyAPI.SharedKernel.Abstractions.Delivery;
 using RallyAPI.SharedKernel.IntegrationEvents.Delivery;
 using RallyAPI.SharedKernel.Results;
+using System.Linq;
 
 namespace RallyAPI.Delivery.Application.Commands.RefreshDeliveryStatus;
 
@@ -40,7 +41,8 @@ internal sealed class RefreshDeliveryStatusCommandHandler
 
         if (!request.IsAdmin)
         {
-            if (delivery.RestaurantId != request.CallerId)
+            var authorizedRestaurantIds = request.CallerRestaurantIds ?? new[] { request.CallerId };
+            if (delivery.RestaurantId is not Guid deliveryRestaurantId || !authorizedRestaurantIds.Contains(deliveryRestaurantId))
             {
                 _logger.LogWarning(
                     "Restaurant {CallerId} attempted to refresh delivery for order {OrderId} owned by {OwnerId}",

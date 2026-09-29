@@ -186,6 +186,11 @@ public class RestaurantConfiguration : IEntityTypeConfiguration<Restaurant>
             .HasForeignKey(r => r.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // GetByOwnerIdAsync / GetSiblingOutletIdsAsync now run on every restaurant login,
+        // OTP-verify, and token refresh for owner-linked restaurants (multi-outlet cross-accept).
+        builder.HasIndex(r => r.OwnerId)
+            .HasDatabaseName("idx_restaurants_owner_id");
+
         // FSSAI compliance
         builder.Property(r => r.FssaiNumber)
             .HasColumnName("fssai_number")

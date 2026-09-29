@@ -25,7 +25,7 @@ public sealed class GetOrderByNumberQueryHandler : IRequestHandler<GetOrderByNum
             return Result.Failure<OrderDto>(OrderErrors.NotFoundByNumber(query.OrderNumber));
         }
 
-        if (!IsAuthorized(order, query.CallerId, query.CallerRole))
+        if (!IsAuthorized(order, query.CallerId, query.CallerRole, query.CallerRestaurantIds))
         {
             // Return NotFound — do not reveal that the order exists to unauthorized callers
             return Result.Failure<OrderDto>(OrderErrors.NotFoundByNumber(query.OrderNumber));
@@ -34,12 +34,13 @@ public sealed class GetOrderByNumberQueryHandler : IRequestHandler<GetOrderByNum
         return Result.Success(order.ToDto());
     }
 
-    private static bool IsAuthorized(Domain.Entities.Order order, Guid callerId, string callerRole) =>
+    private static bool IsAuthorized(
+        Domain.Entities.Order order, Guid callerId, string callerRole, IReadOnlyList<Guid>? callerRestaurantIds) =>
         callerRole switch
         {
             "Admin"      => true,
             "Customer"   => order.CustomerId == callerId,
-            "Restaurant" => order.RestaurantId == callerId,
+            "Restaurant" => (callerRestaurantIds ?? new[] { callerId }).Contains(order.RestaurantId),
             "Rider"      => order.DeliveryInfo.RiderId == callerId,
             _            => false
         };
