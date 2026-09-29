@@ -13,6 +13,7 @@ public sealed class VerifyRestaurantOtpCommandHandler
 {
     private readonly IOtpService _otpService;
     private readonly IRestaurantRepository _restaurantRepository;
+    private readonly IRestaurantOwnerRepository _restaurantOwnerRepository;
     private readonly IJwtProvider _jwtProvider;
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -20,12 +21,14 @@ public sealed class VerifyRestaurantOtpCommandHandler
     public VerifyRestaurantOtpCommandHandler(
         IOtpService otpService,
         IRestaurantRepository restaurantRepository,
+        IRestaurantOwnerRepository restaurantOwnerRepository,
         IJwtProvider jwtProvider,
         IRefreshTokenRepository refreshTokenRepository,
         IUnitOfWork unitOfWork)
     {
         _otpService = otpService;
         _restaurantRepository = restaurantRepository;
+        _restaurantOwnerRepository = restaurantOwnerRepository;
         _jwtProvider = jwtProvider;
         _refreshTokenRepository = refreshTokenRepository;
         _unitOfWork = unitOfWork;
@@ -53,12 +56,19 @@ public sealed class VerifyRestaurantOtpCommandHandler
             return Result.Failure<VerifyRestaurantOtpResponse>(Error.Validation("No active restaurant account found for this phone number."));
 
         // Only reject as ambiguous if there's more than one match AND they don't share a
-        // single, non-null owner — same-owner multi-outlet matches are the whole point of
-        // this feature and should succeed with a token authorized for all of them.
+        // single, non-null owner with cross-outlet accept enabled — same-owner multi-outlet
+        // matches only succeed when the owner has this admin-controlled setting turned on;
+        // otherwise it's the same ambiguous case as before this feature (reject).
         if (matches.Count > 1)
         {
             var distinctOwners = matches.Select(r => r.OwnerId).Distinct().ToList();
-            if (distinctOwners.Count > 1 || distinctOwners[0] is null)
+            var sharedOwnerId = distinctOwners.Count == 1 ? distinctOwners[0] : null;
+
+            var crossAcceptEnabled = sharedOwnerId.HasValue
+                && (await _restaurantOwnerRepository.GetByIdAsync(sharedOwnerId.Value, cancellationToken))
+                    is { CrossOutletAcceptEnabled: true };
+
+            if (!crossAcceptEnabled)
                 return Result.Failure<VerifyRestaurantOtpResponse>(Error.Validation(
                     "Multiple accounts are linked to this phone number. Please log in with email and password, or contact support."));
         }

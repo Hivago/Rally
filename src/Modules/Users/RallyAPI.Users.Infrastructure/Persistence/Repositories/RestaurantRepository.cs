@@ -72,6 +72,17 @@ public class RestaurantRepository : IRestaurantRepository
         if (restaurant.OwnerId is null)
             return new[] { restaurant.Id };
 
+        // Cross-outlet accept is admin-controlled and off by default — an owner with
+        // multiple outlets does NOT get sibling access unless explicitly enabled.
+        var crossAcceptEnabled = await _context.RestaurantOwners
+            .AsNoTracking()
+            .Where(o => o.Id == restaurant.OwnerId)
+            .Select(o => o.CrossOutletAcceptEnabled)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (!crossAcceptEnabled)
+            return new[] { restaurant.Id };
+
         return await _context.Restaurants
             .AsNoTracking()
             .Where(r => r.OwnerId == restaurant.OwnerId && r.IsActive)

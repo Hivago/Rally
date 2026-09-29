@@ -14,7 +14,8 @@ public interface IRestaurantRepository
     Task<IReadOnlyList<Restaurant>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default);
     /// <summary>
     /// Active outlet ids authorized under the same login as <paramref name="restaurant"/> —
-    /// itself plus active siblings sharing its OwnerId, or just itself if OwnerId is null.
+    /// itself plus active siblings sharing its OwnerId, or just itself if OwnerId is null OR
+    /// the owner's CrossOutletAcceptEnabled flag is off (admin-controlled, off by default).
     /// </summary>
     Task<IReadOnlyList<Guid>> GetSiblingOutletIdsAsync(Restaurant restaurant, CancellationToken cancellationToken = default);
     Task<IReadOnlyDictionary<Guid, int>> GetOutletCountsByOwnerIdsAsync(

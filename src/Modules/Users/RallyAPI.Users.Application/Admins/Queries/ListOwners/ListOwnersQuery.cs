@@ -25,4 +25,5 @@ public sealed record OwnerListItem(
     string? GstNumber,
     bool IsActive,
     int OutletCount,
+    bool CrossOutletAcceptEnabled,
     DateTime CreatedAt);

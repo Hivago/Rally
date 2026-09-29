@@ -12,6 +12,7 @@ public class VerifyRestaurantOtpCommandHandlerTests
 {
     private readonly IOtpService _otpService = Substitute.For<IOtpService>();
     private readonly IRestaurantRepository _restaurantRepository = Substitute.For<IRestaurantRepository>();
+    private readonly IRestaurantOwnerRepository _restaurantOwnerRepository = Substitute.For<IRestaurantOwnerRepository>();
     private readonly IJwtProvider _jwtProvider = Substitute.For<IJwtProvider>();
     private readonly IRefreshTokenRepository _refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
@@ -20,7 +21,8 @@ public class VerifyRestaurantOtpCommandHandlerTests
     public VerifyRestaurantOtpCommandHandlerTests()
     {
         _handler = new VerifyRestaurantOtpCommandHandler(
-            _otpService, _restaurantRepository, _jwtProvider, _refreshTokenRepository, _unitOfWork);
+            _otpService, _restaurantRepository, _restaurantOwnerRepository, _jwtProvider,
+            _refreshTokenRepository, _unitOfWork);
 
         _otpService.VerifyOtpAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(true);
@@ -46,6 +48,23 @@ public class VerifyRestaurantOtpCommandHandlerTests
         return restaurant;
     }
 
+    // Note: the handler only reads CrossOutletAcceptEnabled off whatever GetByIdAsync
+    // returns — it never checks the returned owner's own Id — so this doesn't need to be
+    // seeded with a matching Id.
+    private static RestaurantOwner BuildOwner(bool crossOutletAcceptEnabled)
+    {
+        var owner = RestaurantOwner.Create(
+            "Balchandra",
+            Email.Create($"{Guid.NewGuid()}@example.com").Value,
+            "hash",
+            PhoneNumber.Create("9998887777").Value).Value;
+
+        if (crossOutletAcceptEnabled)
+            owner.SetCrossOutletAcceptEnabled(true);
+
+        return owner;
+    }
+
     [Fact]
     public async Task Handle_SingleActiveMatchWithNoOwner_ShouldSucceed()
     {
@@ -63,13 +82,15 @@ public class VerifyRestaurantOtpCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_MultipleMatchesSameOwner_ShouldSucceedWithFullOutletSet()
+    public async Task Handle_MultipleMatchesSameOwnerCrossAcceptEnabled_ShouldSucceedWithFullOutletSet()
     {
         var ownerId = Guid.NewGuid();
         var kalp = BuildActiveRestaurant("Kalp", ownerId);
         var lordFork = BuildActiveRestaurant("Lord Fork", ownerId);
         _restaurantRepository.GetByPhoneAsync(Arg.Any<PhoneNumber>(), Arg.Any<CancellationToken>())
             .Returns(new List<Restaurant> { kalp, lordFork });
+        _restaurantOwnerRepository.GetByIdAsync(ownerId, Arg.Any<CancellationToken>())
+            .Returns(BuildOwner(crossOutletAcceptEnabled: true));
 
         var result = await _handler.Handle(
             new VerifyRestaurantOtpCommand("9876543210", "1234"), CancellationToken.None);
@@ -78,6 +99,26 @@ public class VerifyRestaurantOtpCommandHandlerTests
         _jwtProvider.Received(1).GenerateRestaurantTokenPair(
             Arg.Any<Restaurant>(),
             Arg.Is<IReadOnlyList<Guid>>(ids => ids.Count == 2 && ids.Contains(kalp.Id) && ids.Contains(lordFork.Id)));
+    }
+
+    [Fact]
+    public async Task Handle_MultipleMatchesSameOwnerCrossAcceptDisabled_ShouldReturnFailure()
+    {
+        // Cross-outlet accept is off by default (admin-controlled) — same-owner multi-match
+        // must fall back to the pre-feature ambiguous rejection until an admin enables it.
+        var ownerId = Guid.NewGuid();
+        var kalp = BuildActiveRestaurant("Kalp", ownerId);
+        var lordFork = BuildActiveRestaurant("Lord Fork", ownerId);
+        _restaurantRepository.GetByPhoneAsync(Arg.Any<PhoneNumber>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Restaurant> { kalp, lordFork });
+        _restaurantOwnerRepository.GetByIdAsync(ownerId, Arg.Any<CancellationToken>())
+            .Returns(BuildOwner(crossOutletAcceptEnabled: false));
+
+        var result = await _handler.Handle(
+            new VerifyRestaurantOtpCommand("9876543210", "1234"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]

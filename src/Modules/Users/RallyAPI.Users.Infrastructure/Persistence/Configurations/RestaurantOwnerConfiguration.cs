@@ -73,6 +73,11 @@ public class RestaurantOwnerConfiguration : IEntityTypeConfiguration<RestaurantO
             .HasDefaultValue(false)
             .IsRequired();
 
+        builder.Property(o => o.CrossOutletAcceptEnabled)
+            .HasColumnName("cross_outlet_accept_enabled")
+            .HasDefaultValue(false)
+            .IsRequired();
+
         builder.Property(o => o.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();

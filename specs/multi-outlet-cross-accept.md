@@ -525,3 +525,36 @@ Implemented per §4.2-§4.6 on branch `feat/multi-outlet-cross-accept` (off `sta
 ### Open Questions
 - None blocking. Security review (§9) and the deferred test coverage above are the
   remaining pre-merge items.
+
+### Addendum (2026-09-29): Admin-controlled on/off toggle
+
+Follow-up requirement: cross-outlet accept must be **off by default** and controllable
+per owner, not unconditional for every owner sharing an outlet pair.
+
+- `RestaurantOwner.CrossOutletAcceptEnabled` (bool, default `false`) — new domain
+  property + `SetCrossOutletAcceptEnabled(bool)` method. Migration
+  `20260929094057_AddCrossOutletAcceptToggle`.
+- `RestaurantRepository.GetSiblingOutletIdsAsync` now checks the owner's flag before
+  returning siblings — returns `[self]` if off, even when `OwnerId` is set. This gates
+  Login, SwitchOutlet, and RefreshToken (all three already route through this method).
+- `VerifyRestaurantOtpCommandHandler` (OTP login) has its own inline sibling-resolution
+  that doesn't call `GetSiblingOutletIdsAsync` — gated separately: a same-owner
+  multi-match now also requires the owner's flag to be on, otherwise it falls back to
+  the original "Multiple accounts..." ambiguous rejection.
+- Admin-only toggle: `PUT /api/admin/owners/{ownerId}/cross-outlet-accept` (body
+  `{ enabled: bool }`) — `SetOwnerCrossOutletAcceptCommand`, Support role blocked (same
+  restriction as `ResetOwnerPasswordCommand`). Idempotent (setting to the current value
+  is a no-op success, not a validation error, unlike the `Activate`/`Deactivate`
+  toggle-style convention elsewhere on this entity).
+- `GET /api/admin/owners` (`ListOwnersQuery`) now also returns `CrossOutletAcceptEnabled`
+  per owner so the admin panel can show current state without a second call.
+- Tests: `VerifyRestaurantOtpCommandHandlerTests` updated for the new
+  `IRestaurantOwnerRepository` dependency; added
+  `Handle_MultipleMatchesSameOwnerCrossAcceptEnabled_ShouldSucceedWithFullOutletSet` and
+  `Handle_MultipleMatchesSameOwnerCrossAcceptDisabled_ShouldReturnFailure`. All 26
+  Users.Application tests + 78 Orders.Application tests green; migration applied
+  locally, verified column exists, startup smoke test passed.
+- **Not covered by this addendum**: no test directly exercises
+  `GetSiblingOutletIdsAsync`'s flag-gating for the Login/SwitchOutlet/RefreshToken path
+  (only the OTP path has handler-level tests) — would need either an integration test
+  against a real DB or exposing the repository behind a fake in a unit test.
