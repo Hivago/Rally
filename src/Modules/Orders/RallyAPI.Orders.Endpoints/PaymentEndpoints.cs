@@ -10,11 +10,18 @@ using RallyAPI.Orders.Application.Commands.InitiatePayment;
 using RallyAPI.Orders.Application.Commands.ProcessPayuWebhook;
 using RallyAPI.Orders.Application.Commands.RefundPayment;
 using RallyAPI.Orders.Application.Commands.VerifyPayment;
+using RallyAPI.SharedKernel.Results;
 
 namespace RallyAPI.Orders.Endpoints;
 
 public static class PaymentEndpoints
 {
+    // Webhook idempotency key lifetimes. A request that dies mid-flight frees its key after
+    // InFlightLockTtl; once the outcome is final the key is promoted to ProcessedLockTtl so
+    // PayU's duplicate deliveries are still rejected for a day.
+    private static readonly TimeSpan InFlightLockTtl = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan ProcessedLockTtl = TimeSpan.FromHours(24);
+
     public static IEndpointRouteBuilder MapPaymentEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/payments")
@@ -108,7 +115,10 @@ public static class PaymentEndpoints
             // 3. Idempotency Check using Redis
             var redisKey = $"webhook:payu:eventId:{auditLog.EventId}";
             var hash = "sha256:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawBody)));
-            var idempotencyLock = await idempotencyService.AcquireLockAsync(redisKey, hash, TimeSpan.FromHours(24));
+            // Short in-flight TTL: if this request dies before releasing the key (process kill,
+            // hard timeout) the key frees itself in minutes instead of blocking PayU's retries
+            // for a day. It is promoted to the full dedupe window below once the outcome is final.
+            var idempotencyLock = await idempotencyService.AcquireLockAsync(redisKey, hash, InFlightLockTtl);
 
             if (!idempotencyLock)
             {
@@ -121,12 +131,32 @@ public static class PaymentEndpoints
 
             // 4. Send to MediatR
             // Note: signature verification happens inside the handler.
-            var result = await sender.Send(new ProcessPayuWebhookCommand(formData));
+            Result<bool> result;
+            try
+            {
+                result = await sender.Send(new ProcessPayuWebhookCommand(formData));
+            }
+            catch (Exception ex)
+            {
+                // Anything the handler did not turn into a Result (deadlock/timeout while loading
+                // the payment or order, cancelled request, ...). Release the key so PayU's next
+                // retry is not rejected as a duplicate, keep the audit trail, and let the global
+                // exception middleware answer 500 so PayU retries.
+                await idempotencyService.ReleaseLockAsync(redisKey);
+
+                auditLog.ProcessingStatus = "failed";
+                auditLog.ErrorMessage = ex.Message;
+                auditDb.WebhookAuditLogs.Add(auditLog);
+                try { await auditDb.SaveChangesAsync(); } catch { /* best-effort: never mask the original error */ }
+
+                throw;
+            }
 
             if (result.IsSuccess)
             {
                 auditLog.ProcessingStatus = "accepted";
                 auditLog.SignatureValid = true;
+                await idempotencyService.ExtendAsync(redisKey, ProcessedLockTtl);
             }
             else
             {
@@ -137,6 +167,7 @@ public static class PaymentEndpoints
                     // Genuinely bad signature — reject and keep the lock (real duplicate/forgery).
                     auditLog.SignatureValid = false;
                     auditLog.ProcessingStatus = "rejected_signature";
+                    await idempotencyService.ExtendAsync(redisKey, ProcessedLockTtl);
                 }
                 else
                 {

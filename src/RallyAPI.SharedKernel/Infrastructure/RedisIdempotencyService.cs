@@ -48,6 +48,16 @@ public sealed class RedisIdempotencyService
         return await db.StringSetAsync(key, json, ttl, When.NotExists);
     }
 
+    /// <summary>
+    /// Re-arms the TTL of an existing key (e.g. promote a short in-flight lock to the full
+    /// dedupe window once the work has succeeded). No-op if the key has already expired.
+    /// </summary>
+    public async Task ExtendAsync(string key, TimeSpan ttl)
+    {
+        var db = _redis.GetDatabase();
+        await db.KeyExpireAsync(key, ttl);
+    }
+
     public async Task ReleaseLockAsync(string key)
     {
         var db = _redis.GetDatabase();
