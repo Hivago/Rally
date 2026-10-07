@@ -115,7 +115,8 @@ internal sealed class LoginRestaurantCommandHandler
             return Result.Failure<LoginRestaurantResponse>(
                 Error.Validation("Restaurant account is inactive. Contact support."));
 
-        var tokenPair = _jwtProvider.GenerateRestaurantTokenPair(restaurant);
+        var restaurantIds = await _restaurantRepository.GetSiblingOutletIdsAsync(restaurant, cancellationToken);
+        var tokenPair = _jwtProvider.GenerateRestaurantTokenPair(restaurant, restaurantIds);
 
         var refreshTokenHash = HashToken(tokenPair.RefreshToken);
         var refreshToken = RefreshToken.Create(

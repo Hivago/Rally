@@ -8,6 +8,7 @@ public sealed class OrderPaidEvent : BaseDomainEvent
     public string OrderNumber { get; }
     public Guid CustomerId { get; }
     public Guid RestaurantId { get; }
+    public string RestaurantName { get; }
     public decimal Amount { get; }
     public int ItemCount { get; }
 
@@ -16,6 +17,7 @@ public sealed class OrderPaidEvent : BaseDomainEvent
         string orderNumber,
         Guid customerId,
         Guid restaurantId,
+        string restaurantName,
         decimal amount,
         int itemCount)
     {
@@ -23,6 +25,7 @@ public sealed class OrderPaidEvent : BaseDomainEvent
         OrderNumber = orderNumber;
         CustomerId = customerId;
         RestaurantId = restaurantId;
+        RestaurantName = restaurantName;
         Amount = amount;
         ItemCount = itemCount;
     }

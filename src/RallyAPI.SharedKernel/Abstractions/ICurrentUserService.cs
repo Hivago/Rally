@@ -13,6 +13,14 @@ public interface ICurrentUserService
     IReadOnlyList<string> Roles { get; }
     bool IsAuthenticated { get; }
 
+    /// <summary>
+    /// For a restaurant-role caller: the full set of outlet ids (same owner, active) this
+    /// login is authorized to act on, including <see cref="UserId"/> itself. Falls back to
+    /// <c>[UserId]</c> when the token predates the <c>restaurant_ids</c> claim or has no
+    /// authenticated user.
+    /// </summary>
+    IReadOnlyList<Guid> RestaurantIds { get; }
+
     bool IsInRole(string role);
     bool IsCustomer { get; }
     bool IsRestaurant { get; }

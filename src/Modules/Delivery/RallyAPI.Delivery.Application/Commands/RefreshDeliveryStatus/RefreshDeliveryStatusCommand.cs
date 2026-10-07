@@ -12,7 +12,8 @@ namespace RallyAPI.Delivery.Application.Commands.RefreshDeliveryStatus;
 public sealed record RefreshDeliveryStatusCommand(
     Guid OrderId,
     Guid CallerId,
-    bool IsAdmin) : IRequest<Result<RefreshDeliveryStatusResult>>;
+    bool IsAdmin,
+    IReadOnlyList<Guid>? CallerRestaurantIds = null) : IRequest<Result<RefreshDeliveryStatusResult>>;
 
 public sealed record RefreshDeliveryStatusResult(
     Guid DeliveryRequestId,

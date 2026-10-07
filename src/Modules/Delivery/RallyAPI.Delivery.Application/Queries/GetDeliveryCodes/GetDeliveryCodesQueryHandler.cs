@@ -3,6 +3,7 @@ using RallyAPI.Delivery.Application.DTOs;
 using RallyAPI.Delivery.Domain.Abstractions;
 using RallyAPI.Delivery.Domain.Entities;
 using RallyAPI.SharedKernel.Results;
+using System.Linq;
 
 namespace RallyAPI.Delivery.Application.Queries.GetDeliveryCodes;
 
@@ -28,7 +29,7 @@ public sealed class GetDeliveryCodesQueryHandler
                 Error.NotFound($"No delivery request found for order {query.OrderId}"));
         }
 
-        var dto = Authorize(delivery, query.CallerId, query.CallerRole);
+        var dto = Authorize(delivery, query.CallerId, query.CallerRole, query.CallerRestaurantIds);
         if (dto is null)
         {
             // Treat unauthorized as NotFound so existence isn't leaked.
@@ -39,7 +40,8 @@ public sealed class GetDeliveryCodesQueryHandler
         return Result.Success(dto);
     }
 
-    private static DeliveryCodesDto? Authorize(DeliveryRequest delivery, Guid callerId, string callerRole) =>
+    private static DeliveryCodesDto? Authorize(
+        DeliveryRequest delivery, Guid callerId, string callerRole, IReadOnlyList<Guid>? callerRestaurantIds) =>
         callerRole switch
         {
             "Admin" => new DeliveryCodesDto
@@ -47,7 +49,8 @@ public sealed class GetDeliveryCodesQueryHandler
                 PickupCode = delivery.PickupCode,
                 DropCode = delivery.DropCode
             },
-            "Restaurant" when delivery.RestaurantId == callerId => new DeliveryCodesDto
+            "Restaurant" when delivery.RestaurantId.HasValue
+                && (callerRestaurantIds ?? new[] { callerId }).Contains(delivery.RestaurantId.Value) => new DeliveryCodesDto
             {
                 PickupCode = delivery.PickupCode
             },

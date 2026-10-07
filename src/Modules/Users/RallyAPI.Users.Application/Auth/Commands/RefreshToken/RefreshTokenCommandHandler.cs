@@ -151,7 +151,11 @@ public sealed class RefreshTokenCommandHandler
         Guid userId, CancellationToken ct)
     {
         var restaurant = await _restaurantRepository.GetByIdAsync(userId, ct);
-        return restaurant is null ? null : _jwtProvider.GenerateRestaurantTokenPair(restaurant);
+        if (restaurant is null)
+            return null;
+
+        var restaurantIds = await _restaurantRepository.GetSiblingOutletIdsAsync(restaurant, ct);
+        return _jwtProvider.GenerateRestaurantTokenPair(restaurant, restaurantIds);
     }
 
     private async Task<TokenPair?> GenerateAdminPair(

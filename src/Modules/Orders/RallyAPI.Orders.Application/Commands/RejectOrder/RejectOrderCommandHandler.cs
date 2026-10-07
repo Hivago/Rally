@@ -35,8 +35,14 @@ public sealed class RejectOrderCommandHandler : IRequestHandler<RejectOrderComma
             return Result.Failure<OrderDto>(OrderErrors.NotFound(command.OrderId));
         }
 
-        // Verify restaurant owns this order
-        if (order.RestaurantId != command.RestaurantId)
+        // Verify the order belongs to one of the acting login's authorized outlets. Falls
+        // back to [RestaurantId] when the set wasn't supplied (e.g. tests constructing the
+        // command directly).
+        var effectiveRestaurantIds = command.RestaurantIds.Count > 0
+            ? command.RestaurantIds
+            : new[] { command.RestaurantId };
+
+        if (!effectiveRestaurantIds.Contains(order.RestaurantId))
         {
             return Result.Failure<OrderDto>(OrderErrors.NotRestaurantOrder);
         }
@@ -59,8 +65,9 @@ public sealed class RejectOrderCommandHandler : IRequestHandler<RejectOrderComma
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Order {OrderNumber} rejected by restaurant {RestaurantId}. Reason: {Reason}",
+                "Order {OrderNumber} rejected for restaurant {OrderRestaurantId} via login for outlet {ActingRestaurantId}. Reason: {Reason}",
                 order.OrderNumber.Value,
+                order.RestaurantId,
                 command.RestaurantId,
                 command.Reason);
 

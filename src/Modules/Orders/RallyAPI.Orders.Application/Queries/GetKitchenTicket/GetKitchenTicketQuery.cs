@@ -8,5 +8,9 @@ namespace RallyAPI.Orders.Application.Queries.GetKitchenTicket;
 /// Query to get the Kitchen Order Ticket (KOT) for an order.
 /// Restaurant-facing: only the owning restaurant (or an Admin) may print it.
 /// </summary>
-public sealed record GetKitchenTicketQuery(Guid OrderId, Guid CallerId, string CallerRole)
+public sealed record GetKitchenTicketQuery(
+    Guid OrderId,
+    Guid CallerId,
+    string CallerRole,
+    IReadOnlyList<Guid>? CallerRestaurantIds = null)
     : IRequest<Result<KitchenTicketDto>>;

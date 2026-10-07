@@ -134,6 +134,24 @@ public class GetKitchenTicketQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenOrderBelongsToSiblingOutlet_ShouldReturnTicket()
+    {
+        // Multi-outlet cross-accept: caller's authorized RestaurantIds includes a sibling
+        // outlet distinct from CallerId (the acting login).
+        var orderRestaurantId = Guid.NewGuid();
+        var actingRestaurantId = Guid.NewGuid();
+        var order = BuildPaidOrder(orderRestaurantId);
+        var query = new GetKitchenTicketQuery(
+            order.Id, actingRestaurantId, "Restaurant", new[] { actingRestaurantId, orderRestaurantId });
+
+        _orderRepository.GetByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Handle_WhenAdminRequests_ShouldReturnTicketForAnyRestaurant()
     {
         var order = BuildPaidOrder(restaurantId: Guid.NewGuid());

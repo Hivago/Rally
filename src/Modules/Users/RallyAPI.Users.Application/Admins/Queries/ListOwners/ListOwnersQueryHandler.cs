@@ -52,6 +52,7 @@ internal sealed class ListOwnersQueryHandler
                 o.GstNumber,
                 o.IsActive,
                 outletCounts.TryGetValue(o.Id, out var count) ? count : 0,
+                o.CrossOutletAcceptEnabled,
                 o.CreatedAt))
             .ToList();
 
