@@ -27,7 +27,7 @@ public class GetTimeOffs : IEndpoint
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var ownerId = Guid.Parse(user.FindFirstValue("sub")!);
+        var ownerId = user.GetOwnerId();
 
         var query = new GetTimeOffsQuery(
             ownerId,

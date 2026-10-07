@@ -28,7 +28,7 @@ public class UpdatePassword : IEndpoint
         ISender sender,
         CancellationToken ct)
     {
-        var ownerId = Guid.Parse(user.FindFirstValue("sub")!);
+        var ownerId = user.GetOwnerId();
 
         var command = new UpdateOwnerPasswordCommand(
             ownerId,

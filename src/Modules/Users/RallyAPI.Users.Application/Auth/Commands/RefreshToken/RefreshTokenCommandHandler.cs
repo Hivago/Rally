@@ -22,6 +22,7 @@ public sealed class RefreshTokenCommandHandler
     private readonly IRiderRepository _riderRepository;
     private readonly IRestaurantRepository _restaurantRepository;
     private readonly IAdminRepository _adminRepository;
+    private readonly IRestaurantOwnerRepository _ownerRepository;
     private readonly IJwtProvider _jwtProvider;
     private readonly IUnitOfWork _unitOfWork;
 
@@ -31,6 +32,7 @@ public sealed class RefreshTokenCommandHandler
         IRiderRepository riderRepository,
         IRestaurantRepository restaurantRepository,
         IAdminRepository adminRepository,
+        IRestaurantOwnerRepository ownerRepository,
         IJwtProvider jwtProvider,
         IUnitOfWork unitOfWork)
     {
@@ -39,6 +41,7 @@ public sealed class RefreshTokenCommandHandler
         _riderRepository = riderRepository;
         _restaurantRepository = restaurantRepository;
         _adminRepository = adminRepository;
+        _ownerRepository = ownerRepository;
         _jwtProvider = jwtProvider;
         _unitOfWork = unitOfWork;
     }
@@ -129,6 +132,8 @@ public sealed class RefreshTokenCommandHandler
             "rider" => await GenerateRiderPair(userId, cancellationToken),
             "restaurant" => await GenerateRestaurantPair(userId, cancellationToken),
             "admin" => await GenerateAdminPair(userId, cancellationToken),
+            "owner" => await GenerateOwnerPair(userId, cancellationToken),
+            Domain.Entities.RefreshToken.OwnerOutletUserType => await GenerateOwnerOutletPair(userId, cancellationToken),
             _ => null
         };
     }
@@ -158,11 +163,35 @@ public sealed class RefreshTokenCommandHandler
         return _jwtProvider.GenerateRestaurantTokenPair(restaurant, restaurantIds);
     }
 
+    // Owner who switched into an outlet: userId is the OUTLET id. Owner id is re-derived from
+    // the restaurant so a reassigned/deactivated owner loses access on the next refresh.
+    private async Task<TokenPair?> GenerateOwnerOutletPair(
+        Guid userId, CancellationToken ct)
+    {
+        var restaurant = await _restaurantRepository.GetByIdAsync(userId, ct);
+        if (restaurant is null || !restaurant.IsActive || restaurant.OwnerId is not { } ownerId)
+            return null;
+
+        var owner = await _ownerRepository.GetByIdAsync(ownerId, ct);
+        if (owner is null || !owner.IsActive)
+            return null;
+
+        var restaurantIds = await _restaurantRepository.GetSiblingOutletIdsAsync(restaurant, ct);
+        return _jwtProvider.GenerateOwnerOutletTokenPair(restaurant, ownerId, restaurantIds);
+    }
+
     private async Task<TokenPair?> GenerateAdminPair(
         Guid userId, CancellationToken ct)
     {
         var admin = await _adminRepository.GetByIdAsync(userId, ct);
         return admin is null ? null : _jwtProvider.GenerateAdminTokenPair(admin);
+    }
+
+    private async Task<TokenPair?> GenerateOwnerPair(
+        Guid userId, CancellationToken ct)
+    {
+        var owner = await _ownerRepository.GetByIdAsync(userId, ct);
+        return owner is null || !owner.IsActive ? null : _jwtProvider.GenerateOwnerTokenPair(owner);
     }
 
     private static string HashToken(string token)

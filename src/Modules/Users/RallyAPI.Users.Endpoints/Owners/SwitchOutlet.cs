@@ -25,7 +25,7 @@ public class SwitchOutlet : IEndpoint
         ISender sender,
         CancellationToken ct)
     {
-        var ownerId = Guid.Parse(user.FindFirstValue("sub")!);
+        var ownerId = user.GetOwnerId();
         var result = await sender.Send(new SwitchToOutletCommand(ownerId, restaurantId), ct);
 
         return result.IsFailure

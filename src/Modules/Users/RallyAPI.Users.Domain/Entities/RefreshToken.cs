@@ -14,6 +14,12 @@ public sealed class RefreshToken : BaseEntity
     public Guid? ReplacedByTokenId { get; private set; } // For rotation chain
 
     /// <summary>
+    /// UserType for an owner who switched into an outlet. UserId is the OUTLET id; refresh
+    /// re-issues an outlet token that keeps owner access (plain "restaurant" sessions never get it).
+    /// </summary>
+    public const string OwnerOutletUserType = "owner_outlet";
+
+    /// <summary>
     /// Default refresh-token lifetime for end users (customer / rider / restaurant / owner).
     /// Sliding window — a fresh token with this lifetime is minted on every rotation, so an
     /// active user effectively never has to log in again within this window.

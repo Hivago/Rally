@@ -24,7 +24,7 @@ public class GetOutlets : IEndpoint
         ISender sender,
         CancellationToken ct)
     {
-        var ownerId = Guid.Parse(user.FindFirstValue("sub")!);
+        var ownerId = user.GetOwnerId();
         var result = await sender.Send(new GetOwnerOutletsQuery(ownerId), ct);
 
         return result.IsFailure

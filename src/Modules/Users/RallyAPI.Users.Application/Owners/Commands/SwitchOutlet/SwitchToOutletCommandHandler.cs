@@ -44,11 +44,11 @@ internal sealed class SwitchToOutletCommandHandler
                 Error.Validation("Outlet is inactive."));
 
         var restaurantIds = await _restaurantRepository.GetSiblingOutletIdsAsync(restaurant, cancellationToken);
-        var tokenPair = _jwtProvider.GenerateRestaurantTokenPair(restaurant, restaurantIds);
+        var tokenPair = _jwtProvider.GenerateOwnerOutletTokenPair(restaurant, request.OwnerId, restaurantIds);
 
         var refreshTokenHash = HashToken(tokenPair.RefreshToken);
         var refreshToken = RefreshToken.Create(
-            refreshTokenHash, restaurant.Id, "restaurant",
+            refreshTokenHash, restaurant.Id, RefreshToken.OwnerOutletUserType,
             RefreshToken.DefaultLifetime);
 
         await _refreshTokenRepository.AddAsync(refreshToken, cancellationToken);

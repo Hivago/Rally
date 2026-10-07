@@ -27,7 +27,7 @@ public class SetAllOutletsAvailability : IEndpoint
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var ownerId = Guid.Parse(user.FindFirstValue("sub")!);
+        var ownerId = user.GetOwnerId();
 
         var command = new SetAllOutletsAvailabilityCommand(ownerId, request.IsAcceptingOrders);
         var result = await sender.Send(command, cancellationToken);

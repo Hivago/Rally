@@ -26,7 +26,7 @@ public class CancelTimeOff : IEndpoint
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var ownerId = Guid.Parse(user.FindFirstValue("sub")!);
+        var ownerId = user.GetOwnerId();
 
         var command = new CancelTimeOffCommand(ownerId, restaurantId, timeOffId);
         var result = await sender.Send(command, cancellationToken);

@@ -190,8 +190,14 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("user_type", "rider"));
     options.AddPolicy("Restaurant", policy =>
         policy.RequireClaim("user_type", "restaurant"));
+    // Owner-level access: the owner's own token, or an outlet token issued to an owner who
+    // switched into that outlet. Direct restaurant logins never carry owner_access.
     options.AddPolicy("Owner", policy =>
-        policy.RequireClaim("user_type", "owner"));
+        policy.RequireAssertion(ctx =>
+            ctx.User.HasClaim("user_type", "owner") ||
+            (ctx.User.HasClaim("user_type", "restaurant") &&
+             ctx.User.HasClaim("owner_access", "true") &&
+             ctx.User.HasClaim(c => c.Type == "owner_id"))));
     options.AddPolicy("Admin", policy =>
         policy.RequireClaim("user_type", "admin"));
     options.AddPolicy("AdminOrRestaurant", policy =>

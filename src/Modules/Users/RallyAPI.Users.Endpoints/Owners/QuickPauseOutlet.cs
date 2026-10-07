@@ -28,7 +28,7 @@ public class QuickPauseOutlet : IEndpoint
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var ownerId = Guid.Parse(user.FindFirstValue("sub")!);
+        var ownerId = user.GetOwnerId();
 
         var command = new QuickPauseOutletCommand(ownerId, restaurantId, request.DurationMinutes, request.Reason);
         var result = await sender.Send(command, cancellationToken);

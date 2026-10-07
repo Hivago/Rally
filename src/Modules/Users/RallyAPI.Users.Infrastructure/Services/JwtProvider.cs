@@ -141,20 +141,28 @@ public class JwtProvider : IJwtProvider
     }
 
     public TokenPair GenerateRestaurantTokenPair(Restaurant restaurant, IReadOnlyList<Guid> restaurantIds)
+        => GenerateTokenPair(BuildRestaurantClaims(restaurant, restaurantIds));
+
+    public TokenPair GenerateOwnerOutletTokenPair(
+        Restaurant restaurant, Guid ownerId, IReadOnlyList<Guid> restaurantIds)
     {
-        var claims = new List<Claim>
-        {
-            new(JwtRegisteredClaimNames.Sub, restaurant.Id.ToString()),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new(JwtRegisteredClaimNames.Email, restaurant.Email.Value),
-            new("name", restaurant.Name),
-            new("role", "Restaurant"),
-            new("user_type", "restaurant"),
-            new("restaurant_ids", string.Join(",", restaurantIds))
-        };
+        var claims = BuildRestaurantClaims(restaurant, restaurantIds);
+        claims.Add(new Claim("owner_id", ownerId.ToString()));
+        claims.Add(new Claim("owner_access", "true"));
 
         return GenerateTokenPair(claims);
     }
+
+    private static List<Claim> BuildRestaurantClaims(Restaurant restaurant, IReadOnlyList<Guid> restaurantIds) => new()
+    {
+        new(JwtRegisteredClaimNames.Sub, restaurant.Id.ToString()),
+        new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new(JwtRegisteredClaimNames.Email, restaurant.Email.Value),
+        new("name", restaurant.Name),
+        new("role", "Restaurant"),
+        new("user_type", "restaurant"),
+        new("restaurant_ids", string.Join(",", restaurantIds))
+    };
 
     public TokenPair GenerateAdminTokenPair(Admin admin)
     {
