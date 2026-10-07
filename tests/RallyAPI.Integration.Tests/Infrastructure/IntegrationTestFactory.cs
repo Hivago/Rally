@@ -61,6 +61,8 @@ public sealed class IntegrationTestFactory : WebApplicationFactory<Program>, IAs
         Environment.SetEnvironmentVariable("ConnectionStrings__Redis",            _redis.GetConnectionString());
         Environment.SetEnvironmentVariable("JwtSettings__PublicKeyPem",           publicKeyPem);
         Environment.SetEnvironmentVariable("JwtSettings__PublicKeyPath",          "");
+        // Real JwtProvider signs tokens in login/refresh flows: give it the private half of the same key pair.
+        Environment.SetEnvironmentVariable("JwtSettings__PrivateKeyPem",          Rsa.ExportPkcs8PrivateKeyPem());
         Environment.SetEnvironmentVariable("JwtSettings__Issuer",                 TestJwtHelper.Issuer);
         Environment.SetEnvironmentVariable("JwtSettings__Audience",               TestJwtHelper.Audience);
         Environment.SetEnvironmentVariable("AutoCancel__EscalateAfterMinutes",    "9999");
@@ -88,6 +90,7 @@ public sealed class IntegrationTestFactory : WebApplicationFactory<Program>, IAs
         Environment.SetEnvironmentVariable("ConnectionStrings__Redis",     null);
         Environment.SetEnvironmentVariable("JwtSettings__PublicKeyPem",    null);
         Environment.SetEnvironmentVariable("JwtSettings__PublicKeyPath",   null);
+        Environment.SetEnvironmentVariable("JwtSettings__PrivateKeyPem",   null);
         Environment.SetEnvironmentVariable("JwtSettings__Issuer",          null);
         Environment.SetEnvironmentVariable("JwtSettings__Audience",        null);
 
