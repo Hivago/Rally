@@ -35,7 +35,8 @@ public sealed class OrderFlowTests : IntegrationTestBase
 
         var order = await DeserializeAsync<JsonElement>(response);
         order.GetProperty("id").GetString().Should().NotBeNullOrEmpty();
-        order.GetProperty("status").GetString().Should().Be("Paid");
+        // Payment is confirmed later by the PayU webhook, so a fresh order is Pending.
+        order.GetProperty("status").GetString().Should().Be("Pending");
         order.GetProperty("customerId").GetString().Should().Be(CustomerId.ToString());
         order.GetProperty("restaurantId").GetString().Should().Be(RestaurantId.ToString());
 
@@ -69,24 +70,25 @@ public sealed class OrderFlowTests : IntegrationTestBase
     // ─── 2. Restaurant Confirms ───────────────────────────────────────────────────
 
     [Fact]
-    public async Task ConfirmOrder_ByOwningRestaurant_StatusBecomesConfirmed()
+    public async Task ConfirmOrder_ByOwningRestaurant_ConfirmsAndAutoPromotesToPreparing()
     {
-        var orderId = await PlaceOrderAsync();
+        var orderId = await PlacePaidOrderAsync();
 
         AuthenticateAsRestaurant();
         var response = await Client.PutAsync($"/api/orders/{orderId}/confirm", null);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
+        // OrderConfirmedAutoPrepareHandler promotes Confirmed -> Preparing within the same request.
         var order = await DeserializeAsync<JsonElement>(response);
-        order.GetProperty("status").GetString().Should().Be("Confirmed");
+        order.GetProperty("status").GetString().Should().Be("Preparing");
         order.GetProperty("id").GetString().Should().Be(orderId.ToString());
     }
 
     [Fact]
     public async Task ConfirmOrder_ByWrongRestaurant_Returns400()
     {
-        var orderId = await PlaceOrderAsync();
+        var orderId = await PlacePaidOrderAsync();
 
         // Authenticate as a DIFFERENT restaurant
         var wrongRestaurantId = Guid.NewGuid();
@@ -114,7 +116,7 @@ public sealed class OrderFlowTests : IntegrationTestBase
     [Fact]
     public async Task RejectOrder_ByOwningRestaurant_StatusBecomesRejected()
     {
-        var orderId = await PlaceOrderAsync();
+        var orderId = await PlacePaidOrderAsync();
 
         AuthenticateAsRestaurant();
         var response = await Client.PutAsync(
@@ -152,19 +154,15 @@ public sealed class OrderFlowTests : IntegrationTestBase
     public async Task FullOrderLifecycle_PlaceConfirmPrepareReadyAssignPickupDeliver_Succeeds()
     {
         // Step 1: Place order
-        var orderId = await PlaceOrderAsync();
+        var orderId = await PlacePaidOrderAsync();
 
         // Step 2: Restaurant confirms
         AuthenticateAsRestaurant();
         var confirm = await Client.PutAsync($"/api/orders/{orderId}/confirm", null);
         confirm.StatusCode.Should().Be(HttpStatusCode.OK);
+        // Step 3: Confirm auto-promotes to Preparing (OrderConfirmedAutoPrepareHandler), so
+        // there is no separate /preparing call.
         (await DeserializeAsync<JsonElement>(confirm))
-            .GetProperty("status").GetString().Should().Be("Confirmed");
-
-        // Step 3: Restaurant starts preparing
-        var preparing = await Client.PutAsync($"/api/orders/{orderId}/preparing", null);
-        preparing.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await DeserializeAsync<JsonElement>(preparing))
             .GetProperty("status").GetString().Should().Be("Preparing");
 
         // Step 4: Restaurant marks ready for pickup

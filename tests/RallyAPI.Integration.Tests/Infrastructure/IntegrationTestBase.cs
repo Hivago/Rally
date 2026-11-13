@@ -1,6 +1,9 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using RallyAPI.Orders.Infrastructure;
 
 namespace RallyAPI.Integration.Tests.Infrastructure;
 
@@ -178,5 +181,36 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         var json   = await response.Content.ReadAsStringAsync();
         var result = JsonSerializer.Deserialize<JsonElement>(json, JsonOptions);
         return Guid.Parse(result.GetProperty("id").GetString()!);
+    }
+
+    /// <summary>
+    /// PlaceOrder creates a Pending order; only the PayU webhook (or /verify) moves it to Paid.
+    /// This applies the same domain step the webhook handler performs (Order.ConfirmPayment),
+    /// so tests that exercise the post-payment lifecycle can start from a Paid order.
+    /// </summary>
+    protected async Task MarkOrderPaidAsync(Guid orderId, string paymentId = "test-payment-001")
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OrdersDbContext>();
+
+        var order = await db.Orders
+            .Include(o => o.Items)
+            .Include(o => o.DeliveryInfo)
+            .FirstAsync(o => o.Id == orderId);
+
+        order.ConfirmPayment(paymentId, "txn-test-001");
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Places an order and marks it Paid, as if PayU's webhook had arrived.</summary>
+    protected async Task<Guid> PlacePaidOrderAsync(
+        Guid? restaurantId  = null,
+        string paymentId    = "test-payment-001",
+        decimal subTotal    = 200m,
+        decimal deliveryFee = 30m)
+    {
+        var orderId = await PlaceOrderAsync(restaurantId, paymentId, subTotal, deliveryFee);
+        await MarkOrderPaidAsync(orderId, paymentId);
+        return orderId;
     }
 }

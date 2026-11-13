@@ -26,7 +26,7 @@ public sealed class OrderEdgeCaseTests : IntegrationTestBase
     [Fact]
     public async Task ConfirmOrder_AlreadyConfirmed_Returns400()
     {
-        var orderId = await PlaceOrderAsync();
+        var orderId = await PlacePaidOrderAsync();
 
         AuthenticateAsRestaurant();
         var first = await Client.PutAsync($"/api/orders/{orderId}/confirm", null);
@@ -44,7 +44,7 @@ public sealed class OrderEdgeCaseTests : IntegrationTestBase
     [Fact]
     public async Task CancelOrder_WhenPickedUp_Returns400()
     {
-        var orderId = await PlaceOrderAsync();
+        var orderId = await PlacePaidOrderAsync();
 
         // Advance to PickedUp
         AuthenticateAsRestaurant();
@@ -119,7 +119,7 @@ public sealed class OrderEdgeCaseTests : IntegrationTestBase
         // the order to Preparing within the same request. By the time the response
         // returns, the order is in Preparing — which is no longer rejectable, so
         // a follow-up /reject must return 400.
-        var orderId = await PlaceOrderAsync();
+        var orderId = await PlacePaidOrderAsync();
 
         AuthenticateAsRestaurant();
         await Client.PutAsync($"/api/orders/{orderId}/confirm", null);
@@ -150,32 +150,46 @@ public sealed class OrderEdgeCaseTests : IntegrationTestBase
     // ─── 6. Status transitions that are out of order ─────────────────────────────
 
     [Fact]
-    public async Task MarkPickedUp_WhenOrderIsOnlyConfirmed_Returns400()
+    public async Task MarkPickedUp_ByRiderNotAssigned_ReturnsUnauthorized()
     {
-        var orderId = await PlaceOrderAsync();
+        var orderId = await PlacePaidOrderAsync();
 
         AuthenticateAsRestaurant();
         await Client.PutAsync($"/api/orders/{orderId}/confirm", null);
 
-        // Try to mark picked up without going through Preparing → Ready → AssignRider
+        // A rider who is not assigned to the order is rejected by the ownership check
+        // (UpdateOrderStatusCommandHandler.IsAuthorized) before transition validation.
         AuthenticateAsRider();
         var pickup = await Client.PutAsync($"/api/orders/{orderId}/pickup", null);
 
-        pickup.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        pickup.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task MarkDelivered_WithoutBeingPickedUp_Returns400()
     {
-        var orderId = await PlaceOrderAsync();
+        var orderId = await PlacePaidOrderAsync();
 
+        // Confirm auto-promotes to Preparing; then ready + assign so the assigned rider passes
+        // the ownership check and the invalid transition (ReadyForPickup -> Delivered) is what fails.
         AuthenticateAsRestaurant();
         await Client.PutAsync($"/api/orders/{orderId}/confirm", null);
+        await Client.PutAsync($"/api/orders/{orderId}/ready", null);
+
+        AuthenticateAsAdmin();
+        var assign = await Client.PutAsync($"/api/orders/{orderId}/assign-rider", JsonBody(new
+        {
+            riderId    = RiderId.ToString(),
+            riderName  = "Test Rider",
+            riderPhone = "+919876543210"
+        }));
+        assign.StatusCode.Should().Be(HttpStatusCode.OK);
 
         AuthenticateAsRider();
         var deliver = await Client.PutAsync($"/api/orders/{orderId}/deliver", null);
 
         deliver.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        await AssertErrorShapeAsync(deliver);
     }
 
     // ─── 7. Error response shape consistency ─────────────────────────────────────
