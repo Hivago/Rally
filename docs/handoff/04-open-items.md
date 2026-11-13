@@ -7,7 +7,7 @@ Effort is a rough guess for someone who knows the codebase. P0 = do first.
 1. **PayU webhook lock fix → PR into staging.** Branch `fix/payu-webhook-lock-release` (commit `bcbbff5`, pushed, cut from staging, **no PR yet**): 2-min in-flight TTL, release key on failure + failed audit row, `RedisIdempotencyService.ExtendAsync`, 24 h on success/bad signature. ~1 h to PR + staging verify.
    Remaining on top of it (~1–2 days):
    - Npgsql `EnableRetryOnFailure` for deadlock/serialization (40P01/40001) — verify `DomainEventInterceptor` cannot double-publish on a retried save
-   - `xmin` token on **Order + Payment** — migration exists **uncommitted** in the working tree on `fix/stale-integration-tests` (`20261008125337_AddPaymentOrderXminConcurrencyToken`); review it (Up/Down must be empty, R9), then apply per the migration checklist
+   - `xmin` token on **Order + Payment** — token + migration are committed on `fix/stale-integration-tests` (`00cb6b6`, migration `20261008125337_AddPaymentOrderXminConcurrencyToken`, empty Up/Down verified, not merged); still need the handler to catch `DbUpdateConcurrencyException` and tests
    - decide whether handled failures (`PersistFailed`) return 5xx so PayU retries instead of 200
    - tests: injected deadlock, killed request, webhook-vs-sweep concurrency, exhausted retry
 2. **PayU dashboard + env verification** (R1): webhook URL configured? `PayU__Frontend*Url` set? Prod on `secure.payu.in` with live creds?
@@ -16,7 +16,7 @@ Effort is a rough guess for someone who knows the codebase. P0 = do first.
 
 ## P1 — dispatch
 
-5. **Own-fleet broadcast dispatch**: implemented on `feature/own-fleet-broadcast-dispatch` (2026-07-08). Confirm what is merged to staging/prod vs. only on the feature branch (prod runs the feature-branch orchestrator per the 2026-07-09 incident). Spec: `specs/own-fleet-first-dispatch.md` (has local uncommitted edits). **Accept-handler hardening still required** (`AcceptDeliveryOfferCommandHandler`): early "already assigned" guard; use `TryUpdateAsync` → clean 409 not 500; reorder so the DeliveryRequest write wins *before* setting rider `CurrentDeliveryId` (otherwise a losing rider is stuck, R3).
+5. **Own-fleet broadcast dispatch**: implemented on `feature/own-fleet-broadcast-dispatch` (2026-07-08). Confirm what is merged to staging/prod vs. only on the feature branch (prod runs the feature-branch orchestrator per the 2026-07-09 incident). Spec: `specs/own-fleet-first-dispatch.md` (updated on `fix/stale-integration-tests`, `1cf4c03`). **Accept-handler hardening still required** (`AcceptDeliveryOfferCommandHandler`): early "already assigned" guard; use `TryUpdateAsync` → clean 409 not 500; reorder so the DeliveryRequest write wins *before* setting rider `CurrentDeliveryId` (otherwise a losing rider is stuck, R3).
 6. **Orchestrator 30 s 3PL wait cancels live bookings** (R6). Decide a longer window or event-driven wait.
 7. **Dispatch blocks inline on the outbox thread** for ~30 s; accept detection is 2 s polling. Move off the outbox thread.
 8. **Never-fail dispatch** (`1aa1869`) — only ship after confirming the backlog is clean (R4).
@@ -39,7 +39,7 @@ Effort is a rough guess for someone who knows the codebase. P0 = do first.
 
 ## P2 — features / product
 
-19. **Admin UI for Google Place linking** — only raw API exists (`GET /api/admins/places/search`, `PUT /api/admins/restaurants/{id}` with `googlePlaceId`). Spec: `specs/admin-google-place-linking.md` (uncommitted — commit it for the UI dev). PR #197 (restaurant-list rating commit `b2f23cf`) may never have merged to staging — check.
+19. **Admin UI for Google Place linking** — only raw API exists (`GET /api/admins/places/search`, `PUT /api/admins/restaurants/{id}` with `googlePlaceId`). Spec: `specs/admin-google-place-linking.md` (committed on `fix/stale-integration-tests`, `1cf4c03` — hand to the UI dev). PR #197 (restaurant-list rating commit `b2f23cf`) may never have merged to staging — check.
 20. **Veg / non-veg:** no enforcement rule exists anywhere. A sketch is in `reviews`/memory: customer preference + snapshot flag at cart/order item + revalidate at PlaceOrder.
 21. **Pricing:** `PricingEngine.CalculateFinal` matches `RuleName == "BaseFee"` by magic string (add `ModificationType.Base`); engine swallows rule exceptions ⇒ silently cheaper fee (decide: fail quote or alert).
 22. **Multi-outlet cross-accept** (PRs #200 etc.): shipped to master; spec `specs/multi-outlet-cross-accept.md`.

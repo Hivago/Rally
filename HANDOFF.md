@@ -39,12 +39,17 @@ monolith, one PostgreSQL database, Redis, SignalR.
 4. **Background services run inside every API instance** — do not scale to 2+ replicas until fixed (04, item 3).
 5. **Prod JWT keys:** keep the RSA keypair stable in Railway env or every deploy logs everyone out.
 
-## Uncommitted work at time of writing (branch `fix/stale-integration-tests`)
+## Work in flight (all committed and pushed, NOT merged, no PRs opened)
 
-- `Orders` migration `20261008125337_AddPaymentOrderXminConcurrencyToken` + `OrderConfiguration`/`PaymentConfiguration` changes (xmin concurrency token on Order and Payment).
-  **Not yet reviewed against the migration checklist in CLAUDE.md.** An `xmin` token must have an *empty* Up/Down — EF's generated `AddColumn xmin` crashes boot (see runbook R9).
-- Integration test fixes (`IntegrationTestBase`, `OrderFlowTests`, `DeliveryFlowTests`, `OrderEdgeCaseTests`).
-- Specs: `specs/own-fleet-first-dispatch.md` (modified), `specs/admin-google-place-linking.md` (new, intended for the UI dev).
+| Branch | Commits | Contents |
+|--------|---------|----------|
+| `docs/handoff` | `06b121d` + follow-up | These handoff docs |
+| `fix/stale-integration-tests` | `00cb6b6` | xmin concurrency token on Order + Payment. Migration `AddPaymentOrderXminConcurrencyToken` has **empty Up/Down** (xmin is a system column; verified, build green). Webhook handler does not yet catch `DbUpdateConcurrencyException` — see 04, item 1 |
+| | `02da89c` | Integration test fixes (idempotency key, delivery quote, role claim). 13/41 still fail (04, item 16) |
+| | `1cf4c03` | `specs/own-fleet-first-dispatch.md` update; new `specs/admin-google-place-linking.md` for the UI dev |
+| `fix/payu-webhook-lock-release` | `bcbbff5` | Webhook lock release fix (pushed earlier, no PR) |
+
+Merge path when ready: PR each branch into `staging`, verify, then a `staging → master` promotion PR.
 
 ## First-week plan for the new owner
 
