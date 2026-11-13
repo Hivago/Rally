@@ -1,89 +1,55 @@
-# Rally API — Handoff Document
-> Last updated: 17 Feb 2026
+# Rally / Hivago Backend — Handoff
 
-## What Is This
-A **modular monolith** (.NET 8, Minimal APIs, MediatR, EF Core, PostgreSQL, Redis) for a food delivery platform. Think Swiggy/Zomato backend.
+> Last updated: 2026-11-13. Replaces the Feb 2026 version (it was badly out of date).
+> Author: backend developer leaving the company. Written to be read cold.
 
-## Architecture
-```
-RallyAPI.Host (entry point)
-├── Modules/
-│   ├── Users        — Auth (OTP-based JWT), Customer/Rider/Restaurant/Admin entities
-│   ├── Catalog      — Restaurants, Menus, MenuItems
-│   ├── Orders       — Order lifecycle, state machine (Paid→Confirmed→Preparing→Ready→PickedUp→Delivered)
-│   ├── Delivery     — DeliveryQuote, DeliveryRequest, rider dispatch
-│   └── Pricing      — Delivery fee calculation
-├── Integrations/
-│   └── ProRouting   — 3PL delivery provider integration
-├── RallyAPI.SharedKernel   — Base entities, Result pattern, integration events
-└── RallyAPI.Infrastructure — Google Maps distance calculator
-```
+Rally (brand: **Hivago**) is a food-delivery backend for India: customers order, restaurants
+accept, riders (own fleet first, ProRouting 3PL as fallback) deliver. One .NET 8 modular
+monolith, one PostgreSQL database, Redis, SignalR.
 
-Each module follows: `Domain → Application → Infrastructure → Endpoints`
+## Read in this order
 
-## Cross-Module Communication
-Modules talk via **integration events** through MediatR (in-process, same DB transaction):
+| # | Doc | Read it for |
+|---|-----|-------------|
+| 1 | This file | Orientation, status, first-week plan |
+| 2 | [docs/handoff/01-architecture.md](docs/handoff/01-architecture.md) | Modules, the 3 core flows, background services |
+| 3 | [docs/handoff/02-environments-and-deploy.md](docs/handoff/02-environments-and-deploy.md) | Environments, config/env vars, deploy + migration rules |
+| 4 | [docs/handoff/03-runbooks.md](docs/handoff/03-runbooks.md) | Past incidents: symptoms, root cause, fix, how to diagnose |
+| 5 | [docs/handoff/04-open-items.md](docs/handoff/04-open-items.md) | Everything unfinished, ranked |
+| 6 | [docs/handoff/05-access-and-offboarding.md](docs/handoff/05-access-and-offboarding.md) | Accounts to transfer, secrets to rotate, checklist |
+| — | [CLAUDE.md](CLAUDE.md) + `.claude/rules/` | Coding conventions (also read by AI tools) |
+| — | `specs/`, `docs/` | Per-feature specs and payout/ProRouting/frontend-CI docs |
 
-```
-Orders module                          Delivery module
-─────────────                          ───────────────
-Order.Confirm()
-  → OrderConfirmedEvent (domain)
-    → OrderConfirmedEventHandler
-      enriches: addresses, contacts, pricing
-      → publishes OrderConfirmedIntegrationEvent (SharedKernel)
-                                         → OrderConfirmedIntegrationEventHandler
-                                           creates DeliveryRequest (PendingDispatch)
-```
+## Current status (snapshot)
 
-Reverse flow (Delivery → Orders) has 4 handlers:
-- `DeliveryRiderAssignedEventHandler` → updates order with rider info
-- `DeliveryPickedUpEventHandler` → marks order PickedUp
-- `DeliveryCompletedEventHandler` → marks order Delivered
-- `DeliveryFailedEventHandler` → marks order Failed
+- **Production:** `api.hivago.in` (Railway, project `perceptive-essence`, env `production`). Healthy as of the last check.
+  ProRouting 3PL bookings work on prod.
+- **Staging:** `rally-staging-9ae8.up.railway.app`. Do NOT test 3PL there (see runbook R6).
+- **Branch model:** feature branch → `staging` → (promotion PR) → `master`. Never merge to `master` directly.
+- **Frontends:** 3 React repos (customer, admin, restaurant) under the personal GitHub account
+  `yashdvishwakarma`, deployed to Hostinger by GitHub Actions FTPS. See `docs/frontend-cicd/`.
+- **Tests:** unit tests run in CI; integration tests (`tests/RallyAPI.Integration.Tests`) are
+  `continue-on-error` in CI and 13 of 41 still fail (stale test assumptions, not prod bugs — see open items).
 
-## Key Patterns
-- **CQRS**: Commands/Queries via MediatR `IRequest<Result<T>>`
-- **Result pattern**: `Result<T>` / `Result` with `Error` — no exceptions for business logic
-- **Domain events**: Raised in aggregate roots via `AddDomainEvent()`, dispatched by `DomainEventInterceptor` on `SaveChanges`
-- **Aggregate roots**: `Order`, `DeliveryRequest` — all mutations through methods, not setters
-- **Value objects**: `OrderNumber`, `Money`, `GeoCoordinate`, `Address`, `OrderPricing`
+## Top risks if nobody acts (details in 04 and 05)
 
-## Auth
-- OTP-based login (Redis-backed, SHA256-hashed OTPs)
-- JWT with RSA256 (asymmetric keys)  
-- Policies: `Customer`, `Rider`, `Restaurant`, `Admin`
-- OTP currently logs to console (no SMS provider)
+1. **Secrets and accounts tied to one person** (personal GitHub, Railway, PayU, Hostinger, Google, etc.). Transfer before the last day.
+2. **Exotel API key/token are committed in `appsettings.json`** (commented out, in git since `3eb9e16`). Rotate and purge.
+3. **Money-path concurrency:** PayU webhook lock fix is on an unmerged branch; Order/Payment `xmin` migration is uncommitted in the working tree.
+4. **Background services run inside every API instance** — do not scale to 2+ replicas until fixed (04, item 3).
+5. **Prod JWT keys:** keep the RSA keypair stable in Railway env or every deploy logs everyone out.
 
-## What Works
-- ✅ Full order lifecycle (place → confirm → prepare → ready → pickup → deliver)
-- ✅ Event bridge between Orders ↔ Delivery
-- ✅ Delivery quoting (Google Maps + ProRouting)
-- ✅ OTP auth with Redis (customers, riders)
-- ✅ Catalog CRUD
-- ✅ Rate limiting on auth endpoints
+## Uncommitted work at time of writing (branch `fix/stale-integration-tests`)
 
-## What's Missing (Validated Gaps)
-| Category | Gaps |
-|---|---|
-| **Launch blockers** | No payment integration, no SMS provider, no push notifications (stub only), no HTTPS, no CORS, no health checks |
-| **Day-1 features** | No cart, no search, no order tracking (no SignalR/WebSocket), no admin login endpoint |
-| **Infrastructure** | No frontend, no Dockerfile, no CI/CD, no monitoring, effectively zero tests |
-| **Rider dispatch** | Manual only — admin calls rider and updates status; `RiderDispatchOrchestrator` exists but not auto-triggered |
+- `Orders` migration `20261008125337_AddPaymentOrderXminConcurrencyToken` + `OrderConfiguration`/`PaymentConfiguration` changes (xmin concurrency token on Order and Payment).
+  **Not yet reviewed against the migration checklist in CLAUDE.md.** An `xmin` token must have an *empty* Up/Down — EF's generated `AddColumn xmin` crashes boot (see runbook R9).
+- Integration test fixes (`IntegrationTestBase`, `OrderFlowTests`, `DeliveryFlowTests`, `OrderEdgeCaseTests`).
+- Specs: `specs/own-fleet-first-dispatch.md` (modified), `specs/admin-google-place-linking.md` (new, intended for the UI dev).
 
-## Known Inconsistencies
-- Endpoint style: Users uses per-file `IEndpoint` pattern; Orders/Delivery use large static classes
-- Repository interfaces: `Application/Abstractions/` (most) vs `Domain/Abstractions/` (Delivery)
-- `UnitOfWork`: Different folders, access modifiers, and async patterns across modules
-- Admin endpoints (`Login`, `CreateRestaurant`, `CreateRider`): empty class stubs
+## First-week plan for the new owner
 
-## Key Files
-| Purpose | Path |
-|---|---|
-| Entry point | `src/RallyAPI.Host/Program.cs` |
-| Order aggregate | `src/Modules/Orders/RallyAPI.Orders.Domain/Entities/Order.cs` |
-| Event bridge handler | `src/Modules/Orders/RallyAPI.Orders.Application/EventHandlers/OrderConfirmedEventHandler.cs` |
-| Integration event | `src/RallyAPI.SharedKernel/Domain/IntegrationEvents/Orders/OrderConfirmedIntegrationEvent.cs` |
-| Delivery consumer | `src/Modules/Delivery/RallyAPI.Delivery.Application/EventHandlers/OrderConfirmedIntegrationEventHandler.cs` |
-| OTP service | `src/Modules/Users/RallyAPI.Users.Infrastructure/Services/OtpService.cs` |
-| Domain event dispatcher | `src/RallyAPI.SharedKernel/Infrastructure/DomainEventInterceptor.cs` |
+1. Get repo + Railway + GitHub org admin access (05).
+2. Run it locally (02, "Local development"), hit `/health`, run unit tests.
+3. Read 01, then trace one order end to end in code: `PlaceOrderCommandHandler` → PayU webhook → `OrderConfirmedIntegrationEvent` → `RiderDispatchOrchestrator`.
+4. Skim runbooks 03 so you recognise the failure modes when they page you.
+5. Pick up open items 1–3 in 04.
