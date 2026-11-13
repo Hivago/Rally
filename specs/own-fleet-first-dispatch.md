@@ -223,6 +223,14 @@ The 3PL side previously blocked 30s then **cancelled** the ProRouting task — f
 - Own-fleet broadcast still blocks its single acceptance window (~30s) inline on the outbox thread. Acceptable for now; a fully durable/background dispatch runner remains a separate follow-up.
 - Non-dispatch `DeliveryRequest` writers (MarkPickedUp/MarkDelivered/…) can still surface `DbUpdateConcurrencyException` as 500 under genuine concurrent edits — pre-existing, out of scope.
 
+### Accept-race review (added 2026-11-01)
+Review of `AcceptDeliveryOfferCommandHandler` for "two riders tap Accept at the same instant". The race itself is handled: `xmin` token + `TryUpdateAsync` decide the winner on the delivery row, the loser gets a clean "already assigned" failure and their `CurrentDeliveryId` is never touched. Open gaps found (none fixed yet):
+- **No compensation if the rider bind fails after the delivery write wins.** `AssignDeliveryToRiderAsync` (Users DbContext, separate txn) runs after `TryUpdateAsync` has committed. If it returns failure, the handler returns an error but the `DeliveryRequest` stays assigned to a rider whose `CurrentDeliveryId` was never set. Fix options: revert the delivery to `SearchingOwnFleet` with another guarded update, or check rider availability before claiming. Need to confirm which cases make `Rider.AssignDelivery` fail (e.g. rider already busy).
+- **Rider-side concurrency unverified.** `RiderCommandService.AssignDeliveryToRiderAsync` does a plain `SaveChanges` on `Rider`. Not checked whether Riders has a concurrency token; one rider accepting two different deliveries at once could bind both.
+- **Offer lookup is N+1.** The handler loads all `SearchingOwnFleet` requests then queries offers one by one to find `OfferId`. Replace with a direct lookup by offer id.
+- **Double-tap by the same rider** returns `OfferAlreadyResponded` (error) instead of an idempotent "already yours" success.
+- **Test gap to confirm:** the integration test from §6 (two parallel `AcceptDeliveryOffer` calls → one 200, one 409) should exist and cover the bind-failure path too.
+
 ### Open Questions
 - Poll interval (2s) vs. push-based early-accept signal — polling chosen for simplicity; revisit if 2s latency matters.
 - Should the broadcast radius differ from the 3PL/quote radius? Reusing existing `SearchRadiusKm` (5 km) for now.
