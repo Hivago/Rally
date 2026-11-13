@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RallyAPI.Orders.Domain.Entities;
 using RallyAPI.Orders.Domain.Enums;
@@ -18,6 +18,13 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
 
         // Primary Key
         builder.HasKey(o => o.Id);
+
+        // Optimistic concurrency via Postgres' xmin system column (same pattern as
+        // PayoutConfiguration). Two simultaneous PayU webhooks that both read this row as
+        // Pending would otherwise both write Paid; with xmin the loser's UPDATE matches 0 rows
+        // and SaveChangesAsync throws DbUpdateConcurrencyException. No DDL: xmin is built in.
+        builder.UseXminAsConcurrencyToken();
+
         builder.Property(o => o.Id)
             .HasColumnName("id")
             .ValueGeneratedNever();

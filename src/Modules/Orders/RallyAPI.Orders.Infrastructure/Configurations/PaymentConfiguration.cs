@@ -1,4 +1,4 @@
-﻿// File: src/Modules/Orders/RallyAPI.Orders.Infrastructure/Configurations/PaymentConfiguration.cs
+// File: src/Modules/Orders/RallyAPI.Orders.Infrastructure/Configurations/PaymentConfiguration.cs
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -13,6 +13,13 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.ToTable("payments", "orders");
 
         builder.HasKey(p => p.Id);
+
+        // Optimistic concurrency via Postgres' xmin system column (same pattern as
+        // PayoutConfiguration). Two simultaneous PayU webhooks that both read this row as
+        // Pending would otherwise both write Paid; with xmin the loser's UPDATE matches 0 rows
+        // and SaveChangesAsync throws DbUpdateConcurrencyException. No DDL: xmin is built in.
+        builder.UseXminAsConcurrencyToken();
+
 
         builder.Property(p => p.OrderId)
             .HasColumnName("order_id")
